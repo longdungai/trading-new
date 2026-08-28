@@ -460,6 +460,7 @@ export const App: React.FC = () => {
                     strategyHub={strategyHub}
                     setup={tradeSetup}
                     quoteAsset={currentSymbol.quoteAsset}
+                    symbol={currentSymbol.symbol}
                   />
                   <SentimentMeter sentiment={marketSentiment} />
                 </>
@@ -476,6 +477,7 @@ export const App: React.FC = () => {
                     strategyHub={strategyHub}
                     setup={tradeSetup}
                     quoteAsset={currentSymbol.quoteAsset}
+                    symbol={currentSymbol.symbol}
                   />
                 </>
               )}

@@ -581,13 +581,16 @@ export async function updateAllLiveMarketPrices(symbols: MarketSymbol[]): Promis
         }
       }
 
-      // 3. Micro Real-Time Simulation Ticks for Oil and Stocks
-      if (s.type === 'commodity') {
-        const tickDrift = (Math.random() - 0.49) * (s.price * 0.0003);
+      // 3. Micro Real-Time Simulation Ticks for Commodities, VN30 and Stocks
+      if (s.type === 'commodity' || s.type === 'vn30' || s.type === 'stock' || s.type === 'index') {
+        const volatility = s.type === 'vn30' ? 0.0002 : s.type === 'commodity' ? 0.0003 : 0.0004;
+        const tickDrift = (Math.random() - 0.49) * (s.price * volatility);
         const newPrice = Math.max(0.01, s.price + tickDrift);
+        const changeDrift = (Math.random() - 0.5) * 0.02;
         return {
           ...s,
-          price: parseFloat(newPrice.toFixed(2)),
+          price: s.quoteAsset === 'VND' ? parseFloat(newPrice.toFixed(2)) : parseFloat(newPrice.toFixed(2)),
+          change24h: parseFloat((s.change24h + changeDrift).toFixed(2)),
         };
       }
 

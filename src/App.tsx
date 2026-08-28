@@ -65,6 +65,17 @@ export const App: React.FC = () => {
   const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'market' | 'risk'>('ai');
   const [mobileTab, setMobileTab] = useState<'chart' | 'ai' | 'market' | 'risk'>('chart');
 
+  // References for live ticker background polling
+  const currentSymbolRef = useRef<MarketSymbol>(currentSymbol);
+  useEffect(() => {
+    currentSymbolRef.current = currentSymbol;
+  }, [currentSymbol]);
+
+  const symbolsRef = useRef<MarketSymbol[]>(symbols);
+  useEffect(() => {
+    symbolsRef.current = symbols;
+  }, [symbols]);
+
   // Indicator Settings
   const [settings, setSettings] = useState<IndicatorSettings>({
     ema20: true,
@@ -95,6 +106,7 @@ export const App: React.FC = () => {
   // Persist Symbols whenever changed
   const updateSymbolsAndPersist = (newSymbols: MarketSymbol[]) => {
     setSymbols(newSymbols);
+    symbolsRef.current = newSymbols;
     saveSymbolsToStorage(newSymbols);
   };
 
@@ -102,7 +114,7 @@ export const App: React.FC = () => {
   const handleAddSymbol = (newSymbol: MarketSymbol) => {
     const updated = [newSymbol, ...symbols];
     updateSymbolsAndPersist(updated);
-    setCurrentSymbol(newSymbol);
+    handleSelectSymbol(newSymbol);
   };
 
   // Edit existing symbol
@@ -111,6 +123,7 @@ export const App: React.FC = () => {
     updateSymbolsAndPersist(updated);
     if (currentSymbol.symbol === updatedSymbol.symbol) {
       setCurrentSymbol(updatedSymbol);
+      currentSymbolRef.current = updatedSymbol;
     }
   };
 
@@ -124,7 +137,7 @@ export const App: React.FC = () => {
     updateSymbolsAndPersist(updated);
 
     if (currentSymbol.symbol === symbolKey) {
-      setCurrentSymbol(updated[0]);
+      handleSelectSymbol(updated[0]);
     }
   };
 
@@ -141,18 +154,21 @@ export const App: React.FC = () => {
   const handleResetDefaults = () => {
     if (confirm('Khôi phục danh sách theo dõi về mặc định ban đầu?')) {
       updateSymbolsAndPersist(DEFAULT_SYMBOLS);
-      setCurrentSymbol(DEFAULT_SYMBOLS[0]);
+      handleSelectSymbol(DEFAULT_SYMBOLS[0]);
     }
   };
 
-  // Continuous Real-Time Price Sync (2.5 seconds rapid poll)
+  // Continuous Real-Time Price Sync (2.0 seconds rapid poll)
   const syncLivePrices = useCallback(async () => {
     try {
-      const updated = await updateAllLiveMarketPrices(symbols);
+      const currentList = symbolsRef.current;
+      const updated = await updateAllLiveMarketPrices(currentList);
       setSymbols(updated);
+      symbolsRef.current = updated;
 
       // Keep current symbol updated with latest price & change
-      const currentUpdated = updated.find(s => s.symbol === currentSymbol.symbol);
+      const activeKey = currentSymbolRef.current.symbol;
+      const currentUpdated = updated.find(s => s.symbol === activeKey);
       if (currentUpdated) {
         setCurrentSymbol(prev => ({
           ...prev,
@@ -166,16 +182,16 @@ export const App: React.FC = () => {
     } catch (e) {
       console.warn('Error syncing live prices', e);
     }
-  }, [symbols, currentSymbol.symbol]);
+  }, []);
 
   useEffect(() => {
     syncLivePrices();
     const interval = setInterval(() => {
       syncLivePrices();
-    }, 2500);
+    }, 2000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [syncLivePrices]);
 
   // Load Klines and Depth
   const loadData = async (symbolObj: MarketSymbol, tf: Timeframe) => {
@@ -201,7 +217,13 @@ export const App: React.FC = () => {
         }));
 
         setSymbols(prev =>
-          prev.map(s => (s.symbol === symbolObj.symbol ? { ...s, price: lastCandle.close, change24h: parseFloat(change24h.toFixed(2)) } : s))
+          prev.map(s => (s.symbol === symbolObj.symbol ? {
+            ...s,
+            price: lastCandle.close,
+            change24h: parseFloat(change24h.toFixed(2)),
+            high24h: maxHigh,
+            low24h: minLow
+          } : s))
         );
       }
 
@@ -225,6 +247,18 @@ export const App: React.FC = () => {
     } finally {
       setIsLiveLoading(false);
     }
+  };
+
+  // Instant Symbol Selector Handler: immediately loads fresh data and updates price
+  const handleSelectSymbol = (sym: MarketSymbol) => {
+    const fresh = symbols.find(s => s.symbol === sym.symbol) || sym;
+    setCurrentSymbol(fresh);
+    currentSymbolRef.current = fresh;
+
+    if (activeView === 'heatmap') setActiveView('chart');
+    setMobileTab('chart');
+
+    loadData(fresh, timeframe);
   };
 
   useEffect(() => {
@@ -312,11 +346,7 @@ export const App: React.FC = () => {
         currentSymbol={currentSymbol}
         symbols={symbols}
         timeframe={timeframe}
-        onSelectSymbol={(sym) => {
-          setCurrentSymbol(sym);
-          if (activeView === 'heatmap') setActiveView('chart');
-          setMobileTab('chart');
-        }}
+        onSelectSymbol={handleSelectSymbol}
         onChangeTimeframe={setTimeframe}
         onOpenBacktest={() => setIsBacktestOpen(true)}
         onOpenHeatmap={() => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap')}
@@ -343,11 +373,7 @@ export const App: React.FC = () => {
         <div className={`flex-1 flex flex-col ${activeView === 'heatmap' ? 'flex' : 'hidden'}`}>
           <MarketHeatmap
             symbols={symbols}
-            onSelectSymbol={(sym) => {
-              setCurrentSymbol(sym);
-              setActiveView('chart');
-              setMobileTab('chart');
-            }}
+            onSelectSymbol={handleSelectSymbol}
             onClose={() => setActiveView('chart')}
           />
         </div>
@@ -457,11 +483,7 @@ export const App: React.FC = () => {
                       symbols={symbols}
                       currentSymbol={currentSymbol}
                       favorites={favorites}
-                      onSelectSymbol={(sym) => {
-                        setCurrentSymbol(sym);
-                        if (activeView === 'heatmap') setActiveView('chart');
-                        setMobileTab('chart');
-                      }}
+                      onSelectSymbol={handleSelectSymbol}
                       onAddSymbol={handleAddSymbol}
                       onEditSymbol={handleEditSymbol}
                       onDeleteSymbol={handleDeleteSymbol}

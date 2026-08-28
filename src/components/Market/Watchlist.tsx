@@ -13,6 +13,8 @@ import {
   X,
   AlertCircle,
   Activity,
+  Check,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { formatPercent, formatPrice } from '../../utils/formatters';
 import { GLOBAL_SYMBOL_CATALOG, CatalogItem } from '../../services/api/symbolCatalog';
@@ -42,6 +44,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
 }) => {
   const [filter, setFilter] = useState<'all' | 'commodity' | 'crypto' | 'vn30' | 'stock' | 'favorite'>('all');
   const [search, setSearch] = useState('');
+  const [isManageMode, setIsManageMode] = useState<boolean>(false);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -76,7 +79,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
 
     if (!matchesSearch) return false;
     if (filter === 'favorite') return favorites.includes(s.symbol);
-    if (filter === 'commodity') return s.type === 'commodity' || s.symbol.includes('PAXG') || s.symbol.includes('GOLD') || s.symbol.includes('OIL');
+    if (filter === 'commodity') return s.type === 'commodity' || s.symbol.includes('PAXG') || s.symbol.includes('GOLD') || s.symbol.includes('OIL') || s.symbol.includes('XAU');
     if (filter === 'crypto') return s.type === 'crypto';
     if (filter === 'vn30') return s.type === 'vn30' || s.symbol === 'VNINDEX';
     if (filter === 'stock') return s.type === 'stock' || s.type === 'index';
@@ -120,18 +123,18 @@ export const Watchlist: React.FC<WatchlistProps> = ({
       change24h: 0.5,
       high24h: price * 1.02,
       low24h: price * 0.98,
-      volume24h: 1000000000,
-      category: customCategory || (selectedCatalogItem ? selectedCatalogItem.category : 'Tự thêm'),
+      volume24h: 1000000,
+      category: customCategory || (selectedCatalogItem ? selectedCatalogItem.category : 'Người dùng thêm'),
     };
 
     onAddSymbol(newObj);
     setIsAddModalOpen(false);
     setAddSearchInput('');
     setSelectedCatalogItem(null);
+    setCustomName('');
   };
 
-  // Handle Edit Save
-  const handleSaveEdit = () => {
+  const handleConfirmEdit = () => {
     if (!editingSymbol) return;
     onEditSymbol(editingSymbol);
     setIsEditModalOpen(false);
@@ -139,35 +142,51 @@ export const Watchlist: React.FC<WatchlistProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0c1017] border-l border-[#1b2230] select-none relative">
-      {/* Top Header */}
+    <div className="flex flex-col h-full bg-[#0d121c] border-b border-[#1b2230] select-none">
+      {/* Header Controls */}
       <div className="p-3 border-b border-[#1b2230] space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-bold text-xs text-white uppercase tracking-wider">
-            <Layers className="w-3.5 h-3.5 text-blue-400" />
-            <span>Danh Sách Theo Dõi</span>
-            <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono px-1 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/30">
+          <div className="flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-white font-mono">
+              Danh Mục Theo Dõi ({symbols.length})
+            </span>
+            <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 font-bold px-1 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/30">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               LIVE
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            {/* Manage/Edit toggle for mobile & desktop */}
+            <button
+              onClick={() => setIsManageMode(!isManageMode)}
+              className={`p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ${
+                isManageMode
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
+                  : 'bg-[#141b27] hover:bg-[#1f293b] text-gray-300 border border-[#232f44]'
+              }`}
+              title={isManageMode ? 'Hoàn tất quản lý' : 'Chỉnh sửa / Xóa mã'}
+            >
+              {isManageMode ? <Check className="w-3.5 h-3.5" /> : <SlidersHorizontal className="w-3.5 h-3.5" />}
+              <span className="text-[11px]">{isManageMode ? 'Xong' : 'Sửa'}</span>
+            </button>
+
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold shadow-sm transition"
-              title="Thêm mã mới (có gợi ý)"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition"
+              title="Thêm mã mới (có gợi ý 300+ mã)"
             >
-              <Plus className="w-3 h-3" />
-              <span>Thêm Mã</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Thêm</span>
             </button>
 
             <button
               onClick={onResetDefaults}
-              className="p-1 rounded-md bg-[#141b27] hover:bg-[#1f293b] text-gray-400 hover:text-white transition"
+              className="p-1.5 rounded-lg bg-[#141b27] hover:bg-[#1f293b] text-gray-400 hover:text-white border border-[#232f44] transition"
               title="Khôi phục danh sách mặc định"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -180,17 +199,17 @@ export const Watchlist: React.FC<WatchlistProps> = ({
             placeholder="Tìm Vàng, Dầu, Coin, VN30..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#141b27] border border-[#232f44] rounded-lg pl-8 pr-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+            className="w-full bg-[#141b27] border border-[#232f44] rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
           />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap gap-1 text-[10px]">
+        {/* Filter Pills - Touch Scrollable */}
+        <div className="flex gap-1 overflow-x-auto no-scrollbar whitespace-nowrap text-[11px]">
           {(['all', 'commodity', 'crypto', 'vn30', 'stock', 'favorite'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`px-2 py-1 rounded font-medium transition ${
+              className={`px-2.5 py-1 rounded-lg font-medium shrink-0 transition ${
                 filter === tab ? 'bg-blue-600 text-white shadow-sm' : 'bg-[#141b27] text-gray-400 hover:text-white'
               }`}
             >
@@ -210,8 +229,8 @@ export const Watchlist: React.FC<WatchlistProps> = ({
         </div>
       </div>
 
-      {/* Symbol List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-[#171f2e]">
+      {/* Symbol List with Large Touch Targets */}
+      <div className="flex-1 overflow-y-auto divide-y divide-[#171f2e] pb-16 md:pb-2">
         {filteredSymbols.length === 0 ? (
           <div className="p-6 text-center text-xs text-gray-500 space-y-2">
             <AlertCircle className="w-6 h-6 mx-auto text-gray-600" />
@@ -234,27 +253,31 @@ export const Watchlist: React.FC<WatchlistProps> = ({
             return (
               <div
                 key={s.symbol}
-                onClick={() => onSelectSymbol(s)}
-                className={`group p-2.5 flex items-center justify-between cursor-pointer transition relative ${
-                  isSelected ? 'bg-blue-600/15 border-l-2 border-blue-500' : 'hover:bg-[#121824]'
+                onClick={() => {
+                  if (!isManageMode) {
+                    onSelectSymbol(s);
+                  }
+                }}
+                className={`group p-3 flex items-center justify-between cursor-pointer transition relative ${
+                  isSelected ? 'bg-blue-600/15 border-l-4 border-blue-500' : 'hover:bg-[#121824]'
                 }`}
               >
                 {/* Left Part: Star + Name */}
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleFavorite(s.symbol);
                     }}
-                    className="text-gray-500 hover:text-amber-400 transition"
+                    className="p-1 text-gray-500 hover:text-amber-400 transition shrink-0"
                     title={isFav ? 'Bỏ yêu thích' : 'Thêm yêu thích'}
                   >
-                    <Star className={`w-3.5 h-3.5 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
+                    <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
                   </button>
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-xs text-white">{s.symbol}</span>
+                      <span className="font-mono font-bold text-xs sm:text-sm text-white">{s.symbol}</span>
                       <span className={`text-[9px] px-1 rounded uppercase font-semibold ${
                         isCommodity
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -267,14 +290,14 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                         {isCommodity ? 'HÀNG HÓA' : s.type === 'vn30' ? 'VN30' : s.type}
                       </span>
                     </div>
-                    <div className="text-[10px] text-gray-400 truncate max-w-[110px]">{s.name}</div>
+                    <div className="text-[10px] text-gray-400 truncate max-w-[120px] sm:max-w-[150px]">{s.name}</div>
                   </div>
                 </div>
 
                 {/* Right Part: Price & Action Buttons */}
                 <div className="flex items-center gap-2">
                   <div className="text-right font-mono">
-                    <div className="text-xs font-bold text-gray-100 flex items-center justify-end gap-1">
+                    <div className="text-xs sm:text-sm font-bold text-gray-100 flex items-center justify-end gap-1">
                       {isVND ? `${formatPrice(s.price)}k` : `$${formatPrice(s.price)}`}
                     </div>
                     <div className={`text-[10px] font-semibold flex items-center justify-end gap-0.5 ${
@@ -285,18 +308,20 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                     </div>
                   </div>
 
-                  {/* Edit & Delete Action Buttons (visible on hover) */}
-                  <div className="hidden group-hover:flex items-center gap-1 bg-[#121824] pl-1 z-10">
+                  {/* Edit & Delete Action Buttons (Visible permanently in Manage Mode OR on hover) */}
+                  <div className={`items-center gap-1 bg-[#121824] pl-1.5 z-10 ${
+                    isManageMode ? 'flex' : 'hidden group-hover:flex'
+                  }`}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingSymbol({ ...s });
                         setIsEditModalOpen(true);
                       }}
-                      className="p-1 rounded text-gray-400 hover:text-blue-400 hover:bg-[#1a2332] transition"
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-blue-400 bg-[#1a2332] hover:bg-[#233147] transition shadow-sm"
                       title="Chỉnh sửa mã"
                     >
-                      <Edit2 className="w-3 h-3" />
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
 
                     <button
@@ -306,10 +331,10 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                           onDeleteSymbol(s.symbol);
                         }
                       }}
-                      className="p-1 rounded text-gray-400 hover:text-rose-400 hover:bg-[#1a2332] transition"
+                      className="p-1.5 rounded-lg text-rose-300 hover:text-rose-400 bg-[#2d1a22] hover:bg-[#3d202e] border border-rose-500/30 transition shadow-sm"
                       title="Xóa mã này"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -319,20 +344,20 @@ export const Watchlist: React.FC<WatchlistProps> = ({
         )}
       </div>
 
-      {/* ================= MODAL: THÊM MÃ MỚI ================= */}
+      {/* ================= MODAL: THÊM MÃ MỚI (RESPONSIVE FULL SCREEN ON MOBILE) ================= */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0e141f] border border-[#232f44] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="p-4 border-b border-[#1c2738] flex items-center justify-between bg-[#121927]">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 animate-in fade-in">
+          <div className="bg-[#0e141f] border border-[#232f44] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden mt-3 sm:mt-0 max-h-[90vh] flex flex-col">
+            <div className="p-3.5 sm:p-4 border-b border-[#1c2738] flex items-center justify-between bg-[#121927]">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
                   <Plus className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-tight font-mono">
+                  <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight font-mono">
                     Thêm Mã Giao Dịch Mới
                   </h3>
-                  <p className="text-[11px] text-gray-400">Gõ mã hoặc tên để nhận gợi ý tự động (Vàng, Dầu, Coin, Cổ phiếu...)</p>
+                  <p className="text-[10px] sm:text-[11px] text-gray-400">Gõ mã để gợi ý tức thì (Vàng, Dầu, Coin, VN30...)</p>
                 </div>
               </div>
               <button
@@ -343,16 +368,16 @@ export const Watchlist: React.FC<WatchlistProps> = ({
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-3.5 sm:p-4 space-y-3 overflow-y-auto flex-1">
               <div>
-                <label className="text-[11px] text-gray-400 uppercase font-semibold block mb-1">
-                  Nhập mã hoặc tên (Gợi ý tức thì)
+                <label className="text-[10px] sm:text-[11px] text-gray-400 uppercase font-semibold block mb-1">
+                  Nhập mã hoặc tên
                 </label>
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Ví dụ: XAUUSD (Vàng), OIL_WTI (Dầu), SOL, VND, NVDA..."
+                    placeholder="Ví dụ: XAUUSD (Vàng), OIL_WTI (Dầu), SOL, FPT, NVDA..."
                     value={addSearchInput}
                     onChange={(e) => {
                       setAddSearchInput(e.target.value);
@@ -447,7 +472,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                 disabled={!addSearchInput.trim()}
                 className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-500/20 disabled:opacity-50 transition"
               >
-                Thêm Vào Danh Sách
+                + Thêm Vào Danh Sách
               </button>
             </div>
           </div>
@@ -456,19 +481,14 @@ export const Watchlist: React.FC<WatchlistProps> = ({
 
       {/* ================= MODAL: CHỈNH SỬA MÃ ================= */}
       {isEditModalOpen && editingSymbol && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0e141f] border border-[#232f44] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="p-4 border-b border-[#1c2738] flex items-center justify-between bg-[#121927]">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 animate-in fade-in">
+          <div className="bg-[#0e141f] border border-[#232f44] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden mt-3 sm:mt-0 flex flex-col">
+            <div className="p-3.5 sm:p-4 border-b border-[#1c2738] flex items-center justify-between bg-[#121927]">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-                  <Edit2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase font-mono">
-                    Chỉnh Sửa Mã: {editingSymbol.symbol}
-                  </h3>
-                  <p className="text-[11px] text-gray-400">Thay đổi tên hiển thị, loại thị trường hoặc nhóm ngành</p>
-                </div>
+                <Edit2 className="w-4 h-4 text-blue-400" />
+                <h3 className="text-xs sm:text-sm font-bold text-white uppercase font-mono">
+                  Chỉnh Sửa Mã: {editingSymbol.symbol}
+                </h3>
               </div>
               <button
                 onClick={() => setIsEditModalOpen(false)}
@@ -478,14 +498,14 @@ export const Watchlist: React.FC<WatchlistProps> = ({
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-3.5 sm:p-4 space-y-3">
               <div>
                 <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1">Tên Hiển Thị</label>
                 <input
                   type="text"
                   value={editingSymbol.name}
                   onChange={(e) => setEditingSymbol({ ...editingSymbol, name: e.target.value })}
-                  className="w-full bg-[#141b27] border border-[#27364e] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[#141b27] border border-[#232f44] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -494,23 +514,23 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                 <select
                   value={editingSymbol.type}
                   onChange={(e) => setEditingSymbol({ ...editingSymbol, type: e.target.value as MarketType })}
-                  className="w-full bg-[#141b27] border border-[#27364e] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[#141b27] border border-[#232f44] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                 >
                   <option value="commodity">🥇 Vàng, Dầu, Hàng Hóa</option>
-                  <option value="crypto">🪙 Crypto (Binance)</option>
+                  <option value="crypto">🪙 Crypto</option>
                   <option value="vn30">🇻🇳 Rổ VN30</option>
-                  <option value="stock">🇻🇳 Chứng khoán VN / 🇺🇸 Mỹ</option>
+                  <option value="stock">🇻🇳 Chứng khoán / 🇺🇸 Mỹ</option>
                   <option value="index">📊 Chỉ Số</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1">Nhóm Ngành / Danh Mục</label>
+                <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1">Mô Tả / Danh Mục</label>
                 <input
                   type="text"
                   value={editingSymbol.category || ''}
                   onChange={(e) => setEditingSymbol({ ...editingSymbol, category: e.target.value })}
-                  className="w-full bg-[#141b27] border border-[#27364e] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[#141b27] border border-[#232f44] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
             </div>
@@ -520,10 +540,10 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                 onClick={() => setIsEditModalOpen(false)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white"
               >
-                Hủy Bỏ
+                Hủy
               </button>
               <button
-                onClick={handleSaveEdit}
+                onClick={handleConfirmEdit}
                 className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition"
               >
                 Lưu Thay Đổi

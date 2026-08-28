@@ -382,11 +382,11 @@ export const App: React.FC = () => {
         {/* Main Trading Chart & Workstation Panels */}
         <div className={`flex-1 flex overflow-hidden ${activeView === 'chart' ? 'flex' : 'hidden'}`}>
           {/* Main Chart Area (Visible on Desktop OR when MobileTab === 'chart') */}
-          <div className={`flex-1 flex-col min-w-0 bg-[#090d15] relative pb-16 md:pb-0 overflow-y-auto md:overflow-hidden ${
+          <div className={`flex-1 flex-col min-w-0 bg-[#090d15] relative overflow-hidden h-full ${
             mobileTab === 'chart' ? 'flex' : 'hidden md:flex'
           }`}>
             {/* Lightweight Candles & Indicators Chart */}
-            <div className="flex-1 relative min-h-[260px] sm:min-h-0">
+            <div className="flex-1 relative min-h-0 overflow-hidden">
               <TradingChart
                 candles={candles}
                 timeframe={timeframe}

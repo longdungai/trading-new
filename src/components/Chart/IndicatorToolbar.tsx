@@ -7,6 +7,7 @@ import {
   Sparkles,
   ShieldAlert,
   Zap,
+  Activity,
 } from 'lucide-react';
 
 interface IndicatorToolbarProps {
@@ -17,10 +18,37 @@ interface IndicatorToolbarProps {
 export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, onToggle }) => {
   return (
     <div className="h-9 sm:h-10 bg-[#0d121b] border-b border-[#1b2230] px-2 sm:px-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap select-none">
-      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-gray-400 font-semibold uppercase tracking-wider shrink-0 mr-1">
+      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-gray-400 font-semibold uppercase tracking-wider shrink-0 mr-0.5">
         <Sliders className="w-3 h-3 text-blue-400" />
         <span className="hidden sm:inline">Chỉ Báo:</span>
       </div>
+
+      {/* Sub-panels: RSI & MACD - Brought upfront for instant mobile access */}
+      <button
+        onClick={() => onToggle('rsi')}
+        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold border shrink-0 transition ${
+          settings.rsi
+            ? 'bg-indigo-600 text-white border-indigo-400 shadow-sm shadow-indigo-500/20'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <Activity className="w-3 h-3 text-indigo-300" />
+        <span>RSI (14)</span>
+      </button>
+
+      <button
+        onClick={() => onToggle('macd')}
+        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold border shrink-0 transition ${
+          settings.macd
+            ? 'bg-blue-600 text-white border-blue-400 shadow-sm shadow-blue-500/20'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <Activity className="w-3 h-3 text-blue-300" />
+        <span>MACD (12,26,9)</span>
+      </button>
+
+      <div className="h-4 w-px bg-gray-800 shrink-0 mx-0.5" />
 
       {/* AI Models & Projections */}
       <button
@@ -142,31 +170,6 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
         }`}
       >
         Bollinger Bands
-      </button>
-
-      <div className="h-4 w-px bg-gray-800 shrink-0 mx-0.5" />
-
-      {/* Sub-panels */}
-      <button
-        onClick={() => onToggle('rsi')}
-        className={`px-2 py-1 rounded text-[11px] font-medium border shrink-0 transition ${
-          settings.rsi
-            ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
-            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
-        }`}
-      >
-        RSI (14)
-      </button>
-
-      <button
-        onClick={() => onToggle('macd')}
-        className={`px-2 py-1 rounded text-[11px] font-medium border shrink-0 transition ${
-          settings.macd
-            ? 'bg-blue-600/30 text-blue-300 border-blue-500/50'
-            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
-        }`}
-      >
-        MACD
       </button>
     </div>
   );

@@ -19,6 +19,7 @@ import {
   Check,
   Award,
   Clock,
+  AlertCircle,
 } from 'lucide-react';
 import { formatPercent, formatPrice, formatTime } from '../../utils/formatters';
 import {
@@ -45,7 +46,6 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
 }) => {
   const isVND = quoteAsset === 'VND' || symbol.includes('VN') || ['FPT', 'HPG', 'VIC', 'VHM', 'SJC', 'MWG', 'MSN', 'SSI', 'VCB'].includes(symbol);
   const prefix = isVND ? '' : '$';
-  const suffix = isVND ? 'k VNĐ' : '';
   const priceSuffix = isVND ? 'k' : '';
 
   // Active selected strategy in the Hub
@@ -54,13 +54,13 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
   // Paper Testing state
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [paperTrades, setPaperTrades] = useState<UserPaperTrade[]>(() => getUserPaperTrades());
-  const [activeTab, setActiveTab] = useState<'strategy' | 'active_trades' | 'history' | 'stats'>('strategy');
+  const [activeTab, setActiveTab] = useState<'strategy' | 'active_trades' | 'stats'>('strategy');
 
   // Test Order Form Inputs
   const [testTpTarget, setTestTpTarget] = useState<'TP1' | 'TP2' | 'TP3'>('TP2');
   const [testCapital, setTestCapital] = useState<number>(isVND ? 10000000 : 1000);
   const [testLeverage, setTestLeverage] = useState<number>(1);
-  const [testEntryType, setTestEntryType] = useState<'current' | 'entry_zone'>('entry_zone');
+  const [testEntryType, setTestEntryType] = useState<'current' | 'entry_zone'>('current');
 
   // Derive current display item
   const currentItem: StrategyHubItem = React.useMemo(() => {
@@ -118,7 +118,8 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
 
   // Handle open paper trade
   const handleOpenTestTrade = () => {
-    const entry = testEntryType === 'current' ? currentPrice : currentItem.entryZone[0];
+    const isMarket = testEntryType === 'current';
+    const entry = isMarket ? currentPrice : currentItem.entryZone[0];
     const tpPrice =
       testTpTarget === 'TP1'
         ? currentItem.takeProfit1
@@ -131,7 +132,9 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
       strategyName: currentItem.name,
       strategyId: currentItem.id,
       action: isBuy ? 'BUY' : isSell ? 'SELL' : 'BUY',
+      entryType: isMarket ? 'market' : 'limit',
       entryPrice: entry,
+      currentMarketPrice: currentPrice,
       stopLoss: currentItem.stopLoss,
       takeProfit: tpPrice,
       tpTargetLabel: testTpTarget,
@@ -159,11 +162,11 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
     }
   };
 
-  // Compute performance statistics based ONLY on user tested trades
-  const closedTrades = paperTrades.filter(t => t.status !== 'OPEN');
-  const openTrades = paperTrades.filter(t => t.status === 'OPEN');
-  const winTrades = closedTrades.filter(t => t.pnlPercent > 0);
-  const lossTrades = closedTrades.filter(t => t.pnlPercent <= 0);
+  // Filter trade lists
+  const activeAndPendingTrades = paperTrades.filter(t => t.status === 'OPEN' || t.status === 'PENDING');
+  const closedTrades = paperTrades.filter(t => t.status !== 'OPEN' && t.status !== 'PENDING');
+  const winTrades = closedTrades.filter(t => t.status === 'TP_HIT' || t.pnlPercent > 0);
+  const lossTrades = closedTrades.filter(t => t.status === 'SL_HIT' || t.pnlPercent < 0);
   const userWinRate = closedTrades.length > 0 ? Math.round((winTrades.length / closedTrades.length) * 100) : 0;
   const totalUserPnL = closedTrades.reduce((sum, t) => sum + t.pnlAmount, 0);
 
@@ -227,9 +230,9 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
           }`}
         >
           <span>Lệnh Đang Test</span>
-          {openTrades.length > 0 && (
+          {activeAndPendingTrades.length > 0 && (
             <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-black text-[9px] font-black">
-              {openTrades.length}
+              {activeAndPendingTrades.length}
             </span>
           )}
         </button>
@@ -386,23 +389,23 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
             }`}
           >
             <FlaskConical className="w-4 h-4" />
-            <span>🧪 Vào Lệnh Test Tại Vùng Entry (Chạy Thử AI)</span>
+            <span>🧪 Mở Lệnh Thử Nghiệm (Test Chiến Lược AI)</span>
           </button>
         </div>
       )}
 
-      {/* ================= TAB 2: ACTIVE TRADES ================= */}
+      {/* ================= TAB 2: ACTIVE & PENDING TRADES ================= */}
       {activeTab === 'active_trades' && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-400 font-bold uppercase">Lệnh Đang Chạy ({openTrades.length})</span>
+            <span className="text-gray-400 font-bold uppercase">Lệnh Đang Chạy ({activeAndPendingTrades.length})</span>
             <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              Tự động SL/TP theo giá live
+              Chờ khớp & SL/TP tự động theo giá live
             </span>
           </div>
 
-          {openTrades.length === 0 ? (
+          {activeAndPendingTrades.length === 0 ? (
             <div className="p-6 text-center text-xs text-gray-500 bg-[#0d121c] rounded-xl border border-[#1b2536] space-y-2">
               <FlaskConical className="w-6 h-6 mx-auto text-gray-600" />
               <p>Chưa có lệnh test nào đang mở.</p>
@@ -414,8 +417,11 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
               </button>
             </div>
           ) : (
-            openTrades.map(trade => {
+            activeAndPendingTrades.map(trade => {
+              const isPending = trade.status === 'PENDING';
               const isProfit = trade.pnlPercent >= 0;
+              const entryDist = trade.entryPrice > 0 ? (((currentPrice - trade.entryPrice) / trade.entryPrice) * 100).toFixed(2) : '0';
+
               return (
                 <div key={trade.id} className="p-3 rounded-xl bg-[#0e141f] border border-[#212e42] space-y-2">
                   <div className="flex items-center justify-between">
@@ -426,34 +432,46 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                         {trade.action}
                       </span>
                       <span className="text-white font-mono">{trade.symbol}</span>
-                      <span className="text-[10px] text-gray-400 font-normal truncate max-w-[100px]">{trade.strategyName}</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        isPending
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}>
+                        {isPending ? '⏳ CHỜ KHỚP ENTRY' : '🟢 ĐÃ KHỚP - ĐANG CHẠY'}
+                      </span>
                     </div>
 
                     <div className="text-right font-mono">
-                      <div className={`text-xs font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {isProfit ? '+' : ''}{trade.pnlPercent}%
-                      </div>
-                      <div className="text-[10px] text-gray-400">
-                        {isProfit ? '+' : ''}{isVND ? `${formatPrice(trade.pnlAmount)} VNĐ` : `$${formatPrice(trade.pnlAmount)}`}
-                      </div>
+                      {isPending ? (
+                        <div className="text-[10px] text-amber-400">Cách entry {entryDist}%</div>
+                      ) : (
+                        <>
+                          <div className={`text-xs font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {isProfit ? '+' : ''}{trade.pnlPercent}%
+                          </div>
+                          <div className="text-[10px] text-gray-400">
+                            {isProfit ? '+' : ''}{isVND ? `${formatPrice(trade.pnlAmount)} VNĐ` : `$${formatPrice(trade.pnlAmount)}`}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-1 bg-[#141b27] p-1.5 rounded-lg text-[10px] font-mono text-gray-300 border border-[#1d2738]">
-                    <div>Vào: <span className="text-white font-bold">{prefix}{formatPrice(trade.entryPrice)}{priceSuffix}</span></div>
-                    <div>SL: <span className="text-rose-400 font-bold">{prefix}{formatPrice(trade.stopLoss)}{priceSuffix}</span></div>
+                    <div>Giá Vào: <span className="text-white font-bold">{prefix}{formatPrice(trade.entryPrice)}{priceSuffix}</span></div>
+                    <div>Cắt Lỗ: <span className="text-rose-400 font-bold">{prefix}{formatPrice(trade.stopLoss)}{priceSuffix}</span></div>
                     <div>{trade.tpTargetLabel}: <span className="text-emerald-400 font-bold">{prefix}{formatPrice(trade.takeProfit)}{priceSuffix}</span></div>
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-[9px] text-gray-500 font-mono">
-                      Mở lúc: {formatTime(trade.openTime, 'time')}
+                      Giá thị trường: <span className="text-cyan-300 font-bold">{prefix}{formatPrice(currentPrice)}{priceSuffix}</span>
                     </span>
                     <button
                       onClick={() => handleManualClose(trade.id)}
                       className="px-2.5 py-1 rounded bg-[#1e293b] hover:bg-rose-600 hover:text-white text-gray-300 text-[10px] font-semibold transition"
                     >
-                      Đóng Lệnh Ngay
+                      {isPending ? 'Hủy Lệnh Chờ' : 'Đóng Lệnh Ngay'}
                     </button>
                   </div>
                 </div>
@@ -473,7 +491,7 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
             </span>
             <button
               onClick={handleClearAllTrades}
-              className="flex items-center gap-1 text-[10px] text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20"
+              className="flex items-center gap-1 text-[10px] text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 transition"
               title="Xóa hết lịch sử để test lại từ đầu"
             >
               <Trash2 className="w-3 h-3" />
@@ -498,9 +516,9 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
             </div>
 
             <div className="p-2.5 rounded-xl bg-[#0d121c] border border-[#1b2536]">
-              <div className="text-[9px] text-gray-400 uppercase font-semibold">Tổng Lệnh Test</div>
-              <div className="text-base font-bold text-blue-400 mt-0.5">{paperTrades.length}</div>
-              <div className="text-[9px] text-gray-500">{openTrades.length} đang chạy</div>
+              <div className="text-[9px] text-gray-400 uppercase font-semibold">Tổng Lệnh Đã Test</div>
+              <div className="text-base font-bold text-blue-400 mt-0.5">{closedTrades.length}</div>
+              <div className="text-[9px] text-gray-500">{activeAndPendingTrades.length} đang chờ/chạy</div>
             </div>
           </div>
 
@@ -508,30 +526,33 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
             {closedTrades.length === 0 ? (
               <div className="p-4 text-center text-[11px] text-gray-500 bg-[#0d121c] rounded-xl border border-[#1b2536]">
-                Lịch sử đang trống. Hãy bấm <b>"Vào Lệnh Test"</b> để tự mình kiểm chứng hiệu quả các chiến lược do AI gợi ý!
+                Lịch sử đang trống. Hãy bấm <b>"Mở Lệnh Thử Nghiệm"</b> để tự mình kiểm chứng hiệu quả các chiến lược do AI gợi ý!
               </div>
             ) : (
               closedTrades.map(trade => {
-                const isWin = trade.pnlPercent > 0;
+                const isWin = trade.status === 'TP_HIT' || trade.pnlPercent > 0;
                 return (
                   <div key={trade.id} className="p-2 rounded-lg bg-[#0e141f] border border-[#1d2738] flex items-center justify-between text-[11px] font-mono">
                     <div className="flex items-center gap-1.5">
                       <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
                         trade.status === 'TP_HIT' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                        trade.status === 'SL_HIT' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-gray-700 text-gray-300'
+                        trade.status === 'SL_HIT' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                        trade.status === 'CANCELLED' ? 'bg-gray-800 text-gray-400' : 'bg-blue-500/20 text-blue-300'
                       }`}>
-                        {trade.status === 'TP_HIT' ? '🎯 CHỐT LỜI' : trade.status === 'SL_HIT' ? '🛡️ CẮT LỖ' : 'ĐÓNG TAY'}
+                        {trade.status === 'TP_HIT' ? '🎯 CHỐT LỜI' :
+                         trade.status === 'SL_HIT' ? '🛡️ CẮT LỖ' :
+                         trade.status === 'CANCELLED' ? 'ĐÃ HỦY' : 'ĐÓNG TAY'}
                       </span>
                       <span className="font-bold text-white">{trade.symbol}</span>
                       <span className="text-[9px] text-gray-400 truncate max-w-[80px]">{trade.strategyName}</span>
                     </div>
 
                     <div className="text-right">
-                      <span className={`font-bold ${isWin ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {isWin ? '+' : ''}{trade.pnlPercent}%
+                      <span className={`font-bold ${isWin ? 'text-emerald-400' : trade.pnlPercent < 0 ? 'text-rose-400' : 'text-gray-400'}`}>
+                        {trade.pnlPercent > 0 ? '+' : ''}{trade.pnlPercent}%
                       </span>
                       <div className="text-[9px] text-gray-400">
-                        {isWin ? '+' : ''}{isVND ? `${formatPrice(trade.pnlAmount)} VNĐ` : `$${formatPrice(trade.pnlAmount)}`}
+                        {trade.pnlAmount > 0 ? '+' : ''}{isVND ? `${formatPrice(trade.pnlAmount)} VNĐ` : `$${formatPrice(trade.pnlAmount)}`}
                       </div>
                     </div>
                   </div>
@@ -571,31 +592,31 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
               {/* Entry Price Selection */}
               <div>
                 <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1">
-                  Giá Vào Lệnh (Entry)
+                  Chọn Điểm Vào Lệnh
                 </label>
                 <div className="grid grid-cols-2 gap-1.5 font-mono">
-                  <button
-                    onClick={() => setTestEntryType('entry_zone')}
-                    className={`p-2 rounded-lg border text-left ${
-                      testEntryType === 'entry_zone'
-                        ? 'bg-blue-600/20 border-blue-500 text-white'
-                        : 'bg-[#141b27] border-[#222e42] text-gray-400'
-                    }`}
-                  >
-                    <div className="text-[9px] uppercase">Vùng Entry Đề Xuất</div>
-                    <div className="font-bold text-xs text-white">{prefix}{formatPrice(currentItem.entryZone[0])}{priceSuffix}</div>
-                  </button>
-
                   <button
                     onClick={() => setTestEntryType('current')}
                     className={`p-2 rounded-lg border text-left ${
                       testEntryType === 'current'
-                        ? 'bg-blue-600/20 border-blue-500 text-white'
+                        ? 'bg-blue-600/25 border-blue-500 text-white'
                         : 'bg-[#141b27] border-[#222e42] text-gray-400'
                     }`}
                   >
-                    <div className="text-[9px] uppercase">Giá Hiện Tại</div>
-                    <div className="font-bold text-xs text-emerald-400">{prefix}{formatPrice(currentPrice)}{priceSuffix}</div>
+                    <div className="text-[9px] uppercase font-bold text-emerald-400">⚡ Khớp Ngay Giá Live</div>
+                    <div className="font-bold text-xs text-white mt-0.5">{prefix}{formatPrice(currentPrice)}{priceSuffix}</div>
+                  </button>
+
+                  <button
+                    onClick={() => setTestEntryType('entry_zone')}
+                    className={`p-2 rounded-lg border text-left ${
+                      testEntryType === 'entry_zone'
+                        ? 'bg-blue-600/25 border-blue-500 text-white'
+                        : 'bg-[#141b27] border-[#222e42] text-gray-400'
+                    }`}
+                  >
+                    <div className="text-[9px] uppercase font-bold text-amber-400">⏳ Chờ Khớp Vùng Entry</div>
+                    <div className="font-bold text-xs text-white mt-0.5">{prefix}{formatPrice(currentItem.entryZone[0])}{priceSuffix}</div>
                   </button>
                 </div>
               </div>
@@ -677,7 +698,7 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                 className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Xác Nhận Vào Lệnh Test</span>
+                <span>Xác Nhận Mở Lệnh</span>
               </button>
             </div>
           </div>

@@ -16,7 +16,6 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
   // ========== HÀNG HÓA: VÀNG & DẦU MỎ (COMMODITIES) ==========
   { symbol: 'XAUUSD', name: 'Vàng Thế Giới (Spot Gold)', type: 'commodity', baseAsset: 'XAU', quoteAsset: 'USD', category: 'Kim Loại Quý / Vàng Thế Giới', defaultPrice: 4575.65 },
   { symbol: 'PAXGUSDT', name: 'PAX Gold (Vàng số 1:1 Vàng thật)', type: 'crypto', baseAsset: 'PAXG', quoteAsset: 'USDT', category: 'Vàng Token Hóa (Binance)', defaultPrice: 4575.65 },
-  { symbol: 'SJC', name: 'Vàng Miếng SJC (Triệu VNĐ/Lượng)', type: 'commodity', baseAsset: 'SJC', quoteAsset: 'VND', category: 'Vàng Miếng Việt Nam SJC', defaultPrice: 80.50 },
   { symbol: 'OIL_WTI', name: 'Dầu Thô WTI (Crude Oil)', type: 'commodity', baseAsset: 'WTI', quoteAsset: 'USD', category: 'Năng Lượng / Dầu Thô Mỹ', defaultPrice: 83.12 },
   { symbol: 'OIL_BRENT', name: 'Dầu Thô Brent (Brent Oil)', type: 'commodity', baseAsset: 'BRENT', quoteAsset: 'USD', category: 'Năng Lượng / Dầu Chuẩn Quốc Tế', defaultPrice: 88.20 },
   { symbol: 'SILVER', name: 'Bạc Thế Giới (Silver)', type: 'commodity', baseAsset: 'XAG', quoteAsset: 'USD', category: 'Kim Loại Quý / Bạc', defaultPrice: 69.56 },
@@ -68,6 +67,8 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
   { symbol: 'HPG', name: 'Tập đoàn Hòa Phát', type: 'vn30', baseAsset: 'HPG', quoteAsset: 'VND', category: 'VN30 - Thép & Vật liệu', defaultPrice: 22.20 },
   { symbol: 'SSI', name: 'CTCP Chứng khoán SSI', type: 'vn30', baseAsset: 'SSI', quoteAsset: 'VND', category: 'VN30 - Chứng khoán SSI', defaultPrice: 21.45 },
   { symbol: 'VPB', name: 'Ngân hàng VPBank', type: 'vn30', baseAsset: 'VPB', quoteAsset: 'VND', category: 'VN30 - Ngân hàng', defaultPrice: 19.30 },
+  { symbol: 'PNJ', name: 'CTCP Vàng bạc Đá quý Phú Nhuận', type: 'stock', baseAsset: 'PNJ', quoteAsset: 'VND', category: 'VN30 - Bán lẻ Vàng bạc Trang sức', defaultPrice: 96.50 },
+  { symbol: 'SJC', name: 'CTCP Sông Đà 1.01 (Mã CK: SJC)', type: 'stock', baseAsset: 'SJC', quoteAsset: 'VND', category: 'Chứng khoán VN - Bất động sản & Xây dựng', defaultPrice: 5.20 },
   { symbol: 'VRE', name: 'Vincom Retail', type: 'vn30', baseAsset: 'VRE', quoteAsset: 'VND', category: 'VN30 - Bất động sản thương mại', defaultPrice: 18.60 },
   { symbol: 'VNM', name: 'Sữa Việt Nam (Vinamilk)', type: 'vn30', baseAsset: 'VNM', quoteAsset: 'VND', category: 'VN30 - Thực phẩm & Đồ uống', defaultPrice: 67.50 },
   { symbol: 'VJC', name: 'Hàng không Vietjet', type: 'vn30', baseAsset: 'VJC', quoteAsset: 'VND', category: 'VN30 - Hàng không', defaultPrice: 105.30 },
@@ -115,9 +116,9 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
 
 // LocalStorage Persistence Keys
 export const STORAGE_KEYS = {
-  SYMBOLS: 'quant_ai_symbols_v5',
-  FAVORITES: 'quant_ai_favorites_v5',
-  LAST_SYMBOL: 'quant_ai_last_symbol_v5',
+  SYMBOLS: 'quant_ai_symbols_v6',
+  FAVORITES: 'quant_ai_favorites_v6',
+  LAST_SYMBOL: 'quant_ai_last_symbol_v6',
 };
 
 // Save symbols list to LocalStorage

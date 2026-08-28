@@ -497,6 +497,7 @@ export const App: React.FC = () => {
                   <OrderBook
                     orderBook={orderBook}
                     currentPrice={currentSymbol.price}
+                    quoteAsset={currentSymbol.quoteAsset}
                   />
                 </div>
               )}

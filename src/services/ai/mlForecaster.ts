@@ -137,30 +137,71 @@ export function generateAIPrediction(
   const bearProb = Math.min(85, Math.max(10, Math.round((100 - combinedBullProb) * 0.75 + 10)));
   const baseProb = Math.max(10, 100 - bullProb - bearProb);
 
+  const bullTarget = mc.upper68[mc.upper68.length - 1];
+  const baseTarget = mc.medianPath[mc.medianPath.length - 1];
+  const bearTarget = mc.lower68[mc.lower68.length - 1];
+
+  const bullChangePct = currentPrice > 0 ? ((bullTarget - currentPrice) / currentPrice) * 100 : 0;
+  const baseChangePct = currentPrice > 0 ? ((baseTarget - currentPrice) / currentPrice) * 100 : 0;
+  const bearChangePct = currentPrice > 0 ? ((bearTarget - currentPrice) / currentPrice) * 100 : 0;
+
   const scenarios: AIPredictionScenario[] = [
     {
-      name: 'Kịch bản Tăng giá (Bullish Expansion)',
+      name: 'Kịch bản Tăng Giá (Bullish Expansion)',
+      type: 'BULLISH',
       color: '#10b981',
       path: mc.times.map((t, i) => ({ time: t, price: mc.upper68[i] })),
       probability: bullProb,
-      targetPrice: mc.upper68[mc.upper68.length - 1],
+      targetPrice: bullTarget,
+      priceChangePercent: parseFloat(bullChangePct.toFixed(2)),
+      invalidationPrice: currentPrice * 0.97,
+      timeHorizon: `${forecastBars} nến tới (1 - 2 ngày)`,
       description: 'Phá vỡ kháng cự gần nhất và kích hoạt sóng tăng mở rộng (Target TP).',
+      triggers: [
+        'Nến đóng cửa giữ vững trên EMA 20 & bứt phá đỉnh ngắn hạn',
+        'Khối lượng mua chủ động tăng vượt 130% so với TB 20 phiên',
+        'Chỉ báo RSI bứt phá vượt ngưỡng 55 hướng lên vùng tích cực',
+      ],
+      actionPlan: 'Ưu tiên mở vị thế Mua (Long) khi giá điều chỉnh về vùng hỗ trợ. Chốt lời từng phần tại mục tiêu.',
+      riskReward: '1 : 2.8',
     },
     {
-      name: 'Kịch bản Cơ sở (Base Case / Drift)',
+      name: 'Kịch bản Cơ Sở (Base Case / Sideway)',
+      type: 'BASE',
       color: '#3b82f6',
       path: mc.times.map((t, i) => ({ time: t, price: mc.medianPath[i] })),
       probability: baseProb,
-      targetPrice: mc.medianPath[mc.medianPath.length - 1],
+      targetPrice: baseTarget,
+      priceChangePercent: parseFloat(baseChangePct.toFixed(2)),
+      invalidationPrice: currentPrice * 0.95,
+      timeHorizon: `${forecastBars} nến tới (1 - 2 ngày)`,
       description: 'Tiếp tục dao động theo xu hướng trung bình động với biên độ ổn định.',
+      triggers: [
+        'Giá dao động tích lũy trong vùng hộp cản hỗ trợ - kháng cự',
+        'Khối lượng giao dịch ở mức trung bình ổn định, không có xả hàng',
+        'Chỉ báo RSI đi ngang trong vùng cân bằng 45 - 55',
+      ],
+      actionPlan: 'Chiến lược giao dịch lướt sóng biên độ: Mua ở biên dưới hỗ trợ, bán hạ tỉ trọng ở biên trên.',
+      riskReward: '1 : 1.8',
     },
     {
-      name: 'Kịch bản Điều chỉnh (Bearish Retest)',
+      name: 'Kịch bản Điều Chỉnh (Bearish Retest)',
+      type: 'BEARISH',
       color: '#f43f5e',
       path: mc.times.map((t, i) => ({ time: t, price: mc.lower68[i] })),
       probability: bearProb,
-      targetPrice: mc.lower68[mc.lower68.length - 1],
+      targetPrice: bearTarget,
+      priceChangePercent: parseFloat(bearChangePct.toFixed(2)),
+      invalidationPrice: currentPrice * 1.03,
+      timeHorizon: `${forecastBars} nến tới (1 - 2 ngày)`,
       description: 'Điều chỉnh kiểm định lại vùng đáy hỗ trợ và thanh lý các vị thế đòn bẩy cao.',
+      triggers: [
+        'Gãy qua đường hỗ trợ động EMA 50 hoặc thủng đáy ngắn hạn gần nhất',
+        'Xuất hiện phân kỳ âm trên chỉ báo MACD Histogram và RSI',
+        'Áp lực bán chốt lời gia tăng khi thị trường chạm vùng cản mạnh',
+      ],
+      actionPlan: 'Kiên nhẫn chờ giá về vùng hỗ trợ cứng để gom hàng chiết khấu. Đặt Stop Loss chặt chẽ.',
+      riskReward: '1 : 2.5',
     },
   ];
 

@@ -75,11 +75,18 @@ export interface OrderBlock {
 // AI Price Path Forecasting
 export interface AIPredictionScenario {
   name: string;
+  type: 'BULLISH' | 'BASE' | 'BEARISH';
   color: string;
   path: { time: number; price: number }[];
   probability: number;
   targetPrice: number;
+  priceChangePercent: number;
+  invalidationPrice: number;
+  timeHorizon: string;
   description: string;
+  triggers: string[];
+  actionPlan: string;
+  riskReward: string;
 }
 
 export interface AIPrediction {

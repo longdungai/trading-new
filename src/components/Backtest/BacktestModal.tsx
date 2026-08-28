@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Candle } from '../../types';
-import { runBacktest, StrategyType, BacktestResult, BacktestTrade } from '../../services/backtesting/backtester';
+import { runBacktest, StrategyType, BacktestResult } from '../../services/backtesting/backtester';
 import { formatPercent, formatPrice, formatTime } from '../../utils/formatters';
 import {
   Sparkles,
@@ -15,8 +15,6 @@ import {
   RotateCcw,
   FastForward,
   Settings2,
-  CheckCircle2,
-  Flame,
   Zap,
 } from 'lucide-react';
 
@@ -33,14 +31,48 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
   const [capital, setCapital] = useState<number>(10000);
   const [riskPercent, setRiskPercent] = useState<number>(2);
   const [leverage, setLeverage] = useState<number>(1);
-  const [feePercent, setFeePercent] = useState<number>(0.04);
-  const [tpStrategy, setTpStrategy] = useState<'TP1' | 'TP2' | 'TP3'>('TP2');
 
   // Simulation Replay States
   const [replayIndex, setReplayIndex] = useState<number>(() => Math.max(20, Math.floor(candles.length * 0.3)));
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(500); // ms per candle
   const timerRef = useRef<any>(null);
+
+  // Stop playback safely
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  // Switch mode safely
+  const handleModeChange = (newMode: 'instant' | 'replay') => {
+    stopPlayback();
+    setMode(newMode);
+  };
+
+  // Close safely
+  const handleClose = () => {
+    stopPlayback();
+    onClose();
+  };
+
+  // Pause simulation whenever browser tab or window changes visibility
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPlayback();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopPlayback();
+    };
+  }, []);
 
   // Derive active candles based on mode
   const activeCandles = mode === 'instant' ? candles : candles.slice(0, replayIndex + 1);
@@ -60,34 +92,38 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
       timerRef.current = setInterval(() => {
         setReplayIndex(prev => {
           if (prev >= candles.length - 1) {
-            setIsPlaying(false);
+            stopPlayback();
             return prev;
           }
           return prev + 1;
         });
       }, playbackSpeed);
     } else {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, [isPlaying, mode, candles.length, playbackSpeed]);
 
   const handleResetReplay = () => {
-    setIsPlaying(false);
+    stopPlayback();
     setReplayIndex(Math.max(20, Math.floor(candles.length * 0.3)));
   };
 
   const handleStepNext = () => {
-    setIsPlaying(false);
+    stopPlayback();
     setReplayIndex(prev => Math.min(candles.length - 1, prev + 1));
   };
 
   const currentReplayCandle = candles[replayIndex] || candles[candles.length - 1];
-  const lastTrade = result.trades[result.trades.length - 1];
-  const isCurrentlyInTrade = lastTrade && lastTrade.exitTime === currentReplayCandle?.time;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 select-none animate-in fade-in">
@@ -114,7 +150,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-lg bg-[#1a2332] text-gray-400 hover:text-white transition"
           >
             <X className="w-5 h-5" />
@@ -125,10 +161,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
         <div className="px-3 sm:px-4 py-2.5 bg-[#0a0e16] border-b border-[#1c2738] flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1 bg-[#141c28] p-1 rounded-xl border border-[#24334a]">
             <button
-              onClick={() => {
-                setMode('instant');
-                setIsPlaying(false);
-              }}
+              onClick={() => handleModeChange('instant')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                 mode === 'instant'
                   ? 'bg-blue-600 text-white shadow'
@@ -140,7 +173,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
             </button>
 
             <button
-              onClick={() => setMode('replay')}
+              onClick={() => handleModeChange('replay')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                 mode === 'replay'
                   ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
@@ -221,7 +254,10 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
             </label>
             <select
               value={strategy}
-              onChange={(e) => setStrategy(e.target.value as StrategyType)}
+              onChange={(e) => {
+                stopPlayback();
+                setStrategy(e.target.value as StrategyType);
+              }}
               className="w-full bg-[#182232] border border-[#27364e] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
             >
               <option value="SUPERTREND_EMA">📈 1. SuperTrend + EMA Golden Ribbon</option>
@@ -342,7 +378,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
           {mode === 'replay' && currentReplayCandle && (
             <div className="p-2.5 rounded-xl bg-[#151f2e] border border-blue-500/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping" />
+                <span className={`w-2.5 h-2.5 rounded-full ${isPlaying ? 'bg-blue-400 animate-ping' : 'bg-gray-500'}`} />
                 <span className="text-xs font-mono font-bold text-white">
                   Nến Hiện Tại ({formatTime(currentReplayCandle.time, 'full')}):
                 </span>

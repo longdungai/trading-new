@@ -21,14 +21,22 @@ import {
 interface BacktestModalProps {
   candles: Candle[];
   symbolName: string;
+  quoteAsset?: string;
   onClose: () => void;
 }
 
-export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolName, onClose }) => {
+export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolName, quoteAsset = 'USD', onClose }) => {
+  const isVND = quoteAsset === 'VND' || symbolName.includes('VN') || symbolName === 'FPT' || symbolName === 'HPG' || symbolName === 'VIC' || symbolName === 'VHM' || symbolName === 'SJC' || symbolName === 'MWG' || symbolName === 'MSN' || symbolName === 'GAS' || symbolName === 'STB' || symbolName === 'VCB' || symbolName === 'TCB' || symbolName === 'SSI' || symbolName === 'VPB';
+
+  const defaultCapital = isVND ? 100000000 : 10000;
+  const prefix = isVND ? '' : '$';
+  const suffix = isVND ? ' VNĐ' : '';
+  const priceSuffix = isVND ? 'k' : '';
+
   // Test Options
   const [mode, setMode] = useState<'instant' | 'replay'>('instant');
   const [strategy, setStrategy] = useState<StrategyType>('SUPERTREND_EMA');
-  const [capital, setCapital] = useState<number>(10000);
+  const [capital, setCapital] = useState<number>(defaultCapital);
   const [riskPercent, setRiskPercent] = useState<number>(2);
   const [leverage, setLeverage] = useState<number>(1);
 
@@ -139,8 +147,10 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                 <h2 className="text-sm sm:text-base font-bold text-white uppercase tracking-tight font-mono">
                   Kiểm Thử & Chạy Thử Chiến Lược AI - <span className="text-blue-400">{symbolName}</span>
                 </h2>
-                <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-500/30">
-                  SIMULATOR PRO
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                  isVND ? 'bg-red-500/20 text-red-300 border-red-500/30' : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                }`}>
+                  {isVND ? 'TIỀN TỆ: VNĐ' : 'TIỀN TỆ: USD'}
                 </span>
               </div>
               <p className="text-[11px] text-gray-400">
@@ -273,7 +283,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
           {/* Capital Input */}
           <div>
             <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1">
-              Vốn Ban Đầu ($)
+              Vốn Ban Đầu ({isVND ? 'VNĐ' : '$'})
             </label>
             <input
               type="number"
@@ -303,18 +313,19 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
           {/* Leverage */}
           <div>
             <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1">
-              Đòn Bẩy (Leverage)
+              {isVND ? 'Hình Thức Giao Dịch' : 'Đòn Bẩy (Leverage)'}
             </label>
             <select
               value={leverage}
               onChange={(e) => setLeverage(Number(e.target.value))}
               className="w-full bg-[#182232] border border-[#27364e] rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-blue-500"
             >
-              <option value={1}>Spot (1x)</option>
-              <option value={3}>Futures 3x</option>
-              <option value={5}>Futures 5x</option>
-              <option value={10}>Futures 10x</option>
-              <option value={20}>Futures 20x</option>
+              <option value={1}>{isVND ? 'Tiền Thịt (1x Cơ Sở)' : 'Spot (1x)'}</option>
+              <option value={2}>{isVND ? 'Margin Tỉ Lệ 1:1 (2x)' : 'Futures 2x'}</option>
+              <option value={3}>{isVND ? 'Margin 3x' : 'Futures 3x'}</option>
+              <option value={5}>Đòn bẩy 5x</option>
+              <option value={10}>Đòn bẩy 10x</option>
+              <option value={20}>Đòn bẩy 20x</option>
             </select>
           </div>
         </div>
@@ -339,15 +350,15 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
             <div className="p-3 rounded-xl bg-[#131b28] border border-[#212e42] shadow-sm">
               <div className="text-[10px] text-gray-400 uppercase font-semibold flex items-center gap-1">
                 <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                Tổng Lợi Nhuận ({leverage > 1 ? `${leverage}x` : 'Spot'})
+                Tổng Lợi Nhuận ({leverage > 1 ? `${leverage}x` : '1x'})
               </div>
               <div className={`text-lg sm:text-xl font-bold font-mono mt-1 ${
                 leveragedReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'
               }`}>
                 {formatPercent(leveragedReturn)}
               </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">
-                Số dư: ${formatPrice(leveragedBalance)}
+              <div className="text-[10px] text-gray-400 mt-0.5 truncate">
+                Số dư: {isVND ? `${(leveragedBalance / 1000000).toFixed(1)} Triệu VNĐ` : `$${formatPrice(leveragedBalance)}`}
               </div>
             </div>
 
@@ -383,11 +394,11 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                   Nến Hiện Tại ({formatTime(currentReplayCandle.time, 'full')}):
                 </span>
                 <span className="text-xs font-mono font-bold text-cyan-300">
-                  Đóng cửa: ${formatPrice(currentReplayCandle.close)}
+                  Đóng cửa: {prefix}{formatPrice(currentReplayCandle.close)}{priceSuffix}
                 </span>
               </div>
               <div className="text-xs font-mono text-gray-300">
-                Cao: ${formatPrice(currentReplayCandle.high)} • Thấp: ${formatPrice(currentReplayCandle.low)}
+                Cao: {prefix}{formatPrice(currentReplayCandle.high)}{priceSuffix} • Thấp: {prefix}{formatPrice(currentReplayCandle.low)}{priceSuffix}
               </div>
             </div>
           )}
@@ -400,7 +411,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                 Đồ Thị Tăng Trưởng Tài Khoản (Equity Curve)
               </div>
               <div className="text-[10px] font-mono text-gray-400">
-                Khởi điểm: ${formatPrice(capital)} $\to$ Hiện tại: ${formatPrice(leveragedBalance)}
+                Vốn: {isVND ? `${(capital / 1000000).toFixed(0)}Tr` : `$${formatPrice(capital)}`} $\to$ Hiện tại: {isVND ? `${(leveragedBalance / 1000000).toFixed(1)} Triệu VNĐ` : `$${formatPrice(leveragedBalance)}`}
               </div>
             </div>
 
@@ -453,7 +464,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                     <th className="p-2">Giá Vào</th>
                     <th className="p-2">Giá Ra</th>
                     <th className="p-2">Lãi/Lỗ (%)</th>
-                    <th className="p-2">PnL ($)</th>
+                    <th className="p-2">PnL ({isVND ? 'VNĐ' : '$'})</th>
                     <th className="p-2">Kết Quả</th>
                   </tr>
                 </thead>
@@ -472,13 +483,13 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                           </span>
                         </td>
                         <td className="p-2 text-gray-300">{formatTime(t.entryTime, 'time')}</td>
-                        <td className="p-2 text-gray-200">${formatPrice(t.entryPrice)}</td>
-                        <td className="p-2 text-gray-200">${formatPrice(t.exitPrice)}</td>
+                        <td className="p-2 text-gray-200">{prefix}{formatPrice(t.entryPrice)}{priceSuffix}</td>
+                        <td className="p-2 text-gray-200">{prefix}{formatPrice(t.exitPrice)}{priceSuffix}</td>
                         <td className={`p-2 font-bold ${tradePct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {formatPercent(tradePct)}
                         </td>
                         <td className={`p-2 font-bold ${tradePnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {tradePnl >= 0 ? '+' : ''}${formatPrice(tradePnl)}
+                          {tradePnl >= 0 ? '+' : ''}{isVND ? `${(tradePnl / 1000000).toFixed(2)} Triệu` : `$${formatPrice(tradePnl)}`}
                         </td>
                         <td className="p-2">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${

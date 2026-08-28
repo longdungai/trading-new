@@ -451,7 +451,10 @@ export const App: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {((rightPanelTab === 'ai' && mobileTab === 'chart') || mobileTab === 'ai') && (
                 <>
-                  <AIPredictionCard prediction={aiPrediction} />
+                  <AIPredictionCard
+                    prediction={aiPrediction}
+                    quoteAsset={currentSymbol.quoteAsset}
+                  />
                   <TradeSetupCard
                     strategyHub={strategyHub}
                     setup={tradeSetup}
@@ -572,6 +575,7 @@ export const App: React.FC = () => {
         <BacktestModal
           candles={candles}
           symbolName={currentSymbol.symbol}
+          quoteAsset={currentSymbol.quoteAsset}
           onClose={() => setIsBacktestOpen(false)}
         />
       )}

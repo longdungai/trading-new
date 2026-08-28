@@ -5,9 +5,10 @@ import { formatPercent, formatPrice } from '../../utils/formatters';
 
 interface AIPredictionCardProps {
   prediction: AIPrediction | null;
+  quoteAsset?: string;
 }
 
-export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction }) => {
+export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, quoteAsset = 'USD' }) => {
   if (!prediction) {
     return (
       <div className="p-3 sm:p-4 rounded-xl bg-[#121824] border border-[#1e293b] text-gray-400 text-xs">
@@ -16,6 +17,7 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction }
     );
   }
 
+  const isVND = quoteAsset === 'VND';
   const isBull = prediction.trend === 'STRONG_BULLISH' || prediction.trend === 'BULLISH';
   const isBear = prediction.trend === 'STRONG_BEARISH' || prediction.trend === 'BEARISH';
 
@@ -100,7 +102,7 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction }
                   </span>
                 </div>
                 <div className="text-xs sm:text-sm font-mono font-bold text-white mb-0.5">
-                  ${formatPrice(sc.targetPrice)}
+                  {isVND ? `${formatPrice(sc.targetPrice)}k` : `$${formatPrice(sc.targetPrice)}`}
                 </div>
               </div>
               <div className="text-[9px] sm:text-[10px] text-gray-400 line-clamp-2 mt-1">

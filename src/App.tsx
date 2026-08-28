@@ -254,6 +254,7 @@ export const App: React.FC = () => {
     const fresh = symbols.find(s => s.symbol === sym.symbol) || sym;
     setCurrentSymbol(fresh);
     currentSymbolRef.current = fresh;
+    setOrderBook(null);
 
     if (activeView === 'heatmap') setActiveView('chart');
     setMobileTab('chart');
@@ -497,6 +498,7 @@ export const App: React.FC = () => {
                   <OrderBook
                     orderBook={orderBook}
                     currentPrice={currentSymbol.price}
+                    symbol={currentSymbol.symbol}
                     quoteAsset={currentSymbol.quoteAsset}
                   />
                 </div>

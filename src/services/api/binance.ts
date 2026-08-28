@@ -9,6 +9,7 @@ const timeframeMap: Record<Timeframe, string> = {
   '4h': '4h',
   '1D': '1d',
   '1W': '1w',
+  '1M': '1M',
 };
 
 const BASE_URLS = [

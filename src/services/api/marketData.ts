@@ -489,6 +489,9 @@ export async function fetchStockKlines(
   } else if (timeframe === '1W') {
     interval = '1wk';
     range = '1y';
+  } else if (timeframe === '1M') {
+    interval = '1mo';
+    range = '5y';
   }
 
   const encodedSymbol = encodeURIComponent(yahooSymbol);
@@ -678,6 +681,7 @@ export function generateRealisticKlines(
   else if (timeframe === '4h') intervalSeconds = 14400;
   else if (timeframe === '1D') intervalSeconds = 86400;
   else if (timeframe === '1W') intervalSeconds = 604800;
+  else if (timeframe === '1M') intervalSeconds = 2592000;
 
   let currentPrice = basePrice * 0.95;
   const startTime = now - count * intervalSeconds;

@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [filterType, setFilterType] = useState<'all' | 'commodity' | 'crypto' | 'vn30' | 'stock'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
+  const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1D', '1W', '1M'];
 
   const filteredSymbols = symbols.filter(s => {
     const matchesType =

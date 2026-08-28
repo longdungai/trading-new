@@ -1,0 +1,24 @@
+{
+  "name": "Trading New PRO - AI Market Terminal",
+  "short_name": "Trading New",
+  "description": "Nền tảng phân tích kỹ thuật, dự báo giá AI và chiến lược giao dịch chuyên nghiệp cho Crypto, Chứng khoán VN30, Vàng & Dầu mỏ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080b11",
+  "theme_color": "#080b11",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192' fill='%233b82f6'><rect width='192' height='192' rx='36' fill='%230f172a'/><path d='M30 30v132h132v-16H46V30H30zm28 100h16V86H58v44zm32 0h16V46H90v84zm32 0h16v-54h-16v54zm32 0h16V30h-16v100z' fill='%2338bdf8'/></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%233b82f6'><rect width='512' height='512' rx='96' fill='%230f172a'/><path d='M80 80v352h352v-40H120V80H80zm70 260h40V230h-40v110zm80 0h40V120h-40v220zm80 0h40V180h-40v160zm80 0h40V80h-40v260z' fill='%2338bdf8'/></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

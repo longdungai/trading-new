@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  trading-terminal:
+    build: .
+    container_name: trading_new_terminal
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      - NODE_ENV=production

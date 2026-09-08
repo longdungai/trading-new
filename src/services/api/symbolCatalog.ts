@@ -116,9 +116,9 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
 
 // LocalStorage Persistence Keys
 export const STORAGE_KEYS = {
-  SYMBOLS: 'quant_ai_symbols_v6',
-  FAVORITES: 'quant_ai_favorites_v6',
-  LAST_SYMBOL: 'quant_ai_last_symbol_v6',
+  SYMBOLS: 'quant_ai_symbols_v7',
+  FAVORITES: 'quant_ai_favorites_v7',
+  LAST_SYMBOL: 'quant_ai_last_symbol_v7',
 };
 
 // Save symbols list to LocalStorage

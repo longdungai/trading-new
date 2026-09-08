@@ -113,6 +113,7 @@ export function generateStrategyHub(
     strategies.push({
       id: 'supertrend_ema',
       name: 'SuperTrend + EMA Golden Ribbon',
+      shortName: 'SuperTrend',
       category: 'Bám Xu Hướng & Động Lượng',
       description: 'Giao dịch theo xu hướng lớn, lọc nhiễu qua SuperTrend và cặp đường trung bình EMA 20/50/200.',
       action,
@@ -165,6 +166,7 @@ export function generateStrategyHub(
     strategies.push({
       id: 'smc_orderblock',
       name: 'SMC - Order Block & Quét Thanh Khoản',
+      shortName: 'SMC Cá Mập',
       category: 'Smart Money (Dòng Tiền Cá Mập)',
       description: 'Xác định dấu vết tổ chức tài chính lớn bằng cấu trúc thị trường, Order Block và khoảng trống giá FVG.',
       action,
@@ -220,6 +222,7 @@ export function generateStrategyHub(
     strategies.push({
       id: 'fib_golden_pocket',
       name: 'Fibonacci Golden Pocket 0.618',
+      shortName: 'Fibonacci',
       category: 'Sóng Hồi Kỹ Thuật (Pullback)',
       description: 'Đón đầu các nhịp hồi quy chuẩn mực tại vùng tỉ lệ vàng 61.8% - 65% để tối ưu hóa Risk/Reward.',
       action,
@@ -274,6 +277,7 @@ export function generateStrategyHub(
     strategies.push({
       id: 'rsi_divergence',
       name: 'RSI Đảo Chiều & Vùng Quá Bán/Quá Mua',
+      shortName: 'RSI Đảo Chiều',
       category: 'Đảo Chiều Đỉnh Đáy (Reversal)',
       description: 'Khai thác sự cạn kiệt lực bán tại vùng quá bán (RSI < 30) hoặc chốt lời đỉnh khi quá mua (RSI > 70).',
       action,
@@ -327,6 +331,7 @@ export function generateStrategyHub(
     strategies.push({
       id: 'bb_squeeze',
       name: 'Bollinger Band Squeeze & Bùng Nổ Biến Động',
+      shortName: 'BB Breakout',
       category: 'Bứt Phá Biến Động (Breakout)',
       description: 'Bắt trọn con sóng lớn khi dải Bollinger nén hẹp sau đó bung mở biên độ (Volatility Expansion).',
       action,
@@ -380,6 +385,7 @@ export function generateStrategyHub(
     strategies.push({
       id: 'macd_momentum',
       name: 'MACD Momentum & Động Lượng Mở Rộng',
+      shortName: 'MACD Động Lượng',
       category: 'Động Lượng & Xung Lực',
       description: 'Đo lường gia tốc giá thông qua Histogram và sự hội tụ/phân kỳ của đường trung bình động MACD.',
       action,
@@ -432,6 +438,7 @@ export function generateStrategyHub(
     strategies.push({
       id: 'sr_breakout',
       name: 'Phá Vỡ & Kiểm Tra Lại Hỗ Trợ/Kháng Cự',
+      shortName: 'Hỗ Trợ/Kháng Cự',
       category: 'Cấu Trúc Giá Cổ Điển',
       description: 'Giao dịch theo các ngưỡng cản then chốt được tạo bởi các đỉnh/đáy lịch sử có nhiều lần chạm bật.',
       action,
@@ -445,6 +452,121 @@ export function generateStrategyHub(
       winProbability: 67,
       triggers,
       riskLevel: 'LOW',
+    });
+  }
+
+  // ================= 8. SPOT ACCUMULATION & DCA (INVESTMENT / SWING) =================
+  {
+    const nearestSupport = srLevels.filter(s => s.type === 'support').sort((a, b) => b.price - a.price)[0];
+    const isAboveEma200 = currentPrice >= lastEma200;
+
+    let action: SignalAction = 'BUY';
+    let score = 84;
+    const triggers: string[] = [];
+
+    triggers.push('Kịch bản Giao Dịch Spot / Cơ Sở (100% không đòn bẩy Margin, an toàn tuyệt đối)');
+
+    if (lastRsi < 42) {
+      action = 'STRONG_BUY';
+      score = 94;
+      triggers.push(`RSI (${lastRsi.toFixed(1)}) ở vùng giá chiết khấu hấp dẫn để gom hàng tích sản`);
+    } else if (isAboveEma200) {
+      action = 'STRONG_BUY';
+      score = 89;
+      triggers.push('Giá duy trì trên EMA 200 - Chu kỳ Uptrend trung & dài hạn vững chắc');
+    } else {
+      action = 'BUY';
+      score = 80;
+      triggers.push('Vùng tích lũy chân sóng - Thích hợp chia nhỏ vốn gom DCA 3 bước');
+    }
+
+    triggers.push('Khuyến nghị phân bổ: 40% vị thế tại giá hiện tại, 60% chờ nhịp pullback test hỗ trợ');
+
+    const entryLow = nearestSupport && nearestSupport.price < currentPrice ? nearestSupport.price : currentPrice * 0.96;
+    const entryHigh = currentPrice * 1.01;
+    const sl = nearestSupport && nearestSupport.price < currentPrice ? nearestSupport.price * 0.92 : currentPrice * 0.89;
+    const risk = Math.abs(currentPrice - sl);
+
+    const tp1 = currentPrice * 1.10;
+    const tp2 = currentPrice * 1.22;
+    const tp3 = currentPrice * 1.45;
+
+    strategies.push({
+      id: 'spot_accumulation',
+      name: 'Kịch Bản Giao Dịch Spot & Tích Sản',
+      shortName: 'Spot Tích Sản',
+      category: 'Giao Dịch Spot / Đầu Tư Cơ Sở',
+      description: 'Chiến lược gom hàng giao ngay (Spot) không dùng đòn bẩy Margin, chia vốn DCA gom vùng đáy và nắm giữ theo chu kỳ sóng lớn.',
+      action,
+      score,
+      entryZone: [parseFloat(entryLow.toFixed(2)), parseFloat(entryHigh.toFixed(2))],
+      stopLoss: parseFloat(sl.toFixed(2)),
+      takeProfit1: parseFloat(tp1.toFixed(2)),
+      takeProfit2: parseFloat(tp2.toFixed(2)),
+      takeProfit3: parseFloat(tp3.toFixed(2)),
+      riskRewardRatio: parseFloat((risk > 0 ? (Math.abs(tp2 - currentPrice) / risk) : 3.5).toFixed(2)),
+      winProbability: 76,
+      triggers,
+      riskLevel: 'LOW',
+    });
+  }
+
+  // ================= 9. INTRADAY / DAILY TRADING (LƯỚT SÓNG TRONG NGÀY) =================
+  {
+    const isMacdBull = lastMacd ? lastMacd.macd > lastMacd.signal : true;
+    const isRsiMomentum = lastRsi > 48 && lastRsi < 68;
+
+    let action: SignalAction = 'WAIT';
+    let score = 70;
+    const triggers: string[] = [];
+
+    triggers.push('Kịch bản Trading Daily / Lướt Sóng Trong Ngày (Tất toán lệnh trước khi đóng phiên)');
+
+    if (isMacdBull && isRsiMomentum && currentPrice > lastEma20) {
+      action = 'STRONG_BUY';
+      score = 88;
+      triggers.push('Động lượng nến trong ngày bứt phá (Breakout EMA 20 ngắn hạn)');
+      triggers.push('MACD giao cắt dương + RSI duy trì sức mua xung lực tích cực');
+    } else if (!isMacdBull && currentPrice < lastEma20) {
+      action = 'STRONG_SELL';
+      score = 84;
+      triggers.push('Áp lực chốt lời trong phiên làm gãy đường xu hướng EMA 20 ngắn');
+      triggers.push('MACD cắt xuống - Ưu tiên Short hoặc đứng ngoài quan sát');
+    } else {
+      action = currentPrice >= lastEma50 ? 'BUY' : 'SELL';
+      score = 74;
+      triggers.push('Biến động sideway trong ngày - Lướt sóng theo biên độ dải Bollinger Bands');
+    }
+
+    triggers.push('Quy tắc Day Trading: Cắt lỗ nhanh 1.5% - 2.0%, không gồng lệnh qua đêm tránh rủi ro Gap phiên mở cửa');
+
+    const entryLow = currentPrice * 0.996;
+    const entryHigh = currentPrice * 1.004;
+    const slDistance = Math.max(currentPrice * 0.015, currentAtr * 1.2);
+    const sl = action.includes('BUY') ? currentPrice - slDistance : currentPrice + slDistance;
+    const risk = Math.abs(currentPrice - sl);
+
+    const tp1 = action.includes('BUY') ? currentPrice + risk * 1.4 : currentPrice - risk * 1.4;
+    const tp2 = action.includes('BUY') ? currentPrice + risk * 2.2 : currentPrice - risk * 2.2;
+    const tp3 = action.includes('BUY') ? currentPrice + risk * 3.5 : currentPrice - risk * 3.5;
+
+    strategies.push({
+      id: 'daily_daytrading',
+      name: 'Kịch Bản Trading Daily (Lướt Sóng Ngày)',
+      shortName: 'Trading Daily',
+      category: 'Trading Daily / Lướt Sóng Ngắn Hạn',
+      description: 'Chiến lược lướt sóng nhanh trong ngày (Day Trading/Scalp), tối ưu hóa tốc độ luân chuyển vốn, chốt lời dứt khoát và tất toán trong phiên.',
+      action,
+      score,
+      entryZone: [parseFloat(entryLow.toFixed(2)), parseFloat(entryHigh.toFixed(2))],
+      stopLoss: parseFloat(sl.toFixed(2)),
+      takeProfit1: parseFloat(tp1.toFixed(2)),
+      takeProfit2: parseFloat(tp2.toFixed(2)),
+      takeProfit3: parseFloat(tp3.toFixed(2)),
+      riskRewardRatio: parseFloat((risk > 0 ? (Math.abs(tp2 - currentPrice) / risk) : 2.2).toFixed(2)),
+      winProbability: 68,
+      triggers,
+      riskLevel: 'MEDIUM',
     });
   }
 

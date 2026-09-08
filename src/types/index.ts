@@ -126,10 +126,10 @@ export interface TradeSetup {
   timestamp: number;
 }
 
-// Multi-Strategy Hub & Screener
 export interface StrategyHubItem {
   id: string;
   name: string;
+  shortName?: string;
   category: string;
   description: string;
   action: SignalAction;

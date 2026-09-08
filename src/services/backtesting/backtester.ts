@@ -14,7 +14,9 @@ export type StrategyType =
   | 'RSI_REVERSION'
   | 'BOLLINGER_BREAKOUT'
   | 'MACD_MOMENTUM'
-  | 'SR_BREAKOUT';
+  | 'SR_BREAKOUT'
+  | 'SPOT_ACCUMULATION'
+  | 'DAILY_DAYTRADING';
 
 export function runBacktest(
   candles: Candle[],
@@ -219,6 +221,28 @@ export function runBacktest(
             rrMultiplier = 2.7;
           }
           break;
+
+        case 'SPOT_ACCUMULATION':
+          // Spot Strategy: Buy on deep RSI discount or above EMA 200 with wider targets
+          if (currRSI < 42 || (e200 && c.close > e200 && currRSI > 45 && currRSI < 60)) {
+            signal = 'BUY';
+            slDistancePercent = 0.08; // 8% wide safe SL for Spot
+            rrMultiplier = 3.5; // High R:R for swing hold
+          }
+          break;
+
+        case 'DAILY_DAYTRADING':
+          // Daily DayTrading: Fast ATR / Scalp reactions, tight SL, quick TP
+          if (currMACD && currMACD.macd > currMACD.signal && currRSI > 50 && e20 && c.close > e20) {
+            signal = 'BUY';
+            slDistancePercent = 0.015; // 1.5% tight SL for day trading
+            rrMultiplier = 2.2;
+          } else if (currMACD && currMACD.macd < currMACD.signal && currRSI < 50 && e20 && c.close < e20) {
+            signal = 'SELL';
+            slDistancePercent = 0.015;
+            rrMultiplier = 2.2;
+          }
+          break;
       }
 
       if (signal) {
@@ -273,6 +297,8 @@ export function runBacktest(
     BOLLINGER_BREAKOUT: 'Bollinger Band Squeeze & Breakout',
     MACD_MOMENTUM: 'MACD Momentum & Zero-Lag Cross',
     SR_BREAKOUT: 'Phá Vỡ & Retest Hỗ Trợ/Kháng Cự',
+    SPOT_ACCUMULATION: 'Kịch Bản Giao Dịch Spot & Tích Sản',
+    DAILY_DAYTRADING: 'Kịch Bản Trading Daily (Lướt Sóng Ngày)',
   };
 
   return {

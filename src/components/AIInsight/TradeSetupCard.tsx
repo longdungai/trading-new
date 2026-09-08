@@ -275,7 +275,7 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                   onClick={() => setSelectedStrategyId('best')}
                   className={`px-2 py-1 rounded text-[10px] font-semibold whitespace-nowrap transition flex items-center gap-1 shrink-0 ${
                     selectedStrategyId === 'best'
-                      ? 'bg-blue-600 text-white shadow-sm'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                       : 'bg-[#151e2c] text-gray-400 hover:text-white'
                   }`}
                 >
@@ -287,21 +287,28 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                   const sBuy = s.action.includes('BUY');
                   const sSell = s.action.includes('SELL');
                   const isSelected = selectedStrategyId === s.id;
+                  const displayName = s.shortName || s.name;
+                  const isSpot = s.id === 'spot_accumulation';
+                  const isDaily = s.id === 'daily_daytrading';
 
                   return (
                     <button
                       key={s.id}
                       onClick={() => setSelectedStrategyId(s.id)}
-                      className={`px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap transition flex items-center gap-1 shrink-0 ${
+                      className={`px-2.5 py-1 rounded text-[10px] font-medium whitespace-nowrap transition flex items-center gap-1.5 shrink-0 ${
                         isSelected
-                          ? 'bg-blue-600 text-white shadow-sm'
+                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                          : isSpot
+                          ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:text-white'
+                          : isDaily
+                          ? 'bg-amber-950/40 text-amber-300 border border-amber-500/30 hover:text-white'
                           : 'bg-[#151e2c] text-gray-400 hover:text-white'
                       }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${
                         sBuy ? 'bg-emerald-400' : sSell ? 'bg-rose-400' : 'bg-gray-500'
                       }`} />
-                      <span>{s.name.split(' ')[0]}</span>
+                      <span>{displayName}</span>
                     </button>
                   );
                 })}

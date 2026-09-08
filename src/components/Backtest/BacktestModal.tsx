@@ -270,13 +270,15 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
               }}
               className="w-full bg-[#182232] border border-[#27364e] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
             >
-              <option value="SUPERTREND_EMA">📈 1. SuperTrend + EMA Golden Ribbon</option>
-              <option value="SMC_ORDER_BLOCK">💎 2. Smart Money (SMC) Order Blocks</option>
-              <option value="FIBONACCI_RETRACE">📐 3. Fibonacci Golden Pocket 0.618</option>
-              <option value="RSI_REVERSION">🎯 4. RSI Đảo Chiều Quá Bán/Quá Mua</option>
-              <option value="BOLLINGER_BREAKOUT">💥 5. Bollinger Band Squeeze & Breakout</option>
-              <option value="MACD_MOMENTUM">⚡ 6. MACD Momentum & Zero-Lag</option>
-              <option value="SR_BREAKOUT">🛡️ 7. Phá Vỡ & Retest Hỗ Trợ/Kháng Cự</option>
+              <option value="SPOT_ACCUMULATION">🎯 1. Kịch Bản Giao Dịch Spot & Tích Sản (DCA Không Margin)</option>
+              <option value="DAILY_DAYTRADING">⚡ 2. Kịch Bản Trading Daily (Lướt Sóng Trong Ngày)</option>
+              <option value="SUPERTREND_EMA">📈 3. SuperTrend + EMA Golden Ribbon</option>
+              <option value="SMC_ORDER_BLOCK">💎 4. Smart Money (SMC) Order Blocks</option>
+              <option value="FIBONACCI_RETRACE">📐 5. Fibonacci Golden Pocket 0.618</option>
+              <option value="RSI_REVERSION">🎯 6. RSI Đảo Chiều Quá Bán/Quá Mua</option>
+              <option value="BOLLINGER_BREAKOUT">💥 7. Bollinger Band Squeeze & Breakout</option>
+              <option value="MACD_MOMENTUM">⚡ 8. MACD Momentum & Zero-Lag</option>
+              <option value="SR_BREAKOUT">🛡️ 9. Phá Vỡ & Retest Hỗ Trợ/Kháng Cự</option>
             </select>
           </div>
 

@@ -157,8 +157,14 @@ export function analyzeAccumulationZone(
   }
 
   // Calculate Entry & TP targets
-  const entryLow = supportPrice > 0 && supportPrice < currentPrice ? supportPrice : currentPrice * 0.97;
-  const entryHigh = currentPrice * 1.008;
+  // Sàn gom (entryLow): Tiệm cận hỗ trợ cứng hoặc chiết khấu an toàn (-2.5% đến -5%)
+  let calculatedSupport = supportPrice > 0 && supportPrice < currentPrice ? supportPrice : currentPrice * 0.965;
+  if (calculatedSupport < currentPrice * 0.93) {
+    calculatedSupport = currentPrice * 0.96;
+  }
+  const entryLow = Math.min(calculatedSupport, currentPrice * 0.98);
+  const entryHigh = currentPrice; // Mép trên vùng gom tối đa bằng giá hiện tại (không mua đuổi giá cao hơn)
+  
   const tpTarget = currentPrice * (score >= 78 ? 1.25 : 1.15);
   const discountPct = high24h > 0 ? ((high24h - currentPrice) / high24h) * 100 : Math.abs(change24h);
 

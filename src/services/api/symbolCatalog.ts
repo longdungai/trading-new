@@ -137,7 +137,12 @@ export function loadSymbolsFromStorage(): MarketSymbol[] {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const validated = parsed.filter((s): s is MarketSymbol => 
+          Boolean(s && typeof s === 'object' && s.symbol && typeof s.symbol === 'string' && typeof s.price === 'number')
+        );
+        if (validated.length > 0) {
+          return validated;
+        }
       }
     }
   } catch (e) {

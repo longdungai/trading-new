@@ -22,13 +22,31 @@ export interface AccumulationAnalysis {
  * Analyze if a symbol is in prime accumulation / value buying zone
  */
 export function analyzeAccumulationZone(
-  symbolObj: MarketSymbol,
+  symbolObj?: MarketSymbol | null,
   candles?: Candle[]
 ): AccumulationAnalysis {
-  const currentPrice = symbolObj.price;
-  const high24h = symbolObj.high24h || currentPrice * 1.02;
-  const low24h = symbolObj.low24h || currentPrice * 0.98;
-  const change24h = symbolObj.change24h || 0;
+  if (!symbolObj || !symbolObj.symbol) {
+    return {
+      symbol: '',
+      name: '',
+      type: 'stock',
+      currentPrice: 0,
+      score: 50,
+      status: 'NEUTRAL',
+      statusLabel: 'Theo Dõi',
+      discountPercent: 0,
+      entryZone: [0, 0],
+      targetTakeProfit: 0,
+      riskReward: 2.0,
+      reasons: [],
+      isHot: false,
+    };
+  }
+
+  const currentPrice = typeof symbolObj.price === 'number' && !isNaN(symbolObj.price) ? symbolObj.price : 100;
+  const high24h = typeof symbolObj.high24h === 'number' && !isNaN(symbolObj.high24h) ? symbolObj.high24h : currentPrice * 1.02;
+  const low24h = typeof symbolObj.low24h === 'number' && !isNaN(symbolObj.low24h) ? symbolObj.low24h : currentPrice * 0.98;
+  const change24h = typeof symbolObj.change24h === 'number' && !isNaN(symbolObj.change24h) ? symbolObj.change24h : 0;
 
   let score = 50;
   const reasons: string[] = [];
@@ -164,8 +182,10 @@ export function analyzeAccumulationZone(
 /**
  * Scan all symbols in user's watchlist/catalog and rank them by Accumulation Score
  */
-export function scanMarketAccumulation(symbols: MarketSymbol[]): AccumulationAnalysis[] {
+export function scanMarketAccumulation(symbols?: MarketSymbol[] | null): AccumulationAnalysis[] {
+  if (!Array.isArray(symbols)) return [];
   return symbols
+    .filter((s): s is MarketSymbol => Boolean(s && s.symbol))
     .map(s => analyzeAccumulationZone(s))
     .sort((a, b) => b.score - a.score);
 }

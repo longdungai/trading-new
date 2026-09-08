@@ -1,16 +1,6 @@
-const CACHE_NAME = 'trading-new-pwa-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
-];
+const CACHE_NAME = 'trading-new-pwa-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
   self.skipWaiting();
 });
 
@@ -18,11 +8,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
+        keys.map((key) => caches.delete(key))
       );
     })
   );
@@ -30,14 +16,26 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Let live API requests pass through to network
-  if (event.request.url.includes('/api/') || event.request.url.includes('binance') || event.request.url.includes('yahoo')) {
+  // Pass-through live API requests
+  if (
+    event.request.url.includes('/api/') ||
+    event.request.url.includes('binance') ||
+    event.request.url.includes('yahoo') ||
+    event.request.url.includes('ssi.com.vn') ||
+    event.request.url.includes('googleapis') ||
+    event.request.method !== 'GET'
+  ) {
     return;
   }
 
+  // Network First for all HTML, JS, CSS, and navigation requests
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });

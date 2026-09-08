@@ -17,15 +17,38 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-DAXiOtI4.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BVmyNFGn.css">
+    <script type="module" crossorigin src="/assets/index-DLaSrM3X.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-vgRjsctN.css">
   </head>
   <body class="bg-[#080b11] text-gray-100 antialiased overflow-hidden select-none">
-    <div id="root"></div>
+    <div id="root">
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #080b11; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
+        <div style="width: 48px; height: 48px; border: 3px solid rgba(59, 130, 246, 0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <div style="margin-top: 16px; font-weight: 700; font-size: 14px; letter-spacing: 0.05em; color: #e2e8f0;">TRADING NEW</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Đang tải hệ thống phân tích & tín hiệu AI...</div>
+      </div>
+      <style>
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      </style>
+    </div>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js').catch(err => {
+          navigator.serviceWorker.register('/service-worker.js').then((reg) => {
+            reg.onupdatefound = () => {
+              const installingWorker = reg.installing;
+              if (installingWorker) {
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // Auto reload if new service worker is installed
+                    window.location.reload();
+                  }
+                };
+              }
+            };
+          }).catch((err) => {
             console.warn('ServiceWorker registration error:', err);
           });
         });

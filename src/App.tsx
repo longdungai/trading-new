@@ -356,7 +356,11 @@ export const App: React.FC = () => {
     return getMarketSentiment();
   }, []);
 
-  const isVND = currentSymbol.quoteAsset === 'VND' || currentSymbol.symbol.includes('VN') || ['FPT', 'HPG', 'VIC', 'VHM', 'SJC', 'MWG', 'MSN', 'SSI', 'VCB'].includes(currentSymbol.symbol);
+  const isVND = Boolean(
+    currentSymbol?.quoteAsset === 'VND' ||
+    currentSymbol?.symbol?.includes('VN') ||
+    ['FPT', 'HPG', 'VIC', 'VHM', 'SJC', 'MWG', 'MSN', 'SSI', 'VCB'].includes(currentSymbol?.symbol || '')
+  );
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#080b11] text-gray-100 overflow-hidden select-none font-sans">
@@ -405,7 +409,7 @@ export const App: React.FC = () => {
             mobileTab === 'chart' ? 'flex' : 'hidden md:flex'
           }`}>
             {/* Real-time Accumulation Buy Zone Alert Banner */}
-            {currentAccumulation.isHot && !isGomBannerDismissed && (
+            {currentAccumulation?.isHot && !isGomBannerDismissed && currentAccumulation.entryZone && (
               <div className="bg-gradient-to-r from-amber-950/70 via-[#182333] to-amber-950/70 border-b border-amber-500/40 px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
@@ -414,7 +418,7 @@ export const App: React.FC = () => {
                     CẢNH BÁO VÙNG GOM:
                   </span>
                   <span className="text-gray-200 truncate">
-                    <strong className="text-white font-mono">{currentSymbol.symbol}</strong> đang ở vùng giá gom tích sản đẹp ({currentAccumulation.score}/100đ) • Vùng mua gom: <span className="text-emerald-400 font-mono font-bold">{isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[0])} - {isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[1])}{isVND ? 'k' : ''}</span> • Mục tiêu: <span className="text-amber-300 font-mono font-bold">+{((currentAccumulation.targetTakeProfit - currentSymbol.price) / currentSymbol.price * 100).toFixed(0)}%</span>
+                    <strong className="text-white font-mono">{currentSymbol?.symbol}</strong> đang ở vùng giá gom tích sản đẹp ({currentAccumulation.score}/100đ) • Vùng mua gom: <span className="text-emerald-400 font-mono font-bold">{isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[0])} - {isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[1])}{isVND ? 'k' : ''}</span> • Mục tiêu: <span className="text-amber-300 font-mono font-bold">+{currentSymbol?.price ? ((currentAccumulation.targetTakeProfit - currentSymbol.price) / currentSymbol.price * 100).toFixed(0) : 0}%</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">

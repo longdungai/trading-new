@@ -23,7 +23,7 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
         <span className="hidden sm:inline">Chỉ Báo:</span>
       </div>
 
-      {/* Sub-panels: RSI & MACD - Brought upfront for instant mobile access */}
+      {/* Sub-panels: RSI & MACD */}
       <button
         onClick={() => onToggle('rsi')}
         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold border shrink-0 transition ${
@@ -46,6 +46,58 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
       >
         <Activity className="w-3 h-3 text-blue-300" />
         <span>MACD (12,26,9)</span>
+      </button>
+
+      {/* Main Chart Overlays: Support/Resistance & Bollinger Bands */}
+      <button
+        onClick={() => onToggle('autoSupportResistance')}
+        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-semibold border shrink-0 transition ${
+          settings.autoSupportResistance
+            ? 'bg-amber-500/25 text-amber-300 border-amber-400/60 shadow-sm shadow-amber-500/20'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <ShieldAlert className="w-3 h-3 text-amber-400" />
+        <span>Hỗ Trợ/Kháng Cự</span>
+      </button>
+
+      <button
+        onClick={() => onToggle('bollingerBands')}
+        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-semibold border shrink-0 transition ${
+          settings.bollingerBands
+            ? 'bg-blue-500/25 text-blue-300 border-blue-400/60 shadow-sm shadow-blue-500/20'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <Sliders className="w-3 h-3 text-blue-400" />
+        <span>Bollinger Bands (BB)</span>
+      </button>
+
+      <div className="h-4 w-px bg-gray-800 shrink-0 mx-0.5" />
+
+      {/* Key Levels & SMC */}
+      <button
+        onClick={() => onToggle('smartMoneyConcepts')}
+        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-medium border shrink-0 transition ${
+          settings.smartMoneyConcepts
+            ? 'bg-indigo-500/25 text-indigo-300 border-indigo-500/50'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <Zap className="w-3 h-3 text-indigo-400" />
+        <span>SMC Order Block</span>
+      </button>
+
+      <button
+        onClick={() => onToggle('autoFibonacci')}
+        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-medium border shrink-0 transition ${
+          settings.autoFibonacci
+            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <GitCommit className="w-3 h-3 text-emerald-400" />
+        <span>Auto Fib</span>
       </button>
 
       <div className="h-4 w-px bg-gray-800 shrink-0 mx-0.5" />
@@ -73,45 +125,6 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
       >
         <BrainCircuit className="w-3 h-3 text-purple-400" />
         <span>Monte Carlo</span>
-      </button>
-
-      <div className="h-4 w-px bg-gray-800 shrink-0 mx-0.5" />
-
-      {/* Key Levels & SMC */}
-      <button
-        onClick={() => onToggle('autoSupportResistance')}
-        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-medium border shrink-0 transition ${
-          settings.autoSupportResistance
-            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
-        }`}
-      >
-        <ShieldAlert className="w-3 h-3 text-amber-400" />
-        <span>Hỗ Trợ/Kháng Cự</span>
-      </button>
-
-      <button
-        onClick={() => onToggle('autoFibonacci')}
-        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-medium border shrink-0 transition ${
-          settings.autoFibonacci
-            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
-        }`}
-      >
-        <GitCommit className="w-3 h-3 text-emerald-400" />
-        <span>Auto Fib</span>
-      </button>
-
-      <button
-        onClick={() => onToggle('smartMoneyConcepts')}
-        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-medium border shrink-0 transition ${
-          settings.smartMoneyConcepts
-            ? 'bg-indigo-500/25 text-indigo-300 border-indigo-500/50'
-            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
-        }`}
-      >
-        <Zap className="w-3 h-3 text-indigo-400" />
-        <span>SMC Order Block</span>
       </button>
 
       <div className="h-4 w-px bg-gray-800 shrink-0 mx-0.5" />
@@ -159,17 +172,6 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
         }`}
       >
         EMA 200
-      </button>
-
-      <button
-        onClick={() => onToggle('bollingerBands')}
-        className={`px-2 py-1 rounded text-[11px] font-medium border shrink-0 transition ${
-          settings.bollingerBands
-            ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
-        }`}
-      >
-        Bollinger Bands
       </button>
     </div>
   );

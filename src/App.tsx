@@ -76,24 +76,24 @@ export const App: React.FC = () => {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  // Indicator Settings
+  // Indicator Settings (Mặc định ban đầu chỉ bật RSI, MACD, Hỗ trợ/Kháng cự, và BB)
   const [settings, setSettings] = useState<IndicatorSettings>({
-    ema20: true,
-    ema50: true,
-    ema200: false,
-    bollingerBands: false,
-    supertrend: true,
-    ichimoku: false,
     rsi: true,
     macd: true,
+    autoSupportResistance: true,
+    bollingerBands: true,
+    ema20: false,
+    ema50: false,
+    ema200: false,
+    supertrend: false,
+    ichimoku: false,
     stochastic: false,
     vwap: false,
     volumeProfile: false,
-    autoSupportResistance: true,
-    autoFibonacci: true,
-    smartMoneyConcepts: true,
-    aiForecast: true,
-    monteCarloPaths: true,
+    autoFibonacci: false,
+    smartMoneyConcepts: false,
+    aiForecast: false,
+    monteCarloPaths: false,
   });
 
   const wsRef = useRef<BinanceWebSocket | null>(null);

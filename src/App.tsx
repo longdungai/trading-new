@@ -31,6 +31,7 @@ import { calculateFibonacciLevels } from './services/analysis/fibonacci';
 import { detectOrderBlocks } from './services/analysis/smartMoney';
 import { generateAIPrediction } from './services/ai/mlForecaster';
 import { generateTradeSetup, generateStrategyHub } from './services/ai/signalGenerator';
+import { analyzeAccumulationZone } from './services/ai/accumulationScanner';
 
 // Components
 import { Header } from './components/Layout/Header';
@@ -45,7 +46,8 @@ import { OrderBook } from './components/Market/OrderBook';
 import { SentimentMeter } from './components/Market/SentimentMeter';
 import { MarketHeatmap } from './components/Market/MarketHeatmap';
 import { BacktestModal } from './components/Backtest/BacktestModal';
-import { Sparkles, Layers, Shield, LineChart, Flame } from 'lucide-react';
+import { AccumulationRadarModal } from './components/Market/AccumulationRadarModal';
+import { Sparkles, Layers, Shield, LineChart, Flame, Target, X } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Load persisted symbols or fallback to defaults
@@ -62,6 +64,8 @@ export const App: React.FC = () => {
   const [isLiveLoading, setIsLiveLoading] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [isBacktestOpen, setIsBacktestOpen] = useState<boolean>(false);
+  const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
+  const [isGomBannerDismissed, setIsGomBannerDismissed] = useState<boolean>(false);
   const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'market' | 'risk'>('ai');
   const [mobileTab, setMobileTab] = useState<'chart' | 'ai' | 'market' | 'risk'>('chart');
 
@@ -311,6 +315,14 @@ export const App: React.FC = () => {
     };
   }, [currentSymbol.symbol, timeframe]);
 
+  // Continuous background polling
+  useEffect(() => {
+    const interval = setInterval(() => {
+      syncLivePrices();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [syncLivePrices]);
+
   // Derived Analytics & Calculations
   const srLevels: SupportResistanceLevel[] = useMemo(() => {
     return calculateSupportResistance(candles);
@@ -332,6 +344,10 @@ export const App: React.FC = () => {
     return generateStrategyHub(currentSymbol.symbol, candles, timeframe);
   }, [currentSymbol.symbol, candles, timeframe]);
 
+  const currentAccumulation = useMemo(() => {
+    return analyzeAccumulationZone(currentSymbol, candles);
+  }, [currentSymbol, candles]);
+
   const tradeSetup: TradeSetup | null = useMemo(() => {
     return generateTradeSetup(currentSymbol.symbol, candles, timeframe);
   }, [currentSymbol.symbol, candles, timeframe]);
@@ -339,6 +355,8 @@ export const App: React.FC = () => {
   const marketSentiment: MarketSentiment = useMemo(() => {
     return getMarketSentiment();
   }, []);
+
+  const isVND = currentSymbol.quoteAsset === 'VND' || currentSymbol.symbol.includes('VN') || ['FPT', 'HPG', 'VIC', 'VHM', 'SJC', 'MWG', 'MSN', 'SSI', 'VCB'].includes(currentSymbol.symbol);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#080b11] text-gray-100 overflow-hidden select-none font-sans">
@@ -351,6 +369,7 @@ export const App: React.FC = () => {
         onChangeTimeframe={setTimeframe}
         onOpenBacktest={() => setIsBacktestOpen(true)}
         onOpenHeatmap={() => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap')}
+        onOpenRadar={() => setIsRadarOpen(true)}
         onRefreshData={() => {
           syncLivePrices();
           loadData(currentSymbol, timeframe);
@@ -385,6 +404,37 @@ export const App: React.FC = () => {
           <div className={`flex-1 flex-col min-w-0 bg-[#090d15] relative overflow-hidden h-full ${
             mobileTab === 'chart' ? 'flex' : 'hidden md:flex'
           }`}>
+            {/* Real-time Accumulation Buy Zone Alert Banner */}
+            {currentAccumulation.isHot && !isGomBannerDismissed && (
+              <div className="bg-gradient-to-r from-amber-950/70 via-[#182333] to-amber-950/70 border-b border-amber-500/40 px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                  <span className="font-black text-amber-300 uppercase font-mono tracking-wide shrink-0 flex items-center gap-1">
+                    <Target className="w-3.5 h-3.5 text-amber-400" />
+                    CẢNH BÁO VÙNG GOM:
+                  </span>
+                  <span className="text-gray-200 truncate">
+                    <strong className="text-white font-mono">{currentSymbol.symbol}</strong> đang ở vùng giá gom tích sản đẹp ({currentAccumulation.score}/100đ) • Vùng mua gom: <span className="text-emerald-400 font-mono font-bold">{isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[0])} - {isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[1])}{isVND ? 'k' : ''}</span> • Mục tiêu: <span className="text-amber-300 font-mono font-bold">+{((currentAccumulation.targetTakeProfit - currentSymbol.price) / currentSymbol.price * 100).toFixed(0)}%</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <button
+                    onClick={() => setIsRadarOpen(true)}
+                    className="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black transition flex items-center gap-1 shadow-md shadow-amber-500/20"
+                  >
+                    <span>Quét Toàn Thị Trường</span>
+                  </button>
+                  <button
+                    onClick={() => setIsGomBannerDismissed(true)}
+                    className="text-gray-400 hover:text-white p-0.5"
+                    title="Đóng thông báo"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Lightweight Candles & Indicators Chart */}
             <div className="flex-1 relative min-h-0 overflow-hidden">
               <TradingChart
@@ -582,6 +632,15 @@ export const App: React.FC = () => {
           symbolName={currentSymbol.symbol}
           quoteAsset={currentSymbol.quoteAsset}
           onClose={() => setIsBacktestOpen(false)}
+        />
+      )}
+
+      {/* Market Accumulation Radar Scanner Modal */}
+      {isRadarOpen && (
+        <AccumulationRadarModal
+          symbols={symbols}
+          onSelectSymbol={handleSelectSymbol}
+          onClose={() => setIsRadarOpen(false)}
         />
       )}
     </div>

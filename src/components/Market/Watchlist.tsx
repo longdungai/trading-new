@@ -15,9 +15,14 @@ import {
   Activity,
   Check,
   SlidersHorizontal,
+  Target,
+  Flame,
+  Gem,
 } from 'lucide-react';
 import { formatPercent, formatPrice } from '../../utils/formatters';
 import { GLOBAL_SYMBOL_CATALOG, CatalogItem } from '../../services/api/symbolCatalog';
+import { analyzeAccumulationZone } from '../../services/ai/accumulationScanner';
+import { AccumulationRadarModal } from './AccumulationRadarModal';
 
 interface WatchlistProps {
   symbols: MarketSymbol[];
@@ -42,9 +47,10 @@ export const Watchlist: React.FC<WatchlistProps> = ({
   onToggleFavorite,
   onResetDefaults,
 }) => {
-  const [filter, setFilter] = useState<'all' | 'commodity' | 'crypto' | 'vn30' | 'stock' | 'favorite'>('all');
+  const [filter, setFilter] = useState<'all' | 'accumulation' | 'vn30' | 'commodity' | 'crypto' | 'stock' | 'favorite'>('all');
   const [search, setSearch] = useState('');
   const [isManageMode, setIsManageMode] = useState<boolean>(false);
+  const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -70,21 +76,43 @@ export const Watchlist: React.FC<WatchlistProps> = ({
     ).slice(0, 15);
   }, [addSearchInput]);
 
-  // Filter existing symbols in Watchlist
-  const filteredSymbols = symbols.filter(s => {
-    const matchesSearch =
-      s.symbol.toLowerCase().includes(search.toLowerCase()) ||
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.category && s.category.toLowerCase().includes(search.toLowerCase()));
+  // Pre-calculate accumulation scores for all symbols
+  const accumulationMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof analyzeAccumulationZone>>();
+    for (const s of symbols) {
+      map.set(s.symbol, analyzeAccumulationZone(s));
+    }
+    return map;
+  }, [symbols]);
 
-    if (!matchesSearch) return false;
-    if (filter === 'favorite') return favorites.includes(s.symbol);
-    if (filter === 'commodity') return s.type === 'commodity' || s.symbol.includes('PAXG') || s.symbol.includes('GOLD') || s.symbol.includes('OIL') || s.symbol.includes('XAU');
-    if (filter === 'crypto') return s.type === 'crypto';
-    if (filter === 'vn30') return s.type === 'vn30' || s.symbol === 'VNINDEX';
-    if (filter === 'stock') return s.type === 'stock' || s.type === 'index';
-    return true;
-  });
+  // Filter existing symbols in Watchlist
+  const filteredSymbols = useMemo(() => {
+    return symbols.filter(s => {
+      const matchesSearch =
+        s.symbol.toLowerCase().includes(search.toLowerCase()) ||
+        s.name.toLowerCase().includes(search.toLowerCase()) ||
+        (s.category && s.category.toLowerCase().includes(search.toLowerCase()));
+
+      if (!matchesSearch) return false;
+      if (filter === 'favorite') return favorites.includes(s.symbol);
+      if (filter === 'accumulation') {
+        const acc = accumulationMap.get(s.symbol);
+        return acc && acc.score >= 64;
+      }
+      if (filter === 'commodity') return s.type === 'commodity' || s.symbol.includes('PAXG') || s.symbol.includes('GOLD') || s.symbol.includes('OIL') || s.symbol.includes('XAU');
+      if (filter === 'crypto') return s.type === 'crypto';
+      if (filter === 'vn30') return s.type === 'vn30' || s.symbol === 'VNINDEX';
+      if (filter === 'stock') return s.type === 'stock' || s.type === 'index';
+      return true;
+    }).sort((a, b) => {
+      if (filter === 'accumulation') {
+        const scoreA = accumulationMap.get(a.symbol)?.score || 0;
+        const scoreB = accumulationMap.get(b.symbol)?.score || 0;
+        return scoreB - scoreA;
+      }
+      return 0;
+    });
+  }, [symbols, search, filter, favorites, accumulationMap]);
 
   // Handle Pick Suggestion or Custom Input
   const handleSelectSuggestion = (item: CatalogItem) => {
@@ -158,6 +186,16 @@ export const Watchlist: React.FC<WatchlistProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* Radar Gom Hang Trigger */}
+            <button
+              onClick={() => setIsRadarOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold shadow-md shadow-amber-500/10 transition"
+              title="Quét & Xếp hạng vùng giá gom hàng tốt nhất"
+            >
+              <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span>Radar Gom</span>
+            </button>
+
             {/* Manage/Edit toggle for mobile & desktop */}
             <button
               onClick={() => setIsManageMode(!isManageMode)}
@@ -205,16 +243,24 @@ export const Watchlist: React.FC<WatchlistProps> = ({
 
         {/* Filter Pills - Touch Scrollable */}
         <div className="flex gap-1 overflow-x-auto no-scrollbar whitespace-nowrap text-[11px]">
-          {(['all', 'commodity', 'crypto', 'vn30', 'stock', 'favorite'] as const).map(tab => (
+          {(['all', 'accumulation', 'vn30', 'commodity', 'crypto', 'stock', 'favorite'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`px-2.5 py-1 rounded-lg font-medium shrink-0 transition ${
-                filter === tab ? 'bg-blue-600 text-white shadow-sm' : 'bg-[#141b27] text-gray-400 hover:text-white'
+              className={`px-2.5 py-1 rounded-lg font-medium shrink-0 transition flex items-center gap-1 ${
+                filter === tab
+                  ? tab === 'accumulation'
+                    ? 'bg-amber-500 text-black font-black shadow-md shadow-amber-500/30'
+                    : 'bg-blue-600 text-white shadow-sm'
+                  : tab === 'accumulation'
+                  ? 'bg-amber-950/40 text-amber-300 border border-amber-500/30 hover:text-white'
+                  : 'bg-[#141b27] text-gray-400 hover:text-white'
               }`}
             >
               {tab === 'all'
                 ? 'Tất cả'
+                : tab === 'accumulation'
+                ? '🔥 Vùng Gom Đẹp'
                 : tab === 'commodity'
                 ? '🥇 Vàng & Dầu'
                 : tab === 'crypto'
@@ -249,6 +295,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
             const isPos = s.change24h >= 0;
             const isVND = s.quoteAsset === 'VND';
             const isCommodity = s.type === 'commodity' || s.symbol.includes('XAU') || s.symbol.includes('OIL') || s.symbol.includes('PAXG');
+            const acc = accumulationMap.get(s.symbol);
 
             return (
               <div
@@ -262,7 +309,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                   isSelected ? 'bg-blue-600/15 border-l-4 border-blue-500' : 'hover:bg-[#121824]'
                 }`}
               >
-                {/* Left Part: Star + Name */}
+                {/* Left Part: Star + Name + Gom Badge */}
                 <div className="flex items-center gap-2.5 min-w-0">
                   <button
                     onClick={(e) => {
@@ -276,7 +323,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                   </button>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono font-bold text-xs sm:text-sm text-white">{s.symbol}</span>
                       <span className={`text-[9px] px-1 rounded uppercase font-semibold ${
                         isCommodity
@@ -289,6 +336,17 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                       }`}>
                         {isCommodity ? 'HÀNG HÓA' : s.type === 'vn30' ? 'VN30' : s.type}
                       </span>
+
+                      {/* Gom Badge */}
+                      {acc && acc.score >= 78 ? (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded font-black bg-amber-500/25 text-amber-300 border border-amber-500/40 animate-pulse">
+                          🔥 Gom Tốt ({acc.score}đ)
+                        </span>
+                      ) : acc && acc.score >= 64 ? (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          💎 Tích Lũy
+                        </span>
+                      ) : null}
                     </div>
                     <div className="text-[10px] text-gray-400 truncate max-w-[120px] sm:max-w-[150px]">{s.name}</div>
                   </div>
@@ -551,6 +609,15 @@ export const Watchlist: React.FC<WatchlistProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Accumulation Radar Scanner Modal */}
+      {isRadarOpen && (
+        <AccumulationRadarModal
+          symbols={symbols}
+          onSelectSymbol={onSelectSymbol}
+          onClose={() => setIsRadarOpen(false)}
+        />
       )}
     </div>
   );

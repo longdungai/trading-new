@@ -7,6 +7,7 @@ import {
   ChevronDown,
   RefreshCw,
   X,
+  Target,
 } from 'lucide-react';
 import { MarketSymbol, Timeframe } from '../../types';
 import { formatPercent, formatPrice, formatVolume } from '../../utils/formatters';
@@ -19,6 +20,7 @@ interface HeaderProps {
   onChangeTimeframe: (tf: Timeframe) => void;
   onOpenBacktest: () => void;
   onOpenHeatmap: () => void;
+  onOpenRadar?: () => void;
   onRefreshData: () => void;
   isLiveLoading: boolean;
   activeView: 'chart' | 'heatmap';
@@ -32,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectSymbol,
   onChangeTimeframe,
   onOpenBacktest,
+  onOpenRadar,
   onRefreshData,
   isLiveLoading,
   activeView,
@@ -139,6 +142,18 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Quick Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {onOpenRadar && (
+            <button
+              onClick={onOpenRadar}
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold shadow-md shadow-amber-500/10 transition"
+              title="Quét các mã đang ở vùng giá gom hàng tốt"
+            >
+              <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span className="hidden sm:inline">Vùng Gom</span>
+              <span className="sm:hidden">Gom</span>
+            </button>
+          )}
+
           <button
             onClick={onRefreshData}
             disabled={isLiveLoading}

@@ -1,4 +1,5 @@
 import { BacktestResult, BacktestTrade, Candle } from '../../types';
+export type { BacktestResult, BacktestTrade };
 import {
   calculateBollingerBands,
   calculateEMA,

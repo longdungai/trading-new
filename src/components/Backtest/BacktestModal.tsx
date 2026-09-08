@@ -345,7 +345,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                 {result.winRate}%
               </div>
               <div className="text-[10px] text-gray-400 mt-0.5">
-                {result.trades.filter(t => t.status === 'WIN').length} thắng / {result.totalTrades} lệnh
+                {result.trades.filter((t: any) => t.status === 'WIN').length} thắng / {result.totalTrades} lệnh
               </div>
             </div>
 
@@ -424,12 +424,12 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                 <line x1="0" y1="75" x2="100" y2="75" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
 
                 {result.equityCurve.length > 1 && (() => {
-                  const balances = result.equityCurve.map(e => e.balance);
+                  const balances = result.equityCurve.map((e: any) => e.balance);
                   const min = Math.min(...balances) * 0.98;
                   const max = Math.max(...balances) * 1.02;
                   const range = max - min || 1;
 
-                  const points = result.equityCurve.map((e, idx) => {
+                  const points = result.equityCurve.map((e: any, idx: number) => {
                     const x = (idx / (result.equityCurve.length - 1)) * 100;
                     const y = 100 - ((e.balance - min) / range) * 100;
                     return `${x},${Math.max(5, Math.min(95, y))}`;
@@ -453,7 +453,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
             <div className="p-2.5 sm:p-3 bg-[#172233] border-b border-[#212e42] flex items-center justify-between text-xs font-bold text-white uppercase tracking-wider">
               <span>Nhật Ký Các Lệnh Đã Chạy Thử ({result.trades.length} Lệnh)</span>
               <span className="text-[11px] font-mono text-gray-400">
-                Thắng: <span className="text-emerald-400">{result.trades.filter(t => t.status === 'WIN').length}</span> • Thua: <span className="text-rose-400">{result.trades.filter(t => t.status === 'LOSS').length}</span>
+                Thắng: <span className="text-emerald-400">{result.trades.filter((t: any) => t.status === 'WIN').length}</span> • Thua: <span className="text-rose-400">{result.trades.filter((t: any) => t.status === 'LOSS').length}</span>
               </span>
             </div>
 
@@ -471,7 +471,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#1c2738]">
-                  {result.trades.map(t => {
+                  {result.trades.map((t: any) => {
                     const tradePnl = t.pnlAmount * leverage;
                     const tradePct = t.profitPercent * leverage;
 

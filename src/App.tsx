@@ -32,6 +32,7 @@ import { detectOrderBlocks } from './services/analysis/smartMoney';
 import { generateAIPrediction } from './services/ai/mlForecaster';
 import { generateTradeSetup, generateStrategyHub } from './services/ai/signalGenerator';
 import { analyzeAccumulationZone } from './services/ai/accumulationScanner';
+import { formatPrice, formatPercent, formatVolume } from './utils/formatters';
 
 // Components
 import { Header } from './components/Layout/Header';

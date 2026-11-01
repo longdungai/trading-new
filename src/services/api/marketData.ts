@@ -897,7 +897,10 @@ export async function fetchEntradeKlines(
 
   for (const base of ENTRADE_BASES) {
     try {
-      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      const res = await fetch(`${base}${query}`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
       if (!res.ok) continue;
       const data = await res.json();
       if (!Array.isArray(data?.t) || data.t.length === 0) continue;
@@ -968,7 +971,7 @@ export async function fetchStockKlines(
     try {
       const res = await fetch(
         `${base}/v8/finance/chart/${encodedSymbol}?interval=${interval}&range=${range}`,
-        { headers: { Accept: 'application/json' } }
+        { headers: { Accept: 'application/json' }, cache: 'no-store' }
       );
       if (!res.ok) continue;
 
@@ -1026,18 +1029,21 @@ export interface LiveQuoteUpdate {
   updatedAt: number;
 }
 
-// In-memory cache for Macro / Stock quotes (12s TTL) so 3s Binance polls don't spam Yahoo/Entrade
+// In-memory cache for Macro / Stock quotes (8s TTL) so fast polls stay real-time without spamming Yahoo/Entrade
 const macroQuoteCache = new Map<string, LiveQuoteUpdate>();
 let lastMacroSyncTs = 0;
 let macroSyncInFlight: Promise<void> | null = null;
-const MACRO_CACHE_TTL_MS = 12_000;
+const MACRO_CACHE_TTL_MS = 8_000;
 
 async function fetchYahooSparkBatch(yahooSymbols: string[]): Promise<Record<string, any>> {
   if (yahooSymbols.length === 0) return {};
   const query = `/v8/finance/spark?symbols=${encodeURIComponent(yahooSymbols.join(','))}&range=5d&interval=1d`;
   for (const base of YAHOO_BASES) {
     try {
-      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      const res = await fetch(`${base}${query}`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
       if (res.ok) {
         return await res.json();
       }
@@ -1055,7 +1061,10 @@ async function fetchSingleEntradeQuote(sym: string, isIndex: boolean): Promise<L
 
   for (const base of ENTRADE_BASES) {
     try {
-      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      const res = await fetch(`${base}${query}`, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
       if (!res.ok) continue;
       const d = await res.json();
       if (!Array.isArray(d?.c) || d.c.length === 0) continue;
@@ -1427,12 +1436,14 @@ export function generateRealisticKlines(
 
 let cachedCryptoFng: { value: number; ts: number } | null = null;
 
-export async function fetchLiveCryptoFearAndGreed(): Promise<number | null> {
-  if (cachedCryptoFng && Date.now() - cachedCryptoFng.ts < 600_000) {
+export async function fetchLiveCryptoFearAndGreed(
+  forceRefresh: boolean = false
+): Promise<number | null> {
+  if (!forceRefresh && cachedCryptoFng && Date.now() - cachedCryptoFng.ts < 180_000) {
     return cachedCryptoFng.value;
   }
   try {
-    const res = await fetch('https://api.alternative.me/fng/?limit=1');
+    const res = await fetch('https://api.alternative.me/fng/?limit=1', { cache: 'no-store' });
     if (res.ok) {
       const json = await res.json();
       const val = parseInt(json?.data?.[0]?.value, 10);
@@ -1459,7 +1470,8 @@ export function getMarketSentiment(
   currentSymbol?: MarketSymbol,
   candles: Candle[] = [],
   symbols: MarketSymbol[] = [],
-  liveCryptoFng?: number | null
+  liveCryptoFng?: number | null,
+  liveFundingRatePct8h?: number | null
 ): MarketSentiment {
   // 1. Compute real RSI(14) and Realized Volatility from actual historical candles
   let rsi14 = 50;
@@ -1513,7 +1525,7 @@ export function getMarketSentiment(
     fearAndGreedIndex: compositeScore,
     sentimentClassification: classifySentimentScore(compositeScore),
     longShortRatio: decliners > 0 ? parseFloat((advancers / decliners).toFixed(2)) : advancers,
-    fundingRate: 0,
+    fundingRate: typeof liveFundingRatePct8h === 'number' ? liveFundingRatePct8h : 0,
     volatilityIndex: avgRangePct,
     isLiveCryptoFng: useLiveFng,
     sourceLabel: useLiveFng

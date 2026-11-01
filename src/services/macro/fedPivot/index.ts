@@ -16,7 +16,7 @@ import { recordAndDiffFedPivotSnapshot } from './fedPivotHistoryStore';
 import { generateFedPivotSmartAlerts } from './fedPivotAlertEngine';
 
 let cachedIntelligenceV2: FedPivotIntelligenceV2 | null = null;
-const V2_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes UI memoization
+const V2_CACHE_TTL_MS = 20_000; // 20 seconds real-time memoization aligned with live CBOT ZQ / DXY quotes
 
 export function buildFedPivotIntelligenceFromBundle(
   bundle: RawFedPivotProviderBundle,

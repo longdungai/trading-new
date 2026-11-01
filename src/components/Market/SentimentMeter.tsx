@@ -42,8 +42,10 @@ export const SentimentMeter: React.FC<SentimentMeterProps> = ({ sentiment }) => 
           <span>Tâm Lý & Độ Rộng Thực Tế</span>
         </div>
         {sentiment.sourceLabel && (
-          <span className="text-[9px] text-slate-500 truncate max-w-[165px]" title={sentiment.sourceLabel}>
-            {sentiment.isLiveCryptoFng ? 'Alternative.me F&G' : 'RSI(14) + Độ rộng'}
+          <span className="text-[9px] text-slate-500 truncate max-w-[175px] font-mono" title={sentiment.sourceLabel}>
+            {sentiment.isLiveCryptoFng
+              ? `F&G${sentiment.fundingRate ? ` • Fund ${sentiment.fundingRate > 0 ? '+' : ''}${sentiment.fundingRate.toFixed(3)}%` : ''}`
+              : 'RSI(14) + Độ rộng'}
           </span>
         )}
       </div>

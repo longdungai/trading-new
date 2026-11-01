@@ -6,8 +6,15 @@ const YAHOO_BASES = ['/api/yahoo', 'https://query1.finance.yahoo.com'];
 const NYFED_EFFR_URL = 'https://markets.newyorkfed.org/api/rates/unsecured/effr/last/1.json';
 const CME_MONTH_CODES = ['F', 'G', 'H', 'J', 'K', 'M', 'N', 'Q', 'U', 'V', 'X', 'Z'];
 
-const PROVIDER_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache for macro releases (prevents API loops)
+// Split-tier real-time caching:
+// - Live CBOT ZQ Fed Funds Futures, DXY & NY Fed EFFR refresh every 20 seconds
+// - Official FRED CSV statistical series refresh every 5 minutes (or immediately on forceRefresh)
+const LIVE_RATES_TTL_MS = 20_000;
+const FRED_CACHE_TTL_MS = 5 * 60 * 1000;
+
 let cachedBundle: RawFedPivotProviderBundle | null = null;
+let cachedFredSeriesMap: RawFedPivotProviderBundle['fredSeries'] | null = null;
+let lastFredFetchedAtMs = 0;
 let bundleInFlight: Promise<RawFedPivotProviderBundle> | null = null;
 
 interface FredSeriesSpec {
@@ -54,6 +61,7 @@ async function fetchSingleFredSeries(
       const timer = setTimeout(() => controller.abort(), 7500);
       const res = await fetch(`${base}${path}`, {
         headers: { Accept: 'text/csv,text/plain,*/*' },
+        cache: 'no-store',
         signal: controller.signal,
       });
       clearTimeout(timer);
@@ -92,6 +100,7 @@ async function fetchNyFedEffrOfficial(): Promise<RawFedPivotProviderBundle['nyFe
     const timer = setTimeout(() => controller.abort(), 6000);
     const res = await fetch(NYFED_EFFR_URL, {
       headers: { Accept: 'application/json' },
+      cache: 'no-store',
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -151,6 +160,7 @@ async function fetchFuturesAndDxyQuotes(now: Date): Promise<RawFedPivotProviderB
       const timer = setTimeout(() => controller.abort(), 6500);
       const res = await fetch(`${base}${query}`, {
         headers: { Accept: 'application/json' },
+        cache: 'no-store',
         signal: controller.signal,
       });
       clearTimeout(timer);
@@ -196,7 +206,7 @@ async function fetchFuturesAndDxyQuotes(now: Date): Promise<RawFedPivotProviderB
 export async function fetchRawFedPivotProviderBundle(
   forceRefresh: boolean = false
 ): Promise<RawFedPivotProviderBundle> {
-  if (!forceRefresh && cachedBundle && Date.now() - cachedBundle.fetchedAtMs < PROVIDER_CACHE_TTL_MS) {
+  if (!forceRefresh && cachedBundle && Date.now() - cachedBundle.fetchedAtMs < LIVE_RATES_TTL_MS) {
     return cachedBundle;
   }
 
@@ -208,19 +218,37 @@ export async function fetchRawFedPivotProviderBundle(
     try {
       const now = new Date();
       const fetchedAtMs = now.getTime();
+      const shouldRefreshFred =
+        forceRefresh ||
+        !cachedFredSeriesMap ||
+        fetchedAtMs - lastFredFetchedAtMs >= FRED_CACHE_TTL_MS;
+
       // 830 days lookback ensures 1Y (365d) historical Pivot Score curve has 12+ months prior lookback for YoY PCE & Sahm Rule
       const startDateISO = new Date(fetchedAtMs - 830 * 86_400_000).toISOString().slice(0, 10);
 
-      const [nyFedEffr, futuresQuote, ...fredResults] = await Promise.all([
+      const [nyFedEffr, futuresQuote, fredMap] = await Promise.all([
         fetchNyFedEffrOfficial(),
         fetchFuturesAndDxyQuotes(now),
-        ...FRED_SERIES_SPECS.map(spec => fetchSingleFredSeries(spec, startDateISO, fetchedAtMs)),
+        (async () => {
+          if (!shouldRefreshFred && cachedFredSeriesMap) {
+            return cachedFredSeriesMap;
+          }
+          const fredResults = await Promise.all(
+            FRED_SERIES_SPECS.map(spec => fetchSingleFredSeries(spec, startDateISO, fetchedAtMs))
+          );
+          const map = {} as RawFedPivotProviderBundle['fredSeries'];
+          FRED_SERIES_SPECS.forEach((spec, idx) => {
+            map[spec.id] = fredResults[idx];
+          });
+          // Only cache FRED map if at least half of official series resolved cleanly
+          const resolvedCount = Object.values(map).filter(s => s.observations.length > 0).length;
+          if (resolvedCount >= 5) {
+            cachedFredSeriesMap = map;
+            lastFredFetchedAtMs = fetchedAtMs;
+          }
+          return map;
+        })(),
       ]);
-
-      const fredMap = {} as RawFedPivotProviderBundle['fredSeries'];
-      FRED_SERIES_SPECS.forEach((spec, idx) => {
-        fredMap[spec.id] = fredResults[idx];
-      });
 
       const bundle: RawFedPivotProviderBundle = {
         fetchedAtMs,

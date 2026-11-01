@@ -72,8 +72,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   // Price Lines References (S/R, Fibonacci)
   const priceLinesRef = useRef<IPriceLine[]>([]);
 
-  // Track previous timeframe to trigger smooth auto-fit
+  // Track hover state and previous symbol/timeframe to preserve pan/zoom on real-time ticks
+  const isHoveringRef = useRef<boolean>(false);
   const prevTimeframeRef = useRef<Timeframe>(timeframe);
+  const prevSymbolRef = useRef<string>(symbolName);
 
   // 1. Initialize Chart
   useEffect(() => {
@@ -195,6 +197,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : n >= 1 ? n.toFixed(2) : n.toFixed(4);
 
     chart.subscribeCrosshairMove(param => {
+      isHoveringRef.current = Boolean(param.time);
       if (!ohlcHudRef.current) return;
       const realBar = candleSeriesRef.current ? (param.seriesData.get(candleSeriesRef.current) as any) : null;
       const ghostBar = kronosCandleSeriesRef.current ? (param.seriesData.get(kronosCandleSeriesRef.current) as any) : null;
@@ -258,7 +261,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     // 2. Update Volume Data (Historical + Kronos 6D Predicted Future Volume)
     const lastCandle = candles[candles.length - 1];
     latestCandleRef.current = lastCandle || null;
-    if (lastCandle && ohlcHudRef.current) {
+    if (lastCandle && ohlcHudRef.current && !isHoveringRef.current) {
       const chg = lastCandle.open > 0 ? ((lastCandle.close - lastCandle.open) / lastCandle.open) * 100 : 0;
       const fmt = (n: number) =>
         n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : n >= 1 ? n.toFixed(2) : n.toFixed(4);
@@ -490,14 +493,15 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       if (mcLowerRef.current) mcLowerRef.current.setData([]);
     }
 
-    // 10. Auto-Fit TimeScale Smoothly When Timeframe Changes
-    if (prevTimeframeRef.current !== timeframe) {
+    // 10. Auto-Fit TimeScale Smoothly When Symbol or Timeframe Changes (Preserves Pan/Zoom on Live Ticks)
+    if (prevTimeframeRef.current !== timeframe || prevSymbolRef.current !== symbolName) {
       prevTimeframeRef.current = timeframe;
+      prevSymbolRef.current = symbolName;
       requestAnimationFrame(() => {
         chart.timeScale().fitContent();
       });
     }
-  }, [candles, timeframe, settings, srLevels, fibLevels, aiPrediction]);
+  }, [candles, timeframe, symbolName, settings, srLevels, fibLevels, aiPrediction]);
 
   const wf = aiPrediction?.walkForward;
   const vp = aiPrediction?.volumeProfile;

@@ -22,11 +22,11 @@ export const OrderBook: React.FC<OrderBookProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [now, setNow] = useState<Date>(() => new Date());
 
-  // Refresh wall-clock every 30s solely to keep official exchange session status & countdown accurate
+  // Refresh wall-clock every 10s solely to keep official exchange session status & countdown accurate
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(new Date());
-    }, 30_000);
+    }, 10_000);
     return () => clearInterval(timer);
   }, []);
 

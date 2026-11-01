@@ -51,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [nowClock, setNowClock] = useState<Date>(() => new Date());
 
   useEffect(() => {
-    const t = setInterval(() => setNowClock(new Date()), 30_000);
+    const t = setInterval(() => setNowClock(new Date()), 10_000);
     return () => clearInterval(t);
   }, []);
 

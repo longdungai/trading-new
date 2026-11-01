@@ -30,10 +30,12 @@ import {
   saveFavoritesToStorage,
 } from './services/api/symbolCatalog';
 import {
+  BinanceDepthSocket,
   BinanceWatchlistSocket,
   BinanceWebSocket,
   fetchBinanceOrderBook,
 } from './services/api/binance';
+import { getMarketSessionInfo } from './utils/marketHours';
 import { calculateSupportResistance } from './services/analysis/supportResistance';
 import { calculateFibonacciLevels } from './services/analysis/fibonacci';
 import { detectOrderBlocks } from './services/analysis/smartMoney';
@@ -121,6 +123,11 @@ export const App: React.FC = () => {
     currentSymbolRef.current = currentSymbol;
   }, [currentSymbol]);
 
+  const timeframeRef = useRef<Timeframe>(timeframe);
+  useEffect(() => {
+    timeframeRef.current = timeframe;
+  }, [timeframe]);
+
   const symbolsRef = useRef<MarketSymbol[]>(symbols);
   useEffect(() => {
     symbolsRef.current = symbols;
@@ -160,6 +167,8 @@ export const App: React.FC = () => {
   }, []);
 
   const wsRef = useRef<BinanceWebSocket | null>(null);
+  const depthWsRef = useRef<BinanceDepthSocket | null>(null);
+  const hasLiveDepthStreamRef = useRef<boolean>(false);
   const watchlistWsRef = useRef<BinanceWatchlistSocket | null>(null);
   const isSyncingPricesRef = useRef<boolean>(false);
   const lastStoragePersistRef = useRef<number>(0);
@@ -224,7 +233,8 @@ export const App: React.FC = () => {
         return prev;
       });
 
-      const activeQuote = quotes.get(currentSymbolRef.current.symbol);
+      const activeSymMeta = currentSymbolRef.current;
+      const activeQuote = quotes.get(activeSymMeta.symbol);
       if (activeQuote) {
         setCurrentSymbol(prev => ({
           ...prev,
@@ -234,6 +244,25 @@ export const App: React.FC = () => {
           low24h: activeQuote.low24h ?? Math.min(prev.low24h, activeQuote.price),
           volume24h: activeQuote.volume24h ?? prev.volume24h,
         }));
+
+        // Real-time latest candle tick for open non-Binance markets (XAUUSD, Oil, Silver, VN30/HOSE/HNX, US Stocks)
+        const isBinanceStreamable =
+          activeSymMeta.type === 'crypto' || activeSymMeta.symbol.toUpperCase() === 'PAXGUSDT';
+        if (!isBinanceStreamable && getMarketSessionInfo(activeSymMeta).isOpen) {
+          setCandles(prev => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (last.close === activeQuote.price) return prev;
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...last,
+              close: activeQuote.price,
+              high: Math.max(last.high, activeQuote.price),
+              low: Math.min(last.low, activeQuote.price),
+            };
+            return updated;
+          });
+        }
       }
     } catch (e) {
       console.warn('Error syncing live prices', e);
@@ -362,86 +391,89 @@ export const App: React.FC = () => {
     };
   }, [binanceWatchlistKey]);
 
-  // Single non-overlapping background sync loop + tab focus instant refresh
+  // Single non-overlapping 3s background quote sync loop
   useEffect(() => {
     void syncLivePrices(true);
     const interval = setInterval(() => {
-      void syncLivePrices(false);
-    }, 3000);
-
-    const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        void syncLivePrices(true);
+        void syncLivePrices(false);
       }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    }, 3000);
 
     return () => {
       clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [syncLivePrices]);
 
-  // Load Klines and Depth
-  const loadData = async (symbolObj: MarketSymbol, tf: Timeframe) => {
-    setIsLiveLoading(true);
-    try {
-      const data = await fetchMarketData(symbolObj, tf);
-
-      if (data && data.length > 0) {
-        const lastCandle = data[data.length - 1];
-
-        // Update Watchlist entry with latest candle close while preserving true 24h % change
-        setSymbols(prev => {
-          const next = prev.map(s =>
-            s.symbol === symbolObj.symbol
-              ? {
-                  ...s,
-                  price: lastCandle.close,
-                  high24h: Math.max(s.high24h, lastCandle.close),
-                  low24h: s.low24h > 0 ? Math.min(s.low24h, lastCandle.close) : lastCandle.low,
-                }
-              : s
-          );
-          symbolsRef.current = next;
-          return next;
-        });
-
-        // Guard against stale async responses if user already switched to another symbol
-        if (currentSymbolRef.current.symbol === symbolObj.symbol) {
-          setCandles(data);
-          setCurrentSymbol(prev => ({
-            ...prev,
-            price: lastCandle.close,
-            high24h: Math.max(prev.high24h, lastCandle.close),
-            low24h: prev.low24h > 0 ? Math.min(prev.low24h, lastCandle.close) : lastCandle.low,
-          }));
-        }
+  // Load Klines and Depth (supports silent background bar reconciliation without flashing header spinner)
+  const loadData = useCallback(
+    async (symbolObj: MarketSymbol, tf: Timeframe, options?: { silent?: boolean }) => {
+      const silent = Boolean(options?.silent);
+      if (!silent) {
+        setIsLiveLoading(true);
       }
+      try {
+        const data = await fetchMarketData(symbolObj, tf);
 
-      const isDepthSupported =
-        symbolObj.type === 'crypto' || symbolObj.symbol.toUpperCase() === 'PAXGUSDT';
+        if (data && data.length > 0) {
+          const lastCandle = data[data.length - 1];
 
-      if (isDepthSupported && currentSymbolRef.current.symbol === symbolObj.symbol) {
-        try {
-          const depth = await fetchBinanceOrderBook(symbolObj.symbol, 10);
-          if (currentSymbolRef.current.symbol === symbolObj.symbol) {
-            setOrderBook(depth);
+          // Update Watchlist entry with latest candle close while preserving true 24h % change
+          setSymbols(prev => {
+            const next = prev.map(s =>
+              s.symbol === symbolObj.symbol
+                ? {
+                    ...s,
+                    price: lastCandle.close,
+                    high24h: Math.max(s.high24h, lastCandle.close),
+                    low24h: s.low24h > 0 ? Math.min(s.low24h, lastCandle.close) : lastCandle.low,
+                  }
+                : s
+            );
+            symbolsRef.current = next;
+            return next;
+          });
+
+          // Guard against stale async responses if user already switched to another symbol/timeframe
+          if (
+            currentSymbolRef.current.symbol === symbolObj.symbol &&
+            timeframeRef.current === tf
+          ) {
+            setCandles(data);
+            setCurrentSymbol(prev => ({
+              ...prev,
+              price: lastCandle.close,
+              high24h: Math.max(prev.high24h, lastCandle.close),
+              low24h: prev.low24h > 0 ? Math.min(prev.low24h, lastCandle.close) : lastCandle.low,
+            }));
           }
-        } catch (e) {
-          console.warn('Depth fetch error', e);
         }
-      } else if (!isDepthSupported && currentSymbolRef.current.symbol === symbolObj.symbol) {
-        setOrderBook(null);
+
+        const isDepthSupported =
+          symbolObj.type === 'crypto' || symbolObj.symbol.toUpperCase() === 'PAXGUSDT';
+
+        if (!silent && isDepthSupported && currentSymbolRef.current.symbol === symbolObj.symbol) {
+          try {
+            const depth = await fetchBinanceOrderBook(symbolObj.symbol, 10);
+            if (currentSymbolRef.current.symbol === symbolObj.symbol) {
+              setOrderBook(depth);
+            }
+          } catch (e) {
+            console.warn('Depth fetch error', e);
+          }
+        } else if (!isDepthSupported && currentSymbolRef.current.symbol === symbolObj.symbol) {
+          setOrderBook(null);
+        }
+      } catch (e) {
+        console.error('Error fetching market data', e);
+      } finally {
+        if (!silent && currentSymbolRef.current.symbol === symbolObj.symbol) {
+          setIsLiveLoading(false);
+        }
       }
-    } catch (e) {
-      console.error('Error fetching market data', e);
-    } finally {
-      if (currentSymbolRef.current.symbol === symbolObj.symbol) {
-        setIsLiveLoading(false);
-      }
-    }
-  };
+    },
+    []
+  );
 
   // Instant Symbol Selector Handler: immediately loads fresh data and updates price
   const handleSelectSymbol = (sym: MarketSymbol) => {
@@ -453,24 +485,32 @@ export const App: React.FC = () => {
     if (activeView === 'heatmap') setActiveView('chart');
     setMobileTab('chart');
 
-    loadData(fresh, timeframe);
+    void loadData(fresh, timeframe);
   };
 
   useEffect(() => {
-    loadData(currentSymbol, timeframe);
+    void loadData(currentSymbol, timeframe);
 
-    // Setup Binance WebSocket & real Level-2 OrderBook polling strictly for 24/7 Crypto & PAXGUSDT
+    // Setup Binance WebSocket + 1s Level-2 OrderBook WebSocket strictly for 24/7 Crypto & PAXGUSDT
     const isBinanceStreamable =
       currentSymbol.type === 'crypto' || currentSymbol.symbol.toUpperCase() === 'PAXGUSDT';
 
-    let depthInterval: ReturnType<typeof setInterval> | null = null;
+    let depthFallbackInterval: ReturnType<typeof setInterval> | null = null;
+    let candleSyncInterval: ReturnType<typeof setInterval> | null = null;
+    hasLiveDepthStreamRef.current = false;
 
     if (isBinanceStreamable) {
       if (!wsRef.current) {
         wsRef.current = new BinanceWebSocket();
       }
+      if (!depthWsRef.current) {
+        depthWsRef.current = new BinanceDepthSocket();
+      }
 
-      wsRef.current.connect(currentSymbol.symbol, timeframe, (newCandle) => {
+      const activeSym = currentSymbol.symbol;
+
+      wsRef.current.connect(activeSym, timeframe, (newCandle) => {
+        if (currentSymbolRef.current.symbol !== activeSym) return;
         setCandles(prev => {
           if (prev.length === 0) return [newCandle];
           const last = prev[prev.length - 1];
@@ -491,15 +531,23 @@ export const App: React.FC = () => {
         }));
 
         setSymbols(prev => {
-          const next = prev.map(s => (s.symbol === currentSymbol.symbol ? { ...s, price: newCandle.close } : s));
+          const next = prev.map(s => (s.symbol === activeSym ? { ...s, price: newCandle.close } : s));
           symbolsRef.current = next;
           return next;
         });
       });
 
-      const activeSym = currentSymbol.symbol;
-      depthInterval = setInterval(async () => {
-        if (document.visibilityState === 'hidden') return;
+      // Real-time 1000ms Level-2 OrderBook WebSocket stream
+      depthWsRef.current.connect(activeSym, (liveDepth) => {
+        if (currentSymbolRef.current.symbol === activeSym) {
+          hasLiveDepthStreamRef.current = true;
+          setOrderBook(liveDepth);
+        }
+      });
+
+      // Fallback REST depth poll (only triggers if WebSocket port is blocked and hasn't delivered frames)
+      depthFallbackInterval = setInterval(async () => {
+        if (document.visibilityState === 'hidden' || hasLiveDepthStreamRef.current) return;
         try {
           const depth = await fetchBinanceOrderBook(activeSym, 10);
           if (currentSymbolRef.current.symbol === activeSym) {
@@ -508,20 +556,42 @@ export const App: React.FC = () => {
         } catch {
           // keep last valid real depth snapshot
         }
-      }, 4000);
+      }, 8000);
+
+      // Periodic 60s silent kline history reconciliation
+      candleSyncInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          void loadData(currentSymbolRef.current, timeframeRef.current, { silent: true });
+        }
+      }, 60_000);
     } else {
       setOrderBook(null);
+      // Real-time 15s silent bar rollover & volume sync for open non-Binance exchanges (XAUUSD, Oil, VN30/HOSE/HNX, US Stocks)
+      candleSyncInterval = setInterval(() => {
+        if (
+          document.visibilityState === 'visible' &&
+          getMarketSessionInfo(currentSymbolRef.current).isOpen
+        ) {
+          void loadData(currentSymbolRef.current, timeframeRef.current, { silent: true });
+        }
+      }, 15_000);
     }
 
     return () => {
       if (wsRef.current) {
         wsRef.current.disconnect();
       }
-      if (depthInterval) {
-        clearInterval(depthInterval);
+      if (depthWsRef.current) {
+        depthWsRef.current.disconnect();
+      }
+      if (depthFallbackInterval) {
+        clearInterval(depthFallbackInterval);
+      }
+      if (candleSyncInterval) {
+        clearInterval(candleSyncInterval);
       }
     };
-  }, [currentSymbol.symbol, timeframe]);
+  }, [currentSymbol.symbol, timeframe, loadData]);
 
   // Derived Analytics & Calculations
   const srLevels: SupportResistanceLevel[] = useMemo(() => {
@@ -551,20 +621,20 @@ export const App: React.FC = () => {
     };
   }, [currentSymbol.symbol, candles.length, kronosConfig]);
 
-  // Background Multi-Timeframe Klines Fetcher (15m • 1h • 4h • 1D) with 60s per-symbol cache
-  useEffect(() => {
-    let active = true;
-    const symKey = currentSymbol.symbol;
+  // Background Multi-Timeframe Klines Fetcher (15m • 1h • 4h • 1D) with 30s cache + 45s live auto-refresh
+  const syncMtfCandles = useCallback((symObj: MarketSymbol, force: boolean = false) => {
+    const symKey = symObj.symbol;
     const cached = mtfCacheRef.current.get(symKey);
 
-    if (cached && Date.now() - cached.ts < 60000) {
-      setMtfCandlesMap(cached.map);
+    if (!force && cached && Date.now() - cached.ts < 30_000) {
+      if (currentSymbolRef.current.symbol === symKey) {
+        setMtfCandlesMap(cached.map);
+      }
       return;
     }
 
     const mtfList: Timeframe[] = ['15m', '1h', '4h', '1D'];
-    Promise.allSettled(mtfList.map(tf => fetchMarketData(currentSymbol, tf))).then(results => {
-      if (!active) return;
+    void Promise.allSettled(mtfList.map(tf => fetchMarketData(symObj, tf))).then(results => {
       const nextMap: Partial<Record<Timeframe, Candle[]>> = {};
       results.forEach((res, idx) => {
         if (res.status === 'fulfilled' && res.value && res.value.length >= 28) {
@@ -572,34 +642,50 @@ export const App: React.FC = () => {
         }
       });
       mtfCacheRef.current.set(symKey, { ts: Date.now(), map: nextMap });
-      setMtfCandlesMap(nextMap);
+      if (currentSymbolRef.current.symbol === symKey) {
+        setMtfCandlesMap(nextMap);
+      }
     });
+  }, []);
 
-    return () => {
-      active = false;
-    };
-  }, [currentSymbol.symbol]);
+  useEffect(() => {
+    syncMtfCandles(currentSymbol, false);
+    const interval = setInterval(() => {
+      if (
+        document.visibilityState === 'visible' &&
+        getMarketSessionInfo(currentSymbolRef.current).isOpen
+      ) {
+        syncMtfCandles(currentSymbolRef.current, true);
+      }
+    }, 45_000);
+    return () => clearInterval(interval);
+  }, [currentSymbol.symbol, syncMtfCandles]);
 
-  // Live Global & Vietnam Macro Intelligence Polling (DXY, USD/VND, US10Y, VIX, Brent, Nasdaq, BTC Funding)
-  const refreshMacroSnapshot = useCallback(async (force: boolean = false) => {
-    setIsMacroRefreshing(true);
+  // Live Global & Vietnam Macro Intelligence + Fed Pivot V2 Polling (25s normal / 20s when modal open)
+  const refreshMacroSnapshot = useCallback(async (force: boolean = false, silent: boolean = false) => {
+    if (!silent) {
+      setIsMacroRefreshing(true);
+    }
     try {
       const snap = await fetchMacroIntelligenceSnapshot(force);
       if (snap) setMacroSnapshot(snap);
     } finally {
-      setIsMacroRefreshing(false);
+      if (!silent) {
+        setIsMacroRefreshing(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    void refreshMacroSnapshot(false);
+    void refreshMacroSnapshot(false, true);
+    const pollMs = isMacroModalOpen ? 20_000 : 25_000;
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        void refreshMacroSnapshot(false);
+        void refreshMacroSnapshot(false, true);
       }
-    }, 45_000);
+    }, pollMs);
     return () => clearInterval(interval);
-  }, [refreshMacroSnapshot]);
+  }, [refreshMacroSnapshot, isMacroModalOpen]);
 
   useEffect(() => {
     setIsMacroBannerDismissed(false);
@@ -681,17 +767,59 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    fetchLiveCryptoFearAndGreed().then(val => {
-      if (active && val !== null) setLiveCryptoFng(val);
-    });
+    const syncFng = (force: boolean = false) => {
+      void fetchLiveCryptoFearAndGreed(force).then(val => {
+        if (active && val !== null) setLiveCryptoFng(val);
+      });
+    };
+    syncFng(false);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncFng(false);
+      }
+    }, 180_000);
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, []);
 
+  // Unified Tab Wakeup & Network Reconnect Real-Time Resynchronization
+  useEffect(() => {
+    const resyncAllRealTimeStreams = () => {
+      if (document.visibilityState !== 'visible') return;
+      void syncLivePrices(true);
+      void refreshMacroSnapshot(true, true);
+      void loadData(currentSymbolRef.current, timeframeRef.current, { silent: true });
+      syncMtfCandles(currentSymbolRef.current, true);
+      void fetchLiveCryptoFearAndGreed(true).then(val => {
+        if (val !== null) setLiveCryptoFng(val);
+      });
+    };
+
+    document.addEventListener('visibilitychange', resyncAllRealTimeStreams);
+    window.addEventListener('online', resyncAllRealTimeStreams);
+
+    return () => {
+      document.removeEventListener('visibilitychange', resyncAllRealTimeStreams);
+      window.removeEventListener('online', resyncAllRealTimeStreams);
+    };
+  }, [syncLivePrices, refreshMacroSnapshot, loadData, syncMtfCandles]);
+
+  const liveBtcFundingPct8h = useMemo(() => {
+    const item = macroSnapshot?.indicators.find(i => i.id === 'BTC_FUNDING');
+    return item && Number.isFinite(item.value) ? item.value : null;
+  }, [macroSnapshot]);
+
   const marketSentiment: MarketSentiment = useMemo(() => {
-    return getMarketSentiment(currentSymbol, candles, symbols, liveCryptoFng);
-  }, [currentSymbol, candles, symbols, liveCryptoFng]);
+    return getMarketSentiment(
+      currentSymbol,
+      candles,
+      symbols,
+      liveCryptoFng,
+      liveBtcFundingPct8h
+    );
+  }, [currentSymbol, candles, symbols, liveCryptoFng, liveBtcFundingPct8h]);
 
   const isVND = Boolean(
     currentSymbol?.quoteAsset === 'VND' ||
@@ -716,9 +844,13 @@ export const App: React.FC = () => {
         onOpenHeatmap={() => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap')}
         onOpenRadar={() => setIsRadarOpen(true)}
         onRefreshData={() => {
-          syncLivePrices(true);
-          void refreshMacroSnapshot(true);
-          loadData(currentSymbol, timeframe);
+          void syncLivePrices(true);
+          void refreshMacroSnapshot(true, false);
+          void loadData(currentSymbol, timeframe);
+          syncMtfCandles(currentSymbol, true);
+          void fetchLiveCryptoFearAndGreed(true).then(val => {
+            if (val !== null) setLiveCryptoFng(val);
+          });
         }}
         isLiveLoading={isLiveLoading}
         activeView={activeView}

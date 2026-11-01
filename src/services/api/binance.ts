@@ -29,7 +29,7 @@ async function fetchWithFallbacks(path: string): Promise<any> {
   for (const base of BASE_URLS) {
     try {
       const url = `${base}${path}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       if (res.ok) {
         return await res.json();
       }
@@ -283,7 +283,7 @@ export class BinanceWatchlistSocket {
         this.pending.clear();
         onBatchUpdate(snapshot);
       }
-    }, 600);
+    }, 400);
   }
 
   disconnect() {
@@ -305,13 +305,112 @@ export class BinanceWatchlistSocket {
   }
 }
 
-// Single-symbol Klines WebSocket live feed manager with automatic mirror fallback
+// Real-time Level-2 Partial Book Depth WebSocket (@depth10@1000ms) with auto-reconnect
+export class BinanceDepthSocket {
+  private ws: WebSocket | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private isManuallyClosed = false;
+
+  connect(symbol: string, onDepth: (book: OrderBook) => void) {
+    this.disconnect();
+    this.isManuallyClosed = false;
+
+    const binanceSymbol = symbol.replace(/[/_-]/g, '').toLowerCase();
+    const wsUrls = [
+      `wss://data-stream.binance.vision/ws/${binanceSymbol}@depth10@1000ms`,
+      `wss://stream.binance.com:9443/ws/${binanceSymbol}@depth10@1000ms`,
+    ];
+    let urlIdx = 0;
+
+    const tryConnect = () => {
+      if (this.isManuallyClosed || urlIdx >= wsUrls.length) return;
+      try {
+        this.ws = new WebSocket(wsUrls[urlIdx]);
+
+        this.ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const rawBids: [string, string][] | undefined = data?.bids || data?.b;
+            const rawAsks: [string, string][] | undefined = data?.asks || data?.a;
+            if (!Array.isArray(rawBids) || !Array.isArray(rawAsks)) return;
+
+            let bidTotal = 0;
+            const bids = rawBids.slice(0, 10).map((b) => {
+              const price = parseFloat(b[0]);
+              const amount = parseFloat(b[1]);
+              bidTotal += amount;
+              return { price, amount, total: bidTotal };
+            });
+
+            let askTotal = 0;
+            const asks = rawAsks.slice(0, 10).map((a) => {
+              const price = parseFloat(a[0]);
+              const amount = parseFloat(a[1]);
+              askTotal += amount;
+              return { price, amount, total: askTotal };
+            });
+
+            if (bids.length > 0 && asks.length > 0) {
+              const highestBid = bids[0].price;
+              const lowestAsk = asks[0].price;
+              const spread = Math.max(0, lowestAsk - highestBid);
+              const spreadPercent = highestBid > 0 ? (spread / highestBid) * 100 : 0;
+              onDepth({ bids, asks, spread, spreadPercent });
+            }
+          } catch {
+            // ignore malformed frame
+          }
+        };
+
+        this.ws.onerror = () => {
+          urlIdx++;
+          if (!this.isManuallyClosed && urlIdx < wsUrls.length) {
+            tryConnect();
+          }
+        };
+
+        this.ws.onclose = () => {
+          if (!this.isManuallyClosed) {
+            this.reconnectTimer = setTimeout(() => {
+              urlIdx = 0;
+              tryConnect();
+            }, 3000);
+          }
+        };
+      } catch {
+        urlIdx++;
+        if (!this.isManuallyClosed && urlIdx < wsUrls.length) {
+          tryConnect();
+        }
+      }
+    };
+
+    tryConnect();
+  }
+
+  disconnect() {
+    this.isManuallyClosed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
+
+// Single-symbol Klines WebSocket live feed manager with automatic mirror fallback & auto-reconnect
 export class BinanceWebSocket {
   private ws: WebSocket | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private isManuallyClosed = false;
   private onMessageCallback: ((candle: Candle) => void) | null = null;
 
   connect(symbol: string, timeframe: Timeframe, onMessage: (candle: Candle) => void) {
     this.disconnect();
+    this.isManuallyClosed = false;
     this.onMessageCallback = onMessage;
 
     const binanceSymbol = symbol.replace(/[/_-]/g, '').toLowerCase();
@@ -324,7 +423,7 @@ export class BinanceWebSocket {
     let currentUrlIndex = 0;
 
     const tryConnect = () => {
-      if (currentUrlIndex >= wsUrls.length) return;
+      if (this.isManuallyClosed || currentUrlIndex >= wsUrls.length) return;
       const url = wsUrls[currentUrlIndex];
 
       try {
@@ -354,13 +453,22 @@ export class BinanceWebSocket {
 
         this.ws.onerror = () => {
           currentUrlIndex++;
-          if (currentUrlIndex < wsUrls.length) {
+          if (!this.isManuallyClosed && currentUrlIndex < wsUrls.length) {
             tryConnect();
           }
         };
-      } catch (e) {
+
+        this.ws.onclose = () => {
+          if (!this.isManuallyClosed) {
+            this.reconnectTimer = setTimeout(() => {
+              currentUrlIndex = 0;
+              tryConnect();
+            }, 2500);
+          }
+        };
+      } catch {
         currentUrlIndex++;
-        if (currentUrlIndex < wsUrls.length) {
+        if (!this.isManuallyClosed && currentUrlIndex < wsUrls.length) {
           tryConnect();
         }
       }
@@ -370,6 +478,11 @@ export class BinanceWebSocket {
   }
 
   disconnect() {
+    this.isManuallyClosed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;

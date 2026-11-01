@@ -49,7 +49,7 @@ const VN_RATE_SENSITIVE = new Set([
 
 let cachedMacroSnapshot: MacroIntelligenceSnapshot | null = null;
 let macroFetchInFlight: Promise<MacroIntelligenceSnapshot | null> | null = null;
-const MACRO_TTL_MS = 45_000;
+const MACRO_TTL_MS = 20_000;
 
 interface ParsedSparkMetric {
   last: number;
@@ -108,7 +108,7 @@ interface NyFedEffrData {
 
 async function fetchOfficialNyFedEffr(): Promise<NyFedEffrData | null> {
   try {
-    const res = await fetch(NYFED_EFFR_URL, { headers: { Accept: 'application/json' } });
+    const res = await fetch(NYFED_EFFR_URL, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) return null;
     const json = await res.json();
     const row = json?.refRates?.[0];
@@ -147,7 +147,7 @@ async function fetchYahooMacroSpark(extraSymbols: string[] = []): Promise<Record
 
   for (const base of YAHOO_BASES) {
     try {
-      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
       if (!res.ok) continue;
       const raw = await res.json();
       const out: Record<string, ParsedSparkMetric> = {};
@@ -167,7 +167,7 @@ async function fetchRealBinanceBtcFunding(): Promise<{ fundingPct8h: number; mar
   const query = '/fapi/v1/premiumIndex?symbol=BTCUSDT';
   for (const base of FAPI_BASES) {
     try {
-      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
       if (!res.ok) continue;
       const data = await res.json();
       const rate = parseFloat(data?.lastFundingRate);

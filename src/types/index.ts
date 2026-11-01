@@ -52,6 +52,7 @@ export interface IndicatorSettings {
   vnPriceLimits?: boolean;
   globalOptionsAndLiqLines?: boolean;
   recommendedPlanLines?: boolean;
+  holdingCostLines?: boolean;
 }
 
 export type KronosModelKey = 'kronos-mini' | 'kronos-small' | 'kronos-base';

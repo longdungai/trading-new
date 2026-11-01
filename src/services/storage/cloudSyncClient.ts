@@ -9,6 +9,7 @@ const SYNCED_LOCAL_KEYS = [
   'trading_new_vn_dealer_gold_quote_v1',
   'trading_new_fed_pivot_v2_snapshots',
   'trading_ai_kronos_audit_v2',
+  'trading_new_user_holdings_v1',
 ] as const;
 
 export interface CloudSyncStatus {

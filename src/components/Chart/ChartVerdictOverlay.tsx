@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Bell,
+  Briefcase,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -12,19 +13,27 @@ import {
   Play,
   ShieldAlert,
   Sparkles,
+  Trash2,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
 import { ChartRecommendationVerdict } from '../../services/ai/chartVerdictEngine';
+import {
+  PositionRecoveryPlan,
+  removeUserHolding,
+  saveUserHolding,
+} from '../../services/portfolio/holdingsRecoveryEngine';
 import { addUserPaperTrade } from '../../services/paperTrading/userPaperTrading';
 import { isVnDerivativeSymbol, isVnStockOrIndexSymbol } from '../../services/vnMarket/vnStockMicrostructure';
 import { formatPrice } from '../../utils/formatters';
 
 interface ChartVerdictOverlayProps {
   verdict: ChartRecommendationVerdict | null;
+  recoveryPlan?: PositionRecoveryPlan | null;
   quoteAsset?: string;
   showPlanLines?: boolean;
   onTogglePlanLines?: () => void;
+  onOpenFullRecoveryTab?: () => void;
   onQuickCreatePriceAlert?: (price: number) => void;
 }
 
@@ -32,16 +41,33 @@ const HUD_EXPANDED_KEY = 'trading_new_verdict_hud_expanded_v1';
 
 export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
   verdict,
+  recoveryPlan = null,
   quoteAsset = 'USD',
   showPlanLines = true,
   onTogglePlanLines,
+  onOpenFullRecoveryTab,
   onQuickCreatePriceAlert,
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(HUD_EXPANDED_KEY) === '1';
   });
+  const [isHoldingPopoverOpen, setIsHoldingPopoverOpen] = useState<boolean>(false);
+  const [quickQty, setQuickQty] = useState<string>('');
+  const [quickAvg, setQuickAvg] = useState<string>('');
   const [paperSuccessToast, setPaperSuccessToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (recoveryPlan) {
+      setQuickQty(String(recoveryPlan.holding.quantity));
+      setQuickAvg(String(recoveryPlan.holding.avgCostPrice));
+    } else if (verdict) {
+      const vnSym = isVnStockOrIndexSymbol(verdict.symbol);
+      setQuickQty(vnSym ? '1000' : '10');
+      setQuickAvg('');
+    }
+    setIsHoldingPopoverOpen(false);
+  }, [verdict?.symbol, recoveryPlan?.holding.quantity, recoveryPlan?.holding.avgCostPrice]);
 
   if (!verdict || verdict.pillars.length === 0) return null;
 
@@ -225,6 +251,38 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
           </button>
         )}
 
+        {/* Personal Holding & Break-Even Recovery Pill */}
+        <button
+          type="button"
+          onClick={() => setIsHoldingPopoverOpen((v) => !v)}
+          className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 shrink-0 whitespace-nowrap transition ${
+            recoveryPlan
+              ? recoveryPlan.netUnrealizedPnlPct >= 0
+                ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/50'
+                : 'bg-amber-500/20 text-amber-200 border-amber-400/55'
+              : 'bg-[#131d2f] hover:bg-[#1a2842] text-amber-200 border-amber-500/35'
+          }`}
+          title="Nhập khối lượng & giá vốn đang nắm giữ để xem lộ trình Về Bờ thông minh"
+        >
+          <Briefcase className="w-3 h-3 shrink-0" />
+          {recoveryPlan ? (
+            <span className="font-mono">
+              Giữ {recoveryPlan.holding.quantity.toLocaleString('en-US')}{' '}
+              {recoveryPlan.quantityLabel} •{' '}
+              <strong
+                className={
+                  recoveryPlan.netUnrealizedPnlPct >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                }
+              >
+                {recoveryPlan.netUnrealizedPnlPct >= 0 ? '+' : ''}
+                {recoveryPlan.netUnrealizedPnlPct}%
+              </strong>
+            </span>
+          ) : (
+            <span>Nhập Giá Vốn / Về Bờ</span>
+          )}
+        </button>
+
         {/* Expand / Collapse Details Button */}
         <button
           type="button"
@@ -235,6 +293,128 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
           {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
       </div>
+
+      {/* INLINE QUICK HOLDING INPUT & RECOVERY POPOVER ON CHART */}
+      {isHoldingPopoverOpen && (
+        <div className="pointer-events-auto mt-1.5 w-full max-w-[490px] rounded-2xl bg-[#070d19]/96 backdrop-blur-xl border border-amber-500/50 shadow-2xl p-3 space-y-2.5 text-xs">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="font-bold text-amber-200 flex items-center gap-1.5 text-[11px]">
+              <Briefcase className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Vị thế đang nắm giữ & Chiến lược Về Bờ ({verdict.symbol})</span>
+            </span>
+            {onOpenFullRecoveryTab && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHoldingPopoverOpen(false);
+                  onOpenFullRecoveryTab();
+                }}
+                className="text-[10px] font-bold text-cyan-300 hover:underline shrink-0"
+              >
+                Mở bảng chi tiết 3 phương án ↗
+              </button>
+            )}
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = Number(quickQty.replace(/,/g, '').trim());
+              const a = Number(quickAvg.replace(/,/g, '').trim());
+              if (!Number.isFinite(q) || q <= 0 || !Number.isFinite(a) || a <= 0) return;
+              saveUserHolding(
+                {
+                  symbol: verdict.symbol,
+                  quantity: q,
+                  avgCostPrice: a,
+                  marginRatioPct: recoveryPlan?.holding.marginRatioPct ?? 0,
+                  holdingDays: recoveryPlan?.holding.holdingDays ?? 5,
+                  extraDcaBudget: recoveryPlan?.holding.extraDcaBudget ?? null,
+                },
+                verdict.currentPrice
+              );
+            }}
+            className="grid grid-cols-1 sm:grid-cols-12 gap-1.5 items-end"
+          >
+            <div className="sm:col-span-4 min-w-0">
+              <label className="text-[9.5px] text-slate-400 block mb-0.5">Khối lượng giữ</label>
+              <input
+                type="number"
+                step="any"
+                min="0.0001"
+                required
+                value={quickQty}
+                onChange={(e) => setQuickQty(e.target.value)}
+                className="w-full px-2 py-1 rounded-lg bg-[#121c30] border border-slate-700 text-white font-mono text-[11px] focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            <div className="sm:col-span-5 min-w-0">
+              <label className="text-[9.5px] text-slate-400 block mb-0.5">
+                Giá vốn TB ({isVN && !isVnIdxOrDeriv ? 'nghìn đ/CP' : isVN ? 'điểm' : 'USD'})
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0.0000001"
+                required
+                value={quickAvg}
+                onChange={(e) => setQuickAvg(e.target.value)}
+                placeholder={`VD: ${(verdict.currentPrice * 1.07).toFixed(isVN ? 1 : 2)}`}
+                className="w-full px-2 py-1 rounded-lg bg-[#121c30] border border-slate-700 text-white font-mono text-[11px] focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            <div className="sm:col-span-3 flex items-center gap-1">
+              <button
+                type="submit"
+                className="flex-1 py-1 px-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] transition whitespace-nowrap"
+              >
+                Tính Về Bờ
+              </button>
+              {recoveryPlan && (
+                <button
+                  type="button"
+                  onClick={() => removeUserHolding(verdict.symbol)}
+                  className="p-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/40 text-rose-300"
+                  title="Xóa vị thế"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </form>
+
+          {recoveryPlan && (
+            <div className="p-2 rounded-xl bg-[#0d1628] border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-[10.5px]">
+                <span>
+                  Hòa vốn thực: <strong className="text-amber-300">{fmtP(recoveryPlan.trueBreakEvenPrice)}</strong>
+                  {recoveryPlan.gainRequiredToBreakEvenPct > 0 && (
+                    <span className="text-slate-400"> (cần +{recoveryPlan.gainRequiredToBreakEvenPct}%)</span>
+                  )}
+                </span>
+                <span
+                  className={`font-bold ${
+                    recoveryPlan.netUnrealizedPnlValue >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {recoveryPlan.netUnrealizedPnlValue >= 0 ? '+' : ''}
+                  {recoveryPlan.netUnrealizedPnlValue.toLocaleString('en-US')}{' '}
+                  {recoveryPlan.currencyUnitLabel}
+                </span>
+              </div>
+
+              <div className="text-[10.5px] font-bold text-cyan-200">
+                ➜ {recoveryPlan.primaryBadgeVi}
+              </div>
+              <div className="text-[10.5px] text-slate-300 leading-relaxed">
+                {recoveryPlan.actionStepsVi[0]}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* EXPANDED 6-PILLAR INSTITUTIONAL VERDICT PANEL */}
       {isExpanded && (

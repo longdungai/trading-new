@@ -44,6 +44,7 @@ import {
   calculateVisibleVolumeProfile,
 } from '../../services/analysis/volumeProfileMtf';
 import { ChartRecommendationVerdict } from '../../services/ai/chartVerdictEngine';
+import { PositionRecoveryPlan } from '../../services/portfolio/holdingsRecoveryEngine';
 import { ChartDrawingOverlay } from './ChartDrawingOverlay';
 import { ChartVerdictOverlay } from './ChartVerdictOverlay';
 
@@ -56,12 +57,14 @@ interface TradingChartProps {
   orderBlocks?: OrderBlock[];
   aiPrediction: AIPrediction | null;
   chartVerdict?: ChartRecommendationVerdict | null;
+  recoveryPlan?: PositionRecoveryPlan | null;
   symbolName?: string;
   symbolFullName?: string;
   currentSymbol?: MarketSymbol;
   compareSymbolName?: string | null;
   compareCandles?: Candle[];
   onTogglePlanLines?: () => void;
+  onOpenFullRecoveryTab?: () => void;
   onQuickCreatePriceAlert?: (price: number) => void;
 }
 
@@ -73,12 +76,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   fibLevels,
   aiPrediction,
   chartVerdict = null,
+  recoveryPlan = null,
   symbolName = '',
   symbolFullName = '',
   currentSymbol,
   compareSymbolName = null,
   compareCandles = [],
   onTogglePlanLines,
+  onOpenFullRecoveryTab,
   onQuickCreatePriceAlert,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -791,6 +796,42 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       );
     }
 
+    // 7D. Personal Holding True Break-Even & Post-DCA Price Lines
+    if (
+      settings.holdingCostLines !== false &&
+      recoveryPlan &&
+      recoveryPlan.trueBreakEvenPrice > 0
+    ) {
+      const isProfit = recoveryPlan.netUnrealizedPnlPct >= 0;
+      priceLinesRef.current.push(
+        candleSeries.createPriceLine({
+          price: recoveryPlan.trueBreakEvenPrice,
+          color: isProfit ? '#10b981' : '#f59e0b',
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          axisLabelVisible: true,
+          title: `💼 HÒA VỐN THỰC (${isProfit ? '+' : ''}${recoveryPlan.netUnrealizedPnlPct}%)`,
+        })
+      );
+
+      if (
+        recoveryPlan.smartDcaPlan.allowed &&
+        recoveryPlan.smartDcaPlan.newTrueBreakEvenPrice > 0 &&
+        recoveryPlan.smartDcaPlan.newTrueBreakEvenPrice < recoveryPlan.trueBreakEvenPrice * 0.995
+      ) {
+        priceLinesRef.current.push(
+          candleSeries.createPriceLine({
+            price: recoveryPlan.smartDcaPlan.newTrueBreakEvenPrice,
+            color: '#38bdf8',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `🎯 BỜ MỚI SAU DCA (+${recoveryPlan.smartDcaPlan.newGainNeededPct}%)`,
+          })
+        );
+      }
+    }
+
     // 8. Update Kronos Ghost Candlesticks, Walk-Forward & AI Forecast Paths
     if (
       settings.kronosGhostCandles &&
@@ -902,6 +943,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     fibLevels,
     aiPrediction,
     chartVerdict,
+    recoveryPlan,
     vpvrProfile,
     compareSymbolName,
     compareCandles,
@@ -951,9 +993,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           {chartVerdict && (
             <ChartVerdictOverlay
               verdict={chartVerdict}
+              recoveryPlan={recoveryPlan}
               quoteAsset={currentSymbol?.quoteAsset}
               showPlanLines={settings.recommendedPlanLines !== false}
               onTogglePlanLines={onTogglePlanLines}
+              onOpenFullRecoveryTab={onOpenFullRecoveryTab}
               onQuickCreatePriceAlert={onQuickCreatePriceAlert}
             />
           )}

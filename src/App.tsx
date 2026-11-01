@@ -72,6 +72,12 @@ import { VnStockQuickCard } from './components/AIInsight/VnStockQuickCard';
 import { GlobalMarketQuickCard } from './components/AIInsight/GlobalMarketQuickCard';
 import { TradeSetupCard } from './components/AIInsight/TradeSetupCard';
 import { RiskCalculator } from './components/AIInsight/RiskCalculator';
+import { PositionRecoveryCard } from './components/AIInsight/PositionRecoveryCard';
+import {
+  evaluatePositionRecovery,
+  getUserHoldingForSymbol,
+  USER_HOLDINGS_UPDATED_EVENT,
+} from './services/portfolio/holdingsRecoveryEngine';
 import {
   isVnDerivativeSymbol,
   isVnStockOrIndexSymbol,
@@ -206,6 +212,7 @@ export const App: React.FC = () => {
     vnPriceLimits: true,
     globalOptionsAndLiqLines: true,
     recommendedPlanLines: true,
+    holdingCostLines: true,
   });
 
   // Kronos Foundation Model Configuration & Optional Cloud Override
@@ -832,16 +839,20 @@ export const App: React.FC = () => {
 
   const [liveCryptoFng, setLiveCryptoFng] = useState<number | null>(null);
   const [insightsRevision, setInsightsRevision] = useState<number>(0);
+  const [holdingsRevision, setHoldingsRevision] = useState<number>(0);
 
   // Proactively hydrate VN or Global/Crypto institutional insights for the active chart symbol
   // (works even in Zen Mode or Mobile Chart-only view) and re-evaluate verdict on cache updates
   useEffect(() => {
     const bump = () => setInsightsRevision(r => r + 1);
+    const bumpHoldings = () => setHoldingsRevision(r => r + 1);
     window.addEventListener(VN_INSIGHTS_UPDATED_EVENT, bump);
     window.addEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, bump);
+    window.addEventListener(USER_HOLDINGS_UPDATED_EVENT, bumpHoldings);
     return () => {
       window.removeEventListener(VN_INSIGHTS_UPDATED_EVENT, bump);
       window.removeEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, bump);
+      window.removeEventListener(USER_HOLDINGS_UPDATED_EVENT, bumpHoldings);
     };
   }, []);
 
@@ -949,6 +960,17 @@ export const App: React.FC = () => {
     insightsRevision,
   ]);
 
+  const activeRecoveryPlan = useMemo(() => {
+    const holding = getUserHoldingForSymbol(currentSymbol.symbol);
+    if (!holding) return null;
+    return evaluatePositionRecovery({
+      holding,
+      symbolObj: currentSymbol,
+      candles: effectiveCandles,
+      chartVerdict,
+    });
+  }, [currentSymbol, effectiveCandles, chartVerdict, holdingsRevision]);
+
   const strategyHub: StrategyAnalysisHub = useMemo(() => {
     return generateStrategyHub(
       currentSymbol.symbol,
@@ -1001,6 +1023,7 @@ export const App: React.FC = () => {
       if (restoredKeys > 0) {
         setFavorites(loadFavoritesFromStorage());
         setAuditEntries(loadForecastAuditEntries());
+        setHoldingsRevision(r => r + 1);
         syncAlertCounts();
       }
     });
@@ -1310,6 +1333,7 @@ export const App: React.FC = () => {
                 orderBlocks={orderBlocks}
                 aiPrediction={aiPrediction}
                 chartVerdict={chartVerdict}
+                recoveryPlan={activeRecoveryPlan}
                 symbolName={currentSymbol.symbol}
                 symbolFullName={currentSymbol.name}
                 currentSymbol={currentSymbol}
@@ -1318,6 +1342,11 @@ export const App: React.FC = () => {
                 }
                 compareCandles={effectiveCompareCandles}
                 onTogglePlanLines={() => handleToggleIndicator('recommendedPlanLines')}
+                onOpenFullRecoveryTab={() => {
+                  setIsZenMode(false);
+                  setRightPanelTab('risk');
+                  setMobileTab('risk');
+                }}
                 onQuickCreatePriceAlert={(price) => {
                   setPresetAlertPrice(price);
                   setIsAlertModalOpen(true);
@@ -1388,7 +1417,16 @@ export const App: React.FC = () => {
                   }`}
                 >
                   <Shield className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Vốn & VaR</span>
+                  <span>Vốn &amp; Về Bờ</span>
+                  {activeRecoveryPlan && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        activeRecoveryPlan.netUnrealizedPnlPct >= 0
+                          ? 'bg-emerald-400'
+                          : 'bg-rose-400 animate-pulse'
+                      }`}
+                    />
+                  )}
                 </button>
 
                 {!isLeftDockActive && (
@@ -1410,6 +1448,22 @@ export const App: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-3">
                 {((effectiveRightTab === 'ai' && mobileTab === 'chart') || mobileTab === 'ai') && (
                   <>
+                    {activeRecoveryPlan && (
+                      <PositionRecoveryCard
+                        currentSymbol={currentSymbol}
+                        allSymbols={symbols}
+                        candles={effectiveCandles}
+                        chartVerdict={chartVerdict}
+                        recoveryPlan={activeRecoveryPlan}
+                        showHoldingLines={settings.holdingCostLines !== false}
+                        onToggleHoldingLines={() => handleToggleIndicator('holdingCostLines')}
+                        onSelectSymbol={handleSelectSymbol}
+                        onQuickCreatePriceAlert={(price) => {
+                          setPresetAlertPrice(price);
+                          setIsAlertModalOpen(true);
+                        }}
+                      />
+                    )}
                     {isVnStockOrIndexSymbol(currentSymbol) && (
                       <VnStockQuickCard
                         currentSymbol={currentSymbol}
@@ -1481,6 +1535,20 @@ export const App: React.FC = () => {
 
                 {((effectiveRightTab === 'risk' && mobileTab === 'chart') || mobileTab === 'risk') && (
                   <>
+                    <PositionRecoveryCard
+                      currentSymbol={currentSymbol}
+                      allSymbols={symbols}
+                      candles={effectiveCandles}
+                      chartVerdict={chartVerdict}
+                      recoveryPlan={activeRecoveryPlan}
+                      showHoldingLines={settings.holdingCostLines !== false}
+                      onToggleHoldingLines={() => handleToggleIndicator('holdingCostLines')}
+                      onSelectSymbol={handleSelectSymbol}
+                      onQuickCreatePriceAlert={(price) => {
+                        setPresetAlertPrice(price);
+                        setIsAlertModalOpen(true);
+                      }}
+                    />
                     <RiskCalculator
                       currentPrice={currentSymbol.price}
                       stopLossPrice={
@@ -1643,6 +1711,7 @@ export const App: React.FC = () => {
           onWorkspaceRestored={() => {
             setFavorites(loadFavoritesFromStorage());
             setAuditEntries(loadForecastAuditEntries());
+            setHoldingsRevision(r => r + 1);
           }}
           onClose={() => {
             setIsAlertModalOpen(false);

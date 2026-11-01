@@ -250,6 +250,18 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
         )}
 
         <button
+          onClick={() => onToggle('holdingCostLines')}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+            settings.holdingCostLines !== false
+              ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/60 shadow-sm shadow-indigo-500/15'
+              : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+          }`}
+          title="Hiển thị đường Hòa Vốn Thực (gồm phí/thuế/margin) & Bờ Mới Sau DCA của vị thế đang nắm giữ trên đồ thị"
+        >
+          <span>💼 Đường Hòa Vốn</span>
+        </button>
+
+        <button
           onClick={() => onToggle('bollingerBands')}
           className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border shrink-0 transition ${
             settings.bollingerBands

@@ -25,6 +25,12 @@ import { isVnDerivativeSymbol } from '../../services/vnMarket/vnStockMicrostruct
 import { GLOBAL_SYMBOL_CATALOG, CatalogItem } from '../../services/api/symbolCatalog';
 import { analyzeAccumulationZone } from '../../services/ai/accumulationScanner';
 import { AccumulationRadarModal } from './AccumulationRadarModal';
+import {
+  loadUserHoldings,
+  normalizeHoldingInputPrice,
+  USER_HOLDINGS_UPDATED_EVENT,
+  UserHoldingItem,
+} from '../../services/portfolio/holdingsRecoveryEngine';
 
 interface WatchlistProps {
   symbols: MarketSymbol[];
@@ -49,11 +55,20 @@ export const Watchlist: React.FC<WatchlistProps> = ({
   onToggleFavorite,
   onResetDefaults,
 }) => {
-  const [filter, setFilter] = useState<'all' | 'accumulation' | 'vn30' | 'commodity' | 'crypto' | 'stock' | 'favorite'>('all');
+  const [filter, setFilter] = useState<'all' | 'holdings' | 'accumulation' | 'vn30' | 'commodity' | 'crypto' | 'stock' | 'favorite'>('all');
   const [search, setSearch] = useState('');
   const [isManageMode, setIsManageMode] = useState<boolean>(false);
   const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
   const [nowClock, setNowClock] = useState<Date>(() => new Date());
+  const [holdingsMap, setHoldingsMap] = useState<Record<string, UserHoldingItem>>(() =>
+    loadUserHoldings()
+  );
+
+  useEffect(() => {
+    const syncHoldings = () => setHoldingsMap(loadUserHoldings());
+    window.addEventListener(USER_HOLDINGS_UPDATED_EVENT, syncHoldings);
+    return () => window.removeEventListener(USER_HOLDINGS_UPDATED_EVENT, syncHoldings);
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setNowClock(new Date()), 10_000);
@@ -93,6 +108,10 @@ export const Watchlist: React.FC<WatchlistProps> = ({
     return map;
   }, [symbols]);
 
+  const heldSymbolsCount = useMemo(() => {
+    return symbols.filter(s => Boolean(holdingsMap[s.symbol.toUpperCase()])).length;
+  }, [symbols, holdingsMap]);
+
   // Filter existing symbols in Watchlist
   const filteredSymbols = useMemo(() => {
     return symbols.filter(s => {
@@ -102,6 +121,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
         (s.category && s.category.toLowerCase().includes(search.toLowerCase()));
 
       if (!matchesSearch) return false;
+      if (filter === 'holdings') return Boolean(holdingsMap[s.symbol.toUpperCase()]);
       if (filter === 'favorite') return favorites.includes(s.symbol);
       if (filter === 'accumulation') {
         const acc = accumulationMap.get(s.symbol);
@@ -120,7 +140,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
       }
       return 0;
     });
-  }, [symbols, search, filter, favorites, accumulationMap]);
+  }, [symbols, search, filter, favorites, accumulationMap, holdingsMap]);
 
   // Handle Pick Suggestion or Custom Input
   const handleSelectSuggestion = (item: CatalogItem) => {
@@ -246,7 +266,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
 
         {/* Filter Pills - Touch Scrollable */}
         <div className="flex gap-1 overflow-x-auto no-scrollbar whitespace-nowrap text-[11px]">
-          {(['all', 'accumulation', 'vn30', 'commodity', 'crypto', 'stock', 'favorite'] as const).map(tab => (
+          {(['all', 'holdings', 'accumulation', 'vn30', 'commodity', 'crypto', 'stock', 'favorite'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -254,14 +274,20 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                 filter === tab
                   ? tab === 'accumulation'
                     ? 'bg-amber-500 text-black font-black shadow-md shadow-amber-500/30'
+                    : tab === 'holdings'
+                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-500/30'
                     : 'bg-blue-600 text-white shadow-sm'
                   : tab === 'accumulation'
                   ? 'bg-amber-950/40 text-amber-300 border border-amber-500/30 hover:text-white'
+                  : tab === 'holdings' && heldSymbolsCount > 0
+                  ? 'bg-indigo-950/50 text-indigo-300 border border-indigo-500/35 hover:text-white'
                   : 'bg-[#141b27] text-gray-400 hover:text-white'
               }`}
             >
               {tab === 'all'
                 ? 'Tất cả'
+                : tab === 'holdings'
+                ? `💼 Đang Giữ${heldSymbolsCount > 0 ? ` (${heldSymbolsCount})` : ''}`
                 : tab === 'accumulation'
                 ? '🔥 Vùng Gom Đẹp'
                 : tab === 'commodity'
@@ -283,13 +309,23 @@ export const Watchlist: React.FC<WatchlistProps> = ({
         {filteredSymbols.length === 0 ? (
           <div className="p-6 text-center text-xs text-gray-500 space-y-2">
             <AlertCircle className="w-6 h-6 mx-auto text-gray-600" />
-            <p>Không tìm thấy mã nào phù hợp.</p>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="text-blue-400 hover:underline font-semibold"
-            >
-              + Nhấn để thêm mã mới
-            </button>
+            {filter === 'holdings' ? (
+              <p className="leading-relaxed">
+                Chưa có mã nào lưu vị thế nắm giữ. Hãy chọn 1 mã và nhấn{' '}
+                <strong className="text-indigo-300">💼 Nhập Giá Vốn / Về Bờ</strong> trên biểu đồ hoặc tab{' '}
+                <strong className="text-indigo-300">Vốn &amp; VaR</strong>.
+              </p>
+            ) : (
+              <>
+                <p>Không tìm thấy mã nào phù hợp.</p>
+                <button
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="text-blue-400 hover:underline font-semibold"
+                >
+                  + Nhấn để thêm mã mới
+                </button>
+              </>
+            )}
           </div>
         ) : (
           filteredSymbols.map(s => {
@@ -300,6 +336,15 @@ export const Watchlist: React.FC<WatchlistProps> = ({
             const isCommodity = s.type === 'commodity' || s.symbol.includes('XAU') || s.symbol.includes('OIL') || s.symbol.includes('PAXG');
             const acc = accumulationMap.get(s.symbol);
             const session = getMarketSessionInfo(s, nowClock);
+            const userHold = holdingsMap[s.symbol.toUpperCase()] ?? null;
+            const normHoldCost = userHold
+              ? normalizeHoldingInputPrice(userHold.avgCostPrice, s.symbol, s.price)
+              : 0;
+            const feeDrag = isVND && !isVnDerivativeSymbol(s.symbol) ? 1.004 : 1.002;
+            const estNetHoldPnlPct =
+              userHold && normHoldCost > 0
+                ? ((s.price - normHoldCost * feeDrag) / (normHoldCost * feeDrag)) * 100
+                : null;
 
             return (
               <div
@@ -387,6 +432,21 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                           💎 DCA
                         </span>
                       ) : null}
+
+                      {/* Personal Holding P&L Badge */}
+                      {userHold && estNetHoldPnlPct !== null && (
+                        <span
+                          title={`Đang nắm giữ ${userHold.quantity.toLocaleString('en-US')} • Giá vốn ${normHoldCost}`}
+                          className={`text-[8px] px-1 py-0.2 rounded font-mono font-bold border ${
+                            estNetHoldPnlPct >= 0
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35'
+                              : 'bg-rose-500/20 text-rose-300 border-rose-500/35'
+                          }`}
+                        >
+                          💼 {estNetHoldPnlPct >= 0 ? '+' : ''}
+                          {estNetHoldPnlPct.toFixed(1)}%
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-slate-400 truncate max-w-[115px] sm:max-w-[135px]">{s.name}</div>
                   </div>

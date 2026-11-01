@@ -328,6 +328,7 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
               symbols={symbols}
               currentSymbol={currentSymbol}
               activeCandles={activeCandles}
+              macroSnapshot={snapshot}
               onSelectSymbol={onSelectSymbol}
               onClose={onClose}
             />

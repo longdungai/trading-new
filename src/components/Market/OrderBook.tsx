@@ -6,6 +6,16 @@ import {
   DerivativesOrderFlowSnapshot,
   fetchDerivativesOrderFlow,
 } from '../../services/api/derivativesOrderFlow';
+import { computeVnActiveOrderFlow } from '../../services/vnMarket/vnExecutionEngines';
+import {
+  fetchVnStockInsights,
+  getCachedVnLiquidityAndPt,
+  VnSymbolLiquidityAndPt,
+} from '../../services/vnMarket/vnStockInsightsClient';
+import {
+  isVnDerivativeSymbol,
+  isVnStockOrIndexSymbol,
+} from '../../services/vnMarket/vnStockMicrostructure';
 import {
   ChevronDown,
   ChevronUp,
@@ -16,6 +26,7 @@ import {
   Info,
   Flame,
   AlertTriangle,
+  Activity,
 } from 'lucide-react';
 
 interface OrderBookProps {
@@ -36,9 +47,10 @@ export const OrderBook: React.FC<OrderBookProps> = ({
   candles = [],
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [subTab, setSubTab] = useState<'book' | 'orderflow'>('book');
+  const [subTab, setSubTab] = useState<'vn_shark' | 'book' | 'orderflow'>('book');
   const [now, setNow] = useState<Date>(() => new Date());
   const [flowSnap, setFlowSnap] = useState<DerivativesOrderFlowSnapshot | null>(null);
+  const [vnLiqPt, setVnLiqPt] = useState<VnSymbolLiquidityAndPt | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -90,13 +102,58 @@ export const OrderBook: React.FC<OrderBookProps> = ({
 
   const session = useMemo(() => getMarketSessionInfo(targetMeta, now), [targetMeta, now]);
 
+  const isVnAsset = useMemo(() => isVnStockOrIndexSymbol(targetMeta), [targetMeta]);
+  const isVnIndexOrDeriv = useMemo(() => {
+    const u = targetMeta.symbol.toUpperCase();
+    return (
+      u === 'VNINDEX' ||
+      u === 'VN30' ||
+      u === 'HNXINDEX' ||
+      u === 'UPCOMINDEX' ||
+      isVnDerivativeSymbol(u)
+    );
+  }, [targetMeta.symbol]);
+
+  useEffect(() => {
+    if (isVnAsset) {
+      setSubTab(prev => (prev === 'book' ? 'vn_shark' : prev));
+    } else {
+      setSubTab(prev => (prev === 'vn_shark' ? 'book' : prev));
+    }
+  }, [isVnAsset, targetMeta.symbol]);
+
+  useEffect(() => {
+    let active = true;
+    if (!isVnAsset || isVnIndexOrDeriv) {
+      setVnLiqPt(null);
+      return;
+    }
+    const cached = getCachedVnLiquidityAndPt(targetMeta.symbol);
+    if (cached) setVnLiqPt(cached);
+
+    void fetchVnStockInsights(targetMeta.symbol, false).then(res => {
+      if (active && res?.liquidityAndPt) {
+        setVnLiqPt(res.liquidityAndPt);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isVnAsset, isVnIndexOrDeriv, targetMeta.symbol]);
+
+  const vnFlow = useMemo(
+    () => (isVnAsset ? computeVnActiveOrderFlow(candles, targetMeta, vnLiqPt) : null),
+    [isVnAsset, candles, targetMeta, vnLiqPt]
+  );
+
   const isVND =
+    isVnAsset ||
     targetMeta.quoteAsset === 'VND' ||
     targetMeta.type === 'vn30' ||
     symbol.toUpperCase() === 'VNINDEX' ||
     symbol.toUpperCase() === 'VN30';
   const prefix = isVND ? '' : '$';
-  const priceSuffix = isVND ? 'k' : '';
+  const priceSuffix = isVND ? (isVnIndexOrDeriv ? ' đ' : 'k') : '';
 
   const hasValidRealDepth =
     session.hasRealOrderBook &&
@@ -298,6 +355,149 @@ export const OrderBook: React.FC<OrderBookProps> = ({
     );
   };
 
+  const formatVnVol = (v: number) => {
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}tr`;
+    if (abs >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
+    return String(Math.round(v));
+  };
+
+  const renderVnSharkPanel = () => {
+    if (!vnFlow) return null;
+    const regimeColor =
+      vnFlow.regime === 'STRONG_BUY_ABSORPTION' || vnFlow.regime === 'MILD_BUY'
+        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+        : vnFlow.regime === 'HEAVY_DISTRIBUTION' || vnFlow.regime === 'MILD_SELL'
+          ? 'bg-rose-500/15 text-rose-300 border-rose-500/35'
+          : 'bg-slate-800/90 text-slate-300 border-slate-700';
+
+    return (
+      <div className="p-2 space-y-2 bg-[#060a11] text-[9.5px] font-mono tabular-nums">
+        {/* Active Buy vs Sell Imbalance Bar */}
+        <div className="p-2 rounded-lg bg-[#0b1220] border border-slate-800 space-y-1.5">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            <span className="text-[8.5px] font-sans font-bold uppercase text-cyan-300">
+              Mua / Bán Chủ Động ({vnFlow.board})
+            </span>
+            <span
+              className={`px-1.5 py-0.5 rounded text-[8.5px] font-sans font-bold border shrink-0 whitespace-nowrap ${regimeColor}`}
+            >
+              {vnFlow.regimeLabelVi}
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[9px] font-bold">
+              <span className="text-emerald-400">
+                Mua CĐ {vnFlow.activeBuyPct.toFixed(0)}% ({formatVnVol(vnFlow.activeBuyVolume)})
+              </span>
+              <span className="text-rose-400">
+                ({formatVnVol(vnFlow.activeSellVolume)}) {vnFlow.activeSellPct.toFixed(0)}% Bán CĐ
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-rose-500/35 overflow-hidden flex">
+              <div
+                className="h-full bg-emerald-400 transition-all duration-300"
+                style={{ width: `${vnFlow.activeBuyPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* VWAP & Put-Through Block Deals */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="p-1.5 rounded-lg bg-[#0a101b] border border-slate-800/90 min-w-0">
+            <div className="text-[8px] font-sans text-slate-400 truncate">
+              Giá TB Khớp (VWAP)
+            </div>
+            <div className="font-bold text-white text-[10px] truncate">
+              {vnFlow.vwapPrice !== null ? `${formatPrice(vnFlow.vwapPrice)}${priceSuffix}` : '--'}
+            </div>
+            {vnFlow.priceVsVwapPct !== null && (
+              <div
+                className={`text-[8.5px] truncate ${
+                  vnFlow.priceVsVwapPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                }`}
+              >
+                {vnFlow.priceVsVwapPct >= 0 ? 'Trên VWAP +' : 'Dưới VWAP '}
+                {vnFlow.priceVsVwapPct.toFixed(2)}%
+              </div>
+            )}
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-[#0a101b] border border-slate-800/90 min-w-0">
+            <div className="text-[8px] font-sans text-slate-400 truncate">
+              GD Thỏa Thuận (PT)
+            </div>
+            <div className="font-bold text-fuchsia-300 text-[10px] truncate">
+              {vnFlow.ptValueBillionVnd > 0
+                ? `${vnFlow.ptValueBillionVnd.toFixed(2)} tỷ`
+                : isVnIndexOrDeriv
+                  ? 'HĐ Tương lai / Index'
+                  : '0.00 tỷ'}
+            </div>
+            <div className="text-[8.5px] text-slate-400 truncate">
+              {vnFlow.ptVolume > 0
+                ? `${formatVnVol(vnFlow.ptVolume)} CP (${vnFlow.ptSharePct}%)`
+                : 'Chưa sang tay lô lớn'}
+            </div>
+          </div>
+        </div>
+
+        {/* Intraday Shark Volume Spike Tape */}
+        <div className="rounded-lg border border-slate-800/90 bg-[#0a101b] p-1.5 space-y-1">
+          <div className="flex items-center justify-between gap-1 text-[8.5px] border-b border-slate-800 pb-0.5">
+            <span className="font-sans font-bold text-amber-300 uppercase flex items-center gap-1 min-w-0 truncate">
+              <Flame className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+              <span className="truncate">Cá Mập Nội Ngày (Nến Đột Biến KL)</span>
+            </span>
+            <span
+              className={`shrink-0 whitespace-nowrap font-bold ${
+                vnFlow.netActiveVolume >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              Ròng: {vnFlow.netActiveVolume >= 0 ? '+' : ''}
+              {formatVnVol(vnFlow.netActiveVolume)}
+            </span>
+          </div>
+
+          {vnFlow.whaleBars.length === 0 ? (
+            <div className="py-1.5 text-center font-sans text-[8.5px] text-slate-400">
+              Chưa xuất hiện nến gom/xả đột biến (&ge;1.5x TB) gần đây.
+            </div>
+          ) : (
+            <div className="max-h-24 overflow-y-auto space-y-0.5">
+              {vnFlow.whaleBars.slice(0, 5).map((wb, idx) => (
+                <div
+                  key={`${wb.time}_${idx}`}
+                  className="flex items-center justify-between gap-1 text-[8.5px] px-1 py-0.5 rounded bg-slate-900/75"
+                >
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="text-slate-400 shrink-0">{wb.timeLabelVi}</span>
+                    <span
+                      className={`font-sans font-bold shrink-0 ${
+                        wb.side === 'ACTIVE_BUY' ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {wb.side === 'ACTIVE_BUY' ? 'MUA ĐẨY' : 'BÁN XẢ'}
+                    </span>
+                    <span className="px-1 rounded bg-amber-500/15 text-amber-300 font-bold shrink-0">
+                      {wb.volumeMultiple}x
+                    </span>
+                  </div>
+                  <div className="text-right text-slate-200 shrink-0 whitespace-nowrap">
+                    {formatPrice(wb.price)}
+                    {priceSuffix} • {formatVnVol(wb.volume)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // ================= CASE 1: REAL BINANCE 24/7 LEVEL-2 ORDER BOOK =================
   if (session.hasRealOrderBook) {
     const bids = hasValidRealDepth ? orderBook!.bids.slice(0, 4) : [];
@@ -473,14 +673,32 @@ export const OrderBook: React.FC<OrderBookProps> = ({
   return (
     <div className="bg-[#080c14] border-t border-slate-800/80 select-none text-[10px] font-sans shrink-0">
       <div className="px-2 py-1.5 bg-[#0c121e] border-b border-slate-800/70 flex items-center justify-between gap-1">
-        <div className="flex items-center gap-1 min-w-0">
+        <div className="flex items-center gap-1 min-w-0 flex-wrap">
+          {isVnAsset && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsCollapsed(false);
+                setSubTab('vn_shark');
+              }}
+              className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition shrink-0 ${
+                subTab === 'vn_shark'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-500/40'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Activity className="w-2.5 h-2.5 text-fuchsia-400" />
+              <span>Cá Mập & PT</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
               setIsCollapsed(false);
               setSubTab('book');
             }}
-            className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition ${
+            className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition shrink-0 ${
               subTab === 'book'
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                 : 'text-slate-400 hover:text-white'
@@ -496,14 +714,14 @@ export const OrderBook: React.FC<OrderBookProps> = ({
               setIsCollapsed(false);
               setSubTab('orderflow');
             }}
-            className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition ${
+            className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition shrink-0 ${
               subTab === 'orderflow'
                 ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <Flame className="w-2.5 h-2.5 text-amber-400" />
-            <span>CVD Dòng Tiền</span>
+            <span>CVD</span>
           </button>
 
           <span
@@ -528,7 +746,9 @@ export const OrderBook: React.FC<OrderBookProps> = ({
       </div>
 
       {!isCollapsed &&
-        (subTab === 'orderflow' ? (
+        (subTab === 'vn_shark' && isVnAsset ? (
+          renderVnSharkPanel()
+        ) : subTab === 'orderflow' ? (
           renderOrderFlowPanel()
         ) : (
           <div className="p-2 space-y-1.5 bg-[#060a11]">

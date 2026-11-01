@@ -49,6 +49,7 @@ export interface IndicatorSettings {
   monteCarloPaths: boolean;
   kronosGhostCandles: boolean;
   kronosWalkForward: boolean;
+  vnPriceLimits?: boolean;
 }
 
 export type KronosModelKey = 'kronos-mini' | 'kronos-small' | 'kronos-base';

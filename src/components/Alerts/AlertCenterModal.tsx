@@ -44,6 +44,10 @@ import {
   loadCloudWorkspaceId,
   pushLocalWorkspaceToCloud,
 } from '../../services/storage/cloudSyncClient';
+import {
+  isVnDerivativeSymbol,
+  isVnStockOrIndexSymbol,
+} from '../../services/vnMarket/vnStockMicrostructure';
 
 interface AlertCenterModalProps {
   currentSymbol: MarketSymbol;
@@ -149,6 +153,14 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
       setThresholdInput('4.0');
     } else if (nextCond === 'ACCUMULATION_HOT_BUY') {
       setThresholdInput('1');
+    } else if (nextCond === 'VN_VOLUME_BREAKOUT') {
+      setThresholdInput('1.8');
+    } else if (nextCond === 'VN_NEAR_FLOOR_WARNING') {
+      setThresholdInput('1.2');
+    } else if (nextCond === 'VN30F_BASIS_EXTREME') {
+      setThresholdInput('6');
+    } else if (nextCond === 'VN_FOREIGN_NET_BUY') {
+      setThresholdInput('20');
     }
   };
 
@@ -159,7 +171,12 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
       return;
     }
     createSmartAlertRule({
-      symbol: condition === 'FED_PIVOT_AT_LEAST' ? 'FED_PIVOT' : targetSymbol,
+      symbol:
+        condition === 'FED_PIVOT_AT_LEAST'
+          ? 'FED_PIVOT'
+          : condition === 'VN30F_BASIS_EXTREME'
+          ? 'VN30F1M'
+          : targetSymbol,
       condition,
       threshold: condition === 'ACCUMULATION_HOT_BUY' ? 1 : num,
       note: noteInput,
@@ -438,6 +455,76 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
                   >
                     + Fed Pivot ≥ 4.0/7
                   </button>
+
+                  {isVnStockOrIndexSymbol(currentSymbol) && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickPreset(
+                            'VN_VOLUME_BREAKOUT',
+                            1.8,
+                            currentSymbol.symbol,
+                            'Nổ Vol nội ngày vượt nền VN'
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-lime-500/15 hover:bg-lime-500/25 border border-lime-500/35 text-lime-300 text-[11px] font-bold transition"
+                      >
+                        ⚡ VN Nổ Vol RVOL ≥ 1.8x
+                      </button>
+
+                      {!isVnDerivativeSymbol(currentSymbol.symbol) &&
+                        currentSymbol.symbol !== 'VNINDEX' &&
+                        currentSymbol.symbol !== 'VN30' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleQuickPreset(
+                                  'VN_NEAR_FLOOR_WARNING',
+                                  1.2,
+                                  currentSymbol.symbol,
+                                  'Phòng vệ rủi ro khóa Sàn T+2'
+                                )
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-rose-300 text-[11px] font-bold transition"
+                            >
+                              🛡️ Cảnh báo Sát Sàn ≤ 1.2%
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleQuickPreset(
+                                  'VN_FOREIGN_NET_BUY',
+                                  20,
+                                  currentSymbol.symbol,
+                                  'Khối ngoại gom ròng ≥ 20 tỷ'
+                                )
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/35 text-indigo-300 text-[11px] font-bold transition"
+                            >
+                              🌍 Ngoại mua ≥ 20 tỷ
+                            </button>
+                          </>
+                        )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickPreset(
+                            'VN30F_BASIS_EXTREME',
+                            6,
+                            'VN30F1M',
+                            'Lệch Basis phái sinh VN30F1M ≥ 6 điểm'
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/35 text-orange-300 text-[11px] font-bold transition"
+                      >
+                        ⚖️ Lệch Basis VN30F ≥ 6đ
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -456,7 +543,10 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
                     <select
                       value={targetSymbol}
                       onChange={e => handleSymbolChange(e.target.value)}
-                      disabled={condition === 'FED_PIVOT_AT_LEAST'}
+                      disabled={
+                        condition === 'FED_PIVOT_AT_LEAST' ||
+                        condition === 'VN30F_BASIS_EXTREME'
+                      }
                       className="w-full px-2.5 py-1.5 rounded-lg bg-[#080c14] border border-slate-700 text-white font-mono text-xs focus:border-cyan-500 outline-none"
                     >
                       {symbols.map(s => (
@@ -481,6 +571,10 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
                       <option value="RSI_OVERBOUGHT">RSI(14) Quá mua ≥</option>
                       <option value="RSI_OVERSOLD">RSI(14) Quá bán ≤</option>
                       <option value="ACCUMULATION_HOT_BUY">Lọt vùng gom HOT_BUY</option>
+                      <option value="VN_VOLUME_BREAKOUT">🇻🇳 VN Nổ Vol RVOL nội ngày ≥ (x)</option>
+                      <option value="VN_NEAR_FLOOR_WARNING">🇻🇳 VN Cảnh báo sát Sàn ≤ (%)</option>
+                      <option value="VN_FOREIGN_NET_BUY">🇻🇳 VN Khối ngoại mua ròng ≥ (tỷ)</option>
+                      <option value="VN30F_BASIS_EXTREME">🇻🇳 VN30F1M Lệch Basis |điểm| ≥</option>
                       <option value="FED_PIVOT_AT_LEAST">Fed Pivot Score ≥ (0–7)</option>
                     </select>
                   </div>

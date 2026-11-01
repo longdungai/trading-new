@@ -1,5 +1,15 @@
 import { MarketSymbol } from '../../types';
 import { getMarketSessionInfo } from '../../utils/marketHours';
+import {
+  computeVnNetPaperPnl,
+  computeVnT2SettlementState,
+  VnT2SettlementState,
+} from '../vnMarket/vnExecutionEngines';
+import {
+  isVnDerivativeSymbol,
+  isVnStockOrIndexSymbol,
+  roundToVnTickSize,
+} from '../vnMarket/vnStockMicrostructure';
 
 export interface UserPaperTrade {
   id: string;
@@ -97,6 +107,13 @@ export function clearUserPaperTrades() {
   }
 }
 
+export function getPaperTradeVnT2State(
+  trade: Pick<UserPaperTrade, 'filledTime' | 'symbol' | 'quoteAsset'>,
+  nowMs: number = Date.now()
+): VnT2SettlementState {
+  return computeVnT2SettlementState(trade.filledTime, nowMs, trade.symbol, trade.quoteAsset);
+}
+
 export function addUserPaperTrade(newTrade: {
   symbol: string;
   strategyName: string;
@@ -114,6 +131,15 @@ export function addUserPaperTrade(newTrade: {
 }): UserPaperTrade {
   const trades = getUserPaperTrades();
   const isMarket = newTrade.entryType === 'market';
+  const cleanSym = newTrade.symbol.trim().toUpperCase();
+  const isVnCorp =
+    (newTrade.quoteAsset === 'VND' || isVnStockOrIndexSymbol(cleanSym)) &&
+    !isVnDerivativeSymbol(cleanSym) &&
+    cleanSym !== 'VNINDEX' &&
+    cleanSym !== 'VN30';
+
+  // Enforce Long-only on HOSE/HNX/UPCOM cash equities (shorting is only available on VN30F1M)
+  const effectiveAction: 'BUY' | 'SELL' = isVnCorp ? 'BUY' : newTrade.action;
 
   let initialStatus: UserPaperTrade['status'] = 'PENDING';
   let actualEntry = newTrade.entryPrice;
@@ -122,7 +148,7 @@ export function addUserPaperTrade(newTrade: {
     initialStatus = 'OPEN';
     actualEntry = newTrade.currentMarketPrice;
   } else {
-    const isBuy = newTrade.action === 'BUY';
+    const isBuy = effectiveAction === 'BUY';
     const isAlreadyTouched = isBuy
       ? newTrade.currentMarketPrice <= newTrade.entryPrice
       : newTrade.currentMarketPrice >= newTrade.entryPrice;
@@ -135,7 +161,7 @@ export function addUserPaperTrade(newTrade: {
     }
   }
 
-  const isBuy = newTrade.action === 'BUY';
+  const isBuy = effectiveAction === 'BUY';
   let validSL = newTrade.stopLoss;
   let validTP = newTrade.takeProfit;
 
@@ -147,12 +173,19 @@ export function addUserPaperTrade(newTrade: {
     if (validTP >= actualEntry) validTP = actualEntry * 0.97;
   }
 
+  if (isVnCorp || isVnDerivativeSymbol(cleanSym)) {
+    actualEntry = roundToVnTickSize(actualEntry, cleanSym);
+    validSL = roundToVnTickSize(validSL, cleanSym);
+    validTP = roundToVnTickSize(validTP, cleanSym);
+  }
+
+  const nowMs = Date.now();
   const trade: UserPaperTrade = {
-    id: 'trade_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    id: 'trade_' + nowMs + '_' + Math.random().toString(36).substring(2, 6),
     symbol: newTrade.symbol,
     strategyName: newTrade.strategyName,
     strategyId: newTrade.strategyId,
-    action: newTrade.action,
+    action: effectiveAction,
     entryType: newTrade.entryType,
     entryPrice: parseFloat(actualEntry.toFixed(4)),
     stopLoss: parseFloat(validSL.toFixed(4)),
@@ -160,8 +193,8 @@ export function addUserPaperTrade(newTrade: {
     tpTargetLabel: newTrade.tpTargetLabel,
     capital: newTrade.capital,
     leverage: newTrade.leverage || 1,
-    openTime: Date.now(),
-    filledTime: initialStatus === 'OPEN' ? Date.now() : undefined,
+    openTime: nowMs,
+    filledTime: initialStatus === 'OPEN' ? nowMs : undefined,
     status: initialStatus,
     pnlAmount: 0,
     pnlPercent: 0,
@@ -208,26 +241,37 @@ function evaluateSingleTradeAgainstPrice(
     return { nextTrade: trade, persistedChange: false };
   }
 
-  // 2. OPEN Orders — update floating PnL, and trigger TP/SL when exchange session is OPEN
+  // 2. OPEN Orders — update floating PnL (with VN fee/tax/margin interest), and trigger TP/SL when exchange is OPEN & T+2 settled
   if (trade.status === 'OPEN') {
-    const priceDiff = isBuy ? currentPrice - trade.entryPrice : trade.entryPrice - currentPrice;
-    const rawPct = (priceDiff / trade.entryPrice) * 100;
-    const leveragedPct = rawPct * (trade.leverage || 1);
-    const pnl = trade.capital * (leveragedPct / 100);
+    const t2State = computeVnT2SettlementState(
+      trade.filledTime,
+      nowMs,
+      trade.symbol,
+      trade.quoteAsset
+    );
 
-    if (allowOrderExecution) {
+    if (allowOrderExecution && !t2State.isLocked) {
       const isSlHit = isBuy ? currentPrice <= trade.stopLoss : currentPrice >= trade.stopLoss;
       if (isSlHit) {
-        const finalDiff = isBuy ? trade.stopLoss - trade.entryPrice : trade.entryPrice - trade.stopLoss;
-        const finalPct = (finalDiff / trade.entryPrice) * 100 * (trade.leverage || 1);
+        const netSl = computeVnNetPaperPnl({
+          symbol: trade.symbol,
+          quoteAsset: trade.quoteAsset,
+          action: trade.action,
+          entryPrice: trade.entryPrice,
+          exitPrice: trade.stopLoss,
+          capital: trade.capital,
+          leverage: trade.leverage || 1,
+          filledTimeMs: trade.filledTime,
+          evalTimeMs: nowMs,
+        });
         return {
           nextTrade: {
             ...trade,
             status: 'SL_HIT',
             closeTime: nowMs,
             exitPrice: trade.stopLoss,
-            pnlPercent: parseFloat(finalPct.toFixed(2)),
-            pnlAmount: parseFloat((trade.capital * (finalPct / 100)).toFixed(2)),
+            pnlPercent: netSl.netPnlPercent,
+            pnlAmount: netSl.netPnlAmount,
           },
           persistedChange: true,
         };
@@ -235,24 +279,45 @@ function evaluateSingleTradeAgainstPrice(
 
       const isTpHit = isBuy ? currentPrice >= trade.takeProfit : currentPrice <= trade.takeProfit;
       if (isTpHit) {
-        const finalDiff = isBuy ? trade.takeProfit - trade.entryPrice : trade.entryPrice - trade.takeProfit;
-        const finalPct = (finalDiff / trade.entryPrice) * 100 * (trade.leverage || 1);
+        const netTp = computeVnNetPaperPnl({
+          symbol: trade.symbol,
+          quoteAsset: trade.quoteAsset,
+          action: trade.action,
+          entryPrice: trade.entryPrice,
+          exitPrice: trade.takeProfit,
+          capital: trade.capital,
+          leverage: trade.leverage || 1,
+          filledTimeMs: trade.filledTime,
+          evalTimeMs: nowMs,
+        });
         return {
           nextTrade: {
             ...trade,
             status: 'TP_HIT',
             closeTime: nowMs,
             exitPrice: trade.takeProfit,
-            pnlPercent: parseFloat(finalPct.toFixed(2)),
-            pnlAmount: parseFloat((trade.capital * (finalPct / 100)).toFixed(2)),
+            pnlPercent: netTp.netPnlPercent,
+            pnlAmount: netTp.netPnlAmount,
           },
           persistedChange: true,
         };
       }
     }
 
-    const nextPct = parseFloat(leveragedPct.toFixed(2));
-    const nextAmt = parseFloat(pnl.toFixed(2));
+    const floatingNet = computeVnNetPaperPnl({
+      symbol: trade.symbol,
+      quoteAsset: trade.quoteAsset,
+      action: trade.action,
+      entryPrice: trade.entryPrice,
+      exitPrice: currentPrice,
+      capital: trade.capital,
+      leverage: trade.leverage || 1,
+      filledTimeMs: trade.filledTime,
+      evalTimeMs: nowMs,
+    });
+
+    const nextPct = floatingNet.netPnlPercent;
+    const nextAmt = floatingNet.netPnlAmount;
     const changed = trade.pnlPercent !== nextPct || trade.pnlAmount !== nextAmt;
     return {
       nextTrade: changed
@@ -369,7 +434,11 @@ export function syncAllPaperTradesWithMarket(
   return { trades: updated, statusTransitionEvents };
 }
 
-export function closePaperTradeManually(tradeId: string, currentPrice: number): UserPaperTrade[] {
+export function closePaperTradeManually(
+  tradeId: string,
+  currentPrice: number,
+  nowMs: number = Date.now()
+): UserPaperTrade[] {
   const trades = getUserPaperTrades();
   const updated = trades.map(trade => {
     if (trade.id !== tradeId) return trade;
@@ -378,25 +447,44 @@ export function closePaperTradeManually(tradeId: string, currentPrice: number): 
       return {
         ...trade,
         status: 'CANCELLED' as const,
-        closeTime: Date.now(),
+        closeTime: nowMs,
         pnlPercent: 0,
         pnlAmount: 0,
       };
     }
 
     if (trade.status === 'OPEN') {
-      const isBuy = trade.action === 'BUY';
+      const t2State = computeVnT2SettlementState(
+        trade.filledTime,
+        nowMs,
+        trade.symbol,
+        trade.quoteAsset
+      );
+      if (t2State.isLocked) {
+        // Shares have not settled into T+2 available balance yet
+        return trade;
+      }
+
       const exitPrice = currentPrice || trade.entryPrice;
-      const priceDiff = isBuy ? exitPrice - trade.entryPrice : trade.entryPrice - exitPrice;
-      const finalPct = (priceDiff / trade.entryPrice) * 100 * (trade.leverage || 1);
+      const netManual = computeVnNetPaperPnl({
+        symbol: trade.symbol,
+        quoteAsset: trade.quoteAsset,
+        action: trade.action,
+        entryPrice: trade.entryPrice,
+        exitPrice,
+        capital: trade.capital,
+        leverage: trade.leverage || 1,
+        filledTimeMs: trade.filledTime,
+        evalTimeMs: nowMs,
+      });
 
       return {
         ...trade,
         status: 'CLOSED_MANUAL' as const,
-        closeTime: Date.now(),
+        closeTime: nowMs,
         exitPrice,
-        pnlPercent: parseFloat(finalPct.toFixed(2)),
-        pnlAmount: parseFloat((trade.capital * (finalPct / 100)).toFixed(2)),
+        pnlPercent: netManual.netPnlPercent,
+        pnlAmount: netManual.netPnlAmount,
       };
     }
 

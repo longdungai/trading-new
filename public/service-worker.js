@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trading-new-shell-v5';
+const CACHE_NAME = 'trading-new-shell-v6';
 
 const BYPASS_PATTERNS = [
   '/api/',

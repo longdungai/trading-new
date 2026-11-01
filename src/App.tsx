@@ -187,6 +187,7 @@ export const App: React.FC = () => {
     monteCarloPaths: false,
     kronosGhostCandles: true,
     kronosWalkForward: true,
+    vnPriceLimits: true,
   });
 
   // Kronos Foundation Model Configuration & Optional Cloud Override
@@ -1044,6 +1045,7 @@ export const App: React.FC = () => {
           onToggleReplayMode={handleToggleReplayMode}
           compareSymbol={compareSymbol}
           onChangeCompareSymbol={setCompareSymbol}
+          isVnAsset={isVnStockOrIndexSymbol(currentSymbol)}
         />
       )}
 
@@ -1215,6 +1217,7 @@ export const App: React.FC = () => {
                 aiPrediction={aiPrediction}
                 symbolName={currentSymbol.symbol}
                 symbolFullName={currentSymbol.name}
+                currentSymbol={currentSymbol}
                 compareSymbolName={
                   compareSymbol && compareSymbol !== currentSymbol.symbol ? compareSymbol : null
                 }

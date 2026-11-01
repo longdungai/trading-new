@@ -29,6 +29,7 @@ interface IndicatorToolbarProps {
   onToggleReplayMode?: () => void;
   compareSymbol?: string | null;
   onChangeCompareSymbol?: (sym: string | null) => void;
+  isVnAsset?: boolean;
 }
 
 export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
@@ -42,6 +43,7 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
   onToggleReplayMode,
   compareSymbol = null,
   onChangeCompareSymbol,
+  isVnAsset = false,
 }) => {
   return (
     <div className="h-9 sm:h-[38px] bg-[#080d16] border-b border-slate-800/80 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0">
@@ -208,6 +210,20 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
           <ShieldAlert className="w-3 h-3 text-amber-400" />
           <span>Hỗ Trợ / Kháng Cự</span>
         </button>
+
+        {isVnAsset && (
+          <button
+            onClick={() => onToggle('vnPriceLimits')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+              settings.vnPriceLimits !== false
+                ? 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400/60 shadow-sm shadow-fuchsia-500/15'
+                : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+            }`}
+            title="Hiển thị đường Giá Trần (Tím), Tham Chiếu (Vàng) & Giá Sàn (Xanh lơ) chuẩn HOSE/HNX/UPCOM trực tiếp trên đồ thị"
+          >
+            <span>🇻🇳 Trần/TC/Sàn</span>
+          </button>
+        )}
 
         <button
           onClick={() => onToggle('bollingerBands')}

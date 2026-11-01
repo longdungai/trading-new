@@ -12,10 +12,16 @@ import {
   Candle,
   FibonacciLevel,
   IndicatorSettings,
+  MarketSymbol,
   OrderBlock,
   SupportResistanceLevel,
   Timeframe,
 } from '../../types';
+import {
+  computeVnPriceLimits,
+  isVnStockOrIndexSymbol,
+} from '../../services/vnMarket/vnStockMicrostructure';
+import { getCachedVnFundamentals } from '../../services/vnMarket/vnStockInsightsClient';
 import {
   calculateBollingerBands,
   calculateEMA,
@@ -37,6 +43,7 @@ interface TradingChartProps {
   aiPrediction: AIPrediction | null;
   symbolName?: string;
   symbolFullName?: string;
+  currentSymbol?: MarketSymbol;
   compareSymbolName?: string | null;
   compareCandles?: Candle[];
   onQuickCreatePriceAlert?: (price: number) => void;
@@ -51,6 +58,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   aiPrediction,
   symbolName = '',
   symbolFullName = '',
+  currentSymbol,
   compareSymbolName = null,
   compareCandles = [],
   onQuickCreatePriceAlert,
@@ -501,6 +509,57 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       );
     }
 
+    // 7. Vietnam Official Ceiling (Trần Tím), Reference (Tham Chiếu Vàng), Floor (Sàn Xanh Lơ) Price Lines
+    if (
+      settings.vnPriceLimits !== false &&
+      symbolName &&
+      isVnStockOrIndexSymbol(currentSymbol || symbolName) &&
+      lastCandle
+    ) {
+      const fund = getCachedVnFundamentals(symbolName);
+      const vnLimits = computeVnPriceLimits({
+        symbol: symbolName,
+        currentPrice: currentSymbol?.price || lastCandle.close,
+        change24hPct: currentSymbol?.change24h,
+        officialRefPrice: fund?.officialRefPrice,
+        officialCeilingPrice: fund?.officialCeilingPrice,
+        officialFloorPrice: fund?.officialFloorPrice,
+      });
+
+      if (
+        vnLimits.board !== 'INDEX' &&
+        vnLimits.ceilingPrice !== null &&
+        vnLimits.floorPrice !== null
+      ) {
+        priceLinesRef.current.push(
+          candleSeries.createPriceLine({
+            price: vnLimits.ceilingPrice,
+            color: '#c084fc', // Tím Trần SSI iBoard
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `TRẦN (+${vnLimits.bandPct}%)`,
+          }),
+          candleSeries.createPriceLine({
+            price: vnLimits.refPrice,
+            color: '#facc15', // Vàng Tham chiếu
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: 'THAM CHIẾU',
+          }),
+          candleSeries.createPriceLine({
+            price: vnLimits.floorPrice,
+            color: '#22d3ee', // Xanh lơ Sàn
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `SÀN (-${vnLimits.bandPct}%)`,
+          })
+        );
+      }
+    }
+
     // 8. Update Kronos Ghost Candlesticks, Walk-Forward & AI Forecast Paths
     if (
       settings.kronosGhostCandles &&
@@ -606,6 +665,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     candles,
     timeframe,
     symbolName,
+    currentSymbol,
     settings,
     srLevels,
     fibLevels,

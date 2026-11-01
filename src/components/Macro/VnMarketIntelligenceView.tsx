@@ -3,9 +3,11 @@ import {
   Activity,
   ArrowUpRight,
   Building2,
+  CalendarClock,
   Clock,
   Compass,
   Flame,
+  Landmark,
   Layers,
   RefreshCw,
   Scale,
@@ -13,7 +15,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { Candle, MarketSymbol } from '../../types';
+import { Candle, MacroIntelligenceSnapshot, MarketSymbol } from '../../types';
 import {
   computeVn30BasisAnalytics,
   computeVnIntradaySessionPulse,
@@ -22,6 +24,7 @@ import {
   isVnDerivativeSymbol,
   isVnStockOrIndexSymbol,
 } from '../../services/vnMarket/vnStockMicrostructure';
+import { computeVnSbvFxPressure } from '../../services/vnMarket/vnExecutionEngines';
 import {
   fetchVnStockInsights,
   VnStockInsightsPayload,
@@ -32,6 +35,7 @@ interface VnMarketIntelligenceViewProps {
   symbols: MarketSymbol[];
   currentSymbol: MarketSymbol;
   activeCandles?: Candle[];
+  macroSnapshot?: MacroIntelligenceSnapshot | null;
   onSelectSymbol: (sym: MarketSymbol) => void;
   onClose: () => void;
 }
@@ -55,6 +59,7 @@ export const VnMarketIntelligenceView: React.FC<VnMarketIntelligenceViewProps> =
   symbols,
   currentSymbol,
   activeCandles = [],
+  macroSnapshot = null,
   onSelectSymbol,
   onClose,
 }) => {
@@ -114,6 +119,7 @@ export const VnMarketIntelligenceView: React.FC<VnMarketIntelligenceViewProps> =
   );
 
   const sectorRotation = useMemo(() => computeVnSectorRotation(symbols), [symbols]);
+  const sbvFxGauge = useMemo(() => computeVnSbvFxPressure(macroSnapshot), [macroSnapshot]);
 
   const jumpToChart = (ticker: string) => {
     const found = symbols.find((s) => s.symbol.toUpperCase() === ticker.toUpperCase());
@@ -131,9 +137,89 @@ export const VnMarketIntelligenceView: React.FC<VnMarketIntelligenceViewProps> =
   const fundamentals = insights?.fundamentals ?? null;
   const topBuy = insights?.marketLeaders?.topBuy ?? [];
   const topSell = insights?.marketLeaders?.topSell ?? [];
+  const ptLeaders = insights?.marketPutThroughLeaders ?? [];
+  const symbolEvents = insights?.corporateEvents ?? [];
+  const upcomingMarketEvents = insights?.upcomingMarketEvents ?? [];
 
   return (
     <div className="space-y-4 min-w-0">
+      {/* SECTION 0: SBV USD/VND FX CEILING & DOMESTIC LIQUIDITY PRESSURE GAUGE */}
+      {sbvFxGauge && (
+        <div
+          className={`p-3.5 rounded-xl border space-y-2.5 min-w-0 ${
+            sbvFxGauge.regime === 'SEVERE_FX_STRESS'
+              ? 'bg-rose-950/30 border-rose-500/45'
+              : sbvFxGauge.regime === 'FX_WATCH_OMO'
+                ? 'bg-amber-950/25 border-amber-500/40'
+                : sbvFxGauge.regime === 'EASING_SUPPORTIVE'
+                  ? 'bg-emerald-950/25 border-emerald-500/40'
+                  : 'bg-[#0d1525] border-cyan-500/30'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Landmark className="w-4 h-4 text-amber-400 shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-white break-words">
+                  Áp Lực Tỷ Giá USD/VND & Điều Hành Thanh Khoản NHNN (SBV Liquidity Gauge)
+                </h3>
+              </div>
+              <div className="text-xs font-bold text-cyan-200 break-words">
+                {sbvFxGauge.regimeLabelVi}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 font-mono text-[10px] shrink-0 flex-wrap">
+              <span className="px-2 py-0.5 rounded bg-[#080e1a] border border-slate-700 text-amber-300 font-bold whitespace-nowrap">
+                Áp lực FX: {sbvFxGauge.pressureScore}/100
+              </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-200 font-bold whitespace-nowrap">
+                Tỷ trọng CP khuyến nghị ≤ {sbvFxGauge.recommendedMaxEquityPct}%
+              </span>
+              <span className="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 font-bold whitespace-nowrap">
+                {sbvFxGauge.recommendedMarginCapVi}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-xs">
+            <div className="p-2 rounded-lg bg-[#09101d] border border-slate-800/90 flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-sans text-slate-400">Tỷ giá USD/VND:</span>
+              <span className="font-black text-white whitespace-nowrap">
+                {sbvFxGauge.usdVndRate.toLocaleString('en-US', { maximumFractionDigits: 0 })} đ (
+                <span
+                  className={
+                    sbvFxGauge.usdVndChangePct > 0 ? 'text-rose-400' : 'text-emerald-400'
+                  }
+                >
+                  {sbvFxGauge.usdVndChangePct >= 0 ? '+' : ''}
+                  {sbvFxGauge.usdVndChangePct.toFixed(2)}%
+                </span>
+                )
+              </span>
+            </div>
+
+            <div className="p-2 rounded-lg bg-[#09101d] border border-slate-800/90 flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-sans text-slate-400">Chỉ số USD (DXY):</span>
+              <span className="font-black text-cyan-300 whitespace-nowrap">
+                {sbvFxGauge.dxyValue !== null ? sbvFxGauge.dxyValue.toFixed(2) : '—'}
+              </span>
+            </div>
+
+            <div className="p-2 rounded-lg bg-[#09101d] border border-slate-800/90 flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-sans text-slate-400">Lợi suất Mỹ US10Y:</span>
+              <span className="font-black text-purple-300 whitespace-nowrap">
+                {sbvFxGauge.us10yYield !== null ? `${sbvFxGauge.us10yYield.toFixed(2)}%` : '—'}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-300 leading-relaxed break-words">
+            {sbvFxGauge.actionGuidanceVi}
+          </p>
+        </div>
+      )}
+
       {/* SECTION 1: VN30F1M DERIVATIVE BASIS & INTRADAY HOSE/HNX SESSION CLOCK */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 min-w-0">
         {/* Left 7 cols: VN30F1M vs VN30 Basis Monitor */}
@@ -590,6 +676,193 @@ export const VnMarketIntelligenceView: React.FC<VnMarketIntelligenceViewProps> =
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* SECTION 2.5: CORPORATE EVENTS (GDKHQ / DIVIDEND / RIGHTS ANTI-TRAP) & TOP PUT-THROUGH DEALS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 min-w-0">
+        {/* Left 6 cols: Shareholder Rights & Ex-Dividend Anti-Capital-Trap Radar */}
+        <div className="lg:col-span-6 p-3.5 rounded-xl bg-[#0d1525] border border-amber-500/30 space-y-3 min-w-0">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <CalendarClock className="w-4 h-4 text-amber-400 shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-white break-words">
+                  Radar Quyền Cổ Đông & Ngày GDKHQ (Chống Bẫy Kẹt Vốn)
+                </h3>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed break-words">
+                Cảnh báo trước ngày chốt quyền cổ tức (thuế TNCN 5%), thưởng CP & phát hành thêm (giam vốn 3–6 tháng)
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/35 shrink-0 whitespace-nowrap">
+              Đang soi: {inspectedTicker}
+            </span>
+          </div>
+
+          {/* Current Inspected Ticker Events */}
+          {symbolEvents.length > 0 && (
+            <div className="space-y-1.5 min-w-0">
+              <div className="text-[10.5px] font-bold text-amber-200 uppercase">
+                Sự kiện của {inspectedTicker}
+              </div>
+              {symbolEvents.slice(0, 3).map((ev) => (
+                <div
+                  key={ev.id}
+                  className={`p-2.5 rounded-xl border space-y-1 min-w-0 ${
+                    ev.isImminentExDateWarning
+                      ? 'bg-amber-950/35 border-amber-500/50'
+                      : 'bg-[#09101d] border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-white break-words">
+                      {ev.typeLabelVi}
+                    </span>
+                    {ev.effectiveDate && (
+                      <span className="px-1.5 py-0.5 rounded bg-slate-900 text-cyan-300 border border-slate-700 font-mono text-[10px] shrink-0 whitespace-nowrap">
+                        GDKHQ: {ev.effectiveDate}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-300 leading-snug break-words">
+                    {ev.note}
+                  </div>
+                  {ev.riskHint && (
+                    <div className="text-[10px] text-amber-300 leading-snug break-words">
+                      ⚠️ {ev.riskHint}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upcoming Market-Wide Ex-Dates */}
+          <div className="space-y-1.5 min-w-0">
+            <div className="text-[10.5px] font-bold text-slate-300 uppercase">
+              Lịch Chốt Quyền GDKHQ Toàn Thị Trường Sắp Tới
+            </div>
+            {upcomingMarketEvents.length === 0 ? (
+              <div className="p-3 rounded-xl bg-[#09101d] border border-slate-800 text-xs text-slate-400 text-center">
+                {loadingInsights
+                  ? 'Đang tải lịch sự kiện quyền cổ đông từ VNDirect...'
+                  : 'Chưa ghi nhận lịch GDKHQ mới trong 20 ngày tới.'}
+              </div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto space-y-1.5 pr-0.5">
+                {upcomingMarketEvents.slice(0, 8).map((ev) => (
+                  <div
+                    key={ev.id}
+                    onClick={() => setInspectedTicker(ev.symbol)}
+                    className="p-2 rounded-lg bg-[#09101d] hover:bg-[#111c33] border border-slate-800 cursor-pointer transition space-y-1 min-w-0"
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 font-mono text-[10.5px] font-black shrink-0">
+                          {ev.symbol}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-200 break-words">
+                          {ev.typeLabelVi}
+                        </span>
+                      </div>
+                      {ev.effectiveDate && (
+                        <span className="font-mono text-[10px] text-cyan-300 shrink-0 whitespace-nowrap">
+                          {ev.effectiveDate}
+                          {ev.daysToExDate !== null && ev.daysToExDate >= 0
+                            ? ` (còn ${ev.daysToExDate}N)`
+                            : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10.5px] text-slate-400 leading-snug break-words">
+                      {ev.note}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right 6 cols: Institutional Put-Through (Giao Dịch Thỏa Thuận > 15 Tỷ VNĐ) */}
+        <div className="lg:col-span-6 p-3.5 rounded-xl bg-[#0d1525] border border-fuchsia-500/30 space-y-3 min-w-0">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Layers className="w-4 h-4 text-fuchsia-400 shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-white break-words">
+                  Top Giao Dịch Thỏa Thuận Lô Lớn Cá Mập HOSE (&gt; 15 Tỷ VNĐ)
+                </h3>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed break-words">
+                Theo dõi dòng tiền sang tay ngầm của Tổ chức / Tự doanh / Cổ đông lớn kèm vùng giá thỏa thuận ước tính
+              </p>
+            </div>
+            {ptLeaders[0]?.tradingDate && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/35 shrink-0 whitespace-nowrap">
+                Phiên {ptLeaders[0].tradingDate}
+              </span>
+            )}
+          </div>
+
+          {ptLeaders.length === 0 ? (
+            <div className="p-6 rounded-xl bg-[#09101d] border border-slate-800 text-xs text-slate-400 text-center">
+              {loadingInsights
+                ? 'Đang quét dữ liệu giao dịch thỏa thuận lô lớn toàn sàn HOSE...'
+                : 'Chưa ghi nhận giao dịch thỏa thuận lô lớn > 15 tỷ VNĐ.'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+              {ptLeaders.slice(0, 8).map((pt) => (
+                <div
+                  key={`${pt.symbol}_${pt.tradingDate}`}
+                  onClick={() => setInspectedTicker(pt.symbol)}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition space-y-1 min-w-0 ${
+                    inspectedTicker === pt.symbol
+                      ? 'bg-fuchsia-950/30 border-fuchsia-400'
+                      : 'bg-[#09101d] hover:bg-[#111c33] border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                    <span className="font-mono text-xs font-black text-white shrink-0">
+                      {pt.symbol}
+                    </span>
+                    <span className="font-mono text-xs font-black text-fuchsia-300 shrink-0 whitespace-nowrap">
+                      {pt.ptValueBillionVnd.toLocaleString('en-US', { maximumFractionDigits: 1 })} tỷ
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1 text-[10px] font-mono text-slate-400 flex-wrap">
+                    <span>
+                      KL: {(pt.ptVolume / 1_000_000).toFixed(2)}tr CP
+                    </span>
+                    {pt.impliedPtPrice !== null && (
+                      <span className="text-cyan-300 whitespace-nowrap">
+                        Giá PT ~{formatPrice(pt.impliedPtPrice)}k
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1 text-[10px] pt-0.5 border-t border-slate-800/80 flex-wrap">
+                    <span className="text-slate-300 font-medium truncate">{pt.dealTag}</span>
+                    {symbols.some((s) => s.symbol.toUpperCase() === pt.symbol) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          jumpToChart(pt.symbol);
+                        }}
+                        className="text-cyan-400 hover:underline font-mono font-bold shrink-0 whitespace-nowrap"
+                      >
+                        Đồ thị →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

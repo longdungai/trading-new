@@ -1,6 +1,15 @@
 import { Candle, MacroIntelligenceSnapshot, MarketSymbol } from '../../types';
 import { scanMarketAccumulation } from '../ai/accumulationScanner';
 import { calculateRSI } from '../indicators';
+import {
+  computeVn30BasisAnalytics,
+  computeVnIntradaySessionPulse,
+  computeVnPriceLimits,
+} from '../vnMarket/vnStockMicrostructure';
+import {
+  getCachedVnForeignFlow,
+  getCachedVnFundamentals,
+} from '../vnMarket/vnStockInsightsClient';
 
 export type SmartAlertConditionType =
   | 'PRICE_ABOVE'
@@ -10,7 +19,11 @@ export type SmartAlertConditionType =
   | 'RSI_OVERBOUGHT'
   | 'RSI_OVERSOLD'
   | 'FED_PIVOT_AT_LEAST'
-  | 'ACCUMULATION_HOT_BUY';
+  | 'ACCUMULATION_HOT_BUY'
+  | 'VN_VOLUME_BREAKOUT'
+  | 'VN_NEAR_FLOOR_WARNING'
+  | 'VN30F_BASIS_EXTREME'
+  | 'VN_FOREIGN_NET_BUY';
 
 export interface SmartAlertRule {
   id: string;
@@ -296,6 +309,14 @@ export function getConditionLabelVi(cond: SmartAlertConditionType): string {
       return 'Fed Pivot Score đạt ≥';
     case 'ACCUMULATION_HOT_BUY':
       return 'Lọt vùng gom hàng HOT_BUY';
+    case 'VN_VOLUME_BREAKOUT':
+      return 'VN Nổ Vol RVOL nội ngày ≥ (x)';
+    case 'VN_NEAR_FLOOR_WARNING':
+      return 'VN Cảnh báo sát Sàn ≤ (%)';
+    case 'VN30F_BASIS_EXTREME':
+      return 'VN30F1M Lệch Basis |đ| ≥';
+    case 'VN_FOREIGN_NET_BUY':
+      return 'VN Khối ngoại mua ròng ≥ (tỷ)';
   }
 }
 
@@ -447,6 +468,71 @@ export function evaluateAlertRulesPure(params: {
           severity = 'SUCCESS';
           title = `${targetSym.symbol} lọt Vùng Gom Siêu Đẹp (HOT_BUY)`;
           message = `AI Scanner xác nhận ${targetSym.symbol} vào vùng chiết khấu tích sản hấp dẫn quanh giá ${targetSym.price}.`;
+        }
+        break;
+      }
+      case 'VN_VOLUME_BREAKOUT': {
+        if (targetSym && targetSym.change24h >= 1.5) {
+          const isTargetActive =
+            activeSymbol && activeSymbol.toUpperCase() === rule.symbol.toUpperCase();
+          const pulse = computeVnIntradaySessionPulse(
+            isTargetActive ? activeCandles : [],
+            new Date(nowMs)
+          );
+          if (
+            pulse.timeNormalizedRvol !== null &&
+            pulse.timeNormalizedRvol >= rule.threshold
+          ) {
+            matched = true;
+            severity = 'SUCCESS';
+            title = `⚡ ${targetSym.symbol} Nổ Vol Đột Biến (${pulse.timeNormalizedRvol.toFixed(2)}x TB20)`;
+            message = `Dòng tiền nội ngày cuộn vào ${targetSym.symbol} gấp ${pulse.timeNormalizedRvol.toFixed(2)}x trung bình 20 phiên cùng khung giờ (${pulse.phaseLabel}), giá tăng +${targetSym.change24h}% lên ${targetSym.price}k!`;
+          }
+        }
+        break;
+      }
+      case 'VN_NEAR_FLOOR_WARNING': {
+        if (targetSym && targetSym.price > 0) {
+          const fund = getCachedVnFundamentals(targetSym.symbol);
+          const limits = computeVnPriceLimits({
+            symbol: targetSym.symbol,
+            currentPrice: targetSym.price,
+            change24hPct: targetSym.change24h,
+            officialRefPrice: fund?.officialRefPrice,
+            officialCeilingPrice: fund?.officialCeilingPrice,
+            officialFloorPrice: fund?.officialFloorPrice,
+          });
+          if (
+            limits.floorPrice !== null &&
+            limits.distToFloorPct !== null &&
+            limits.distToFloorPct <= rule.threshold
+          ) {
+            matched = true;
+            severity = 'CRITICAL';
+            title = `🚨 CẢNH BÁO SÁT SÀN: ${targetSym.symbol} cách Sàn ${limits.distToFloorPct}%`;
+            message = `${targetSym.symbol} lùi về ${targetSym.price}k (Sàn ${limits.board}: ${limits.floorPrice}k, biên -${limits.bandPct}%). Cẩn trọng rủi ro trắng bên mua nhốt thanh khoản T+2 & Call Margin chéo!`;
+          }
+        }
+        break;
+      }
+      case 'VN30F_BASIS_EXTREME': {
+        const basis = computeVn30BasisAnalytics(symbols, new Date(nowMs));
+        if (basis && Math.abs(basis.basisPoints) >= rule.threshold) {
+          matched = true;
+          severity = 'WARNING';
+          const sign = basis.basisPoints >= 0 ? '+' : '';
+          title = `⚖️ VN30F1M Lệch Basis ${sign}${basis.basisPoints} điểm (${basis.regimeLabel})`;
+          message = `${basis.headline}. ${basis.guidance}`;
+        }
+        break;
+      }
+      case 'VN_FOREIGN_NET_BUY': {
+        const flow = getCachedVnForeignFlow(rule.symbol);
+        if (flow && flow.latestNetBillionVnd >= rule.threshold) {
+          matched = true;
+          severity = 'SUCCESS';
+          title = `🌍 Khối ngoại gom mạnh ${rule.symbol}: +${flow.latestNetBillionVnd.toFixed(1)} tỷ VNĐ`;
+          message = `Nhà đầu tư nước ngoài mua ròng +${flow.latestNetBillionVnd.toFixed(2)} tỷ VNĐ mã ${rule.symbol} (vượt ngưỡng +${rule.threshold} tỷ). Lũy kế 10 phiên: ${flow.total10dNetBillionVnd >= 0 ? '+' : ''}${flow.total10dNetBillionVnd.toFixed(1)} tỷ.`;
         }
         break;
       }

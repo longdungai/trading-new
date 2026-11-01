@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Building2,
+  CalendarClock,
   Clock,
   Compass,
   Scale,
@@ -118,6 +119,10 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
 
   const foreign = insights?.foreignFlow ?? null;
   const fund = insights?.fundamentals ?? null;
+  const liqPt = insights?.liquidityAndPt ?? null;
+  const corpEvents = insights?.corporateEvents ?? [];
+  const imminentEvent =
+    corpEvents.find((ev) => ev.isImminentExDateWarning) || corpEvents[0] || null;
 
   return (
     <div className="p-3 sm:p-3.5 rounded-xl bg-[#0e1523] border border-rose-500/30 space-y-2.5 shadow-xl select-none min-w-0">
@@ -198,6 +203,38 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
         <div className="p-2 rounded-lg bg-rose-950/35 border border-rose-500/45 text-[10.5px] text-rose-200 flex items-start gap-1.5 leading-relaxed break-words">
           <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
           <span className="min-w-0 flex-1">{priceLimits.liquidityWarning}</span>
+        </div>
+      )}
+
+      {/* Imminent Shareholder Ex-Dividend / Rights Issue Anti-Trap Radar */}
+      {isCorporate && imminentEvent && (
+        <div
+          className={`p-2 rounded-lg border text-[10.5px] space-y-1 min-w-0 ${
+            imminentEvent.isImminentExDateWarning
+              ? 'bg-amber-950/40 border-amber-500/50 text-amber-100'
+              : 'bg-[#090f1b] border-slate-800 text-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+            <span className="font-bold flex items-center gap-1 text-amber-300 min-w-0">
+              <CalendarClock className="w-3 h-3 shrink-0" />
+              <span className="truncate">{imminentEvent.typeLabelVi}</span>
+            </span>
+            {imminentEvent.effectiveDate && (
+              <span className="px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-700 font-mono text-[9.5px] text-cyan-300 shrink-0 whitespace-nowrap">
+                GDKHQ: {imminentEvent.effectiveDate}
+                {imminentEvent.daysToExDate !== null && imminentEvent.daysToExDate >= 0
+                  ? ` (${imminentEvent.daysToExDate}N)`
+                  : ''}
+              </span>
+            )}
+          </div>
+          <div className="text-[10px] leading-snug break-words">{imminentEvent.note}</div>
+          {imminentEvent.riskHint && (
+            <div className="text-[9.5px] text-amber-200/95 leading-snug break-words pt-0.5 border-t border-amber-500/20">
+              ⚠️ {imminentEvent.riskHint}
+            </div>
+          )}
         </div>
       )}
 
@@ -315,6 +352,22 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
                   </span>
                 )}
               </div>
+
+              {liqPt && (liqPt.ptValueBillionVnd > 0 || liqPt.vwapPrice !== null) && (
+                <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-800/80 flex-wrap">
+                  {liqPt.vwapPrice !== null && (
+                    <span>
+                      VWAP sàn: <strong className="text-cyan-300">{formatPrice(liqPt.vwapPrice)}k</strong>
+                    </span>
+                  )}
+                  <span>
+                    Thỏa thuận:{' '}
+                    <strong className="text-fuchsia-300">
+                      {liqPt.ptValueBillionVnd.toFixed(2)} tỷ ({liqPt.ptSharePct}%)
+                    </strong>
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

@@ -38,6 +38,7 @@ import {
   clearUserPaperTrades,
   calculatePaperPortfolioAnalytics,
   exportPaperTradesToCsv,
+  getPaperTradeVnT2State,
   PAPER_TRADES_UPDATED_EVENT,
 } from '../../services/paperTrading/userPaperTrading';
 
@@ -500,11 +501,12 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
               const isPending = trade.status === 'PENDING';
               const isProfit = trade.pnlPercent >= 0;
               const entryDist = trade.entryPrice > 0 ? (((currentPrice - trade.entryPrice) / trade.entryPrice) * 100).toFixed(2) : '0';
+              const t2State = getPaperTradeVnT2State(trade);
 
               return (
                 <div key={trade.id} className="p-3 rounded-xl bg-[#0e141f] border border-[#212e42] space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-1.5 font-bold text-xs flex-wrap min-w-0">
                       <span className={`px-1.5 py-0.5 rounded text-[10px] ${
                         trade.action === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
                       }`}>
@@ -514,9 +516,15 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                       <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
                         isPending
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : t2State.isVnEquityT2 && t2State.isLocked
+                          ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40'
                           : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                       }`}>
-                        {isPending ? '⏳ CHỜ KHỚP ENTRY' : '🟢 ĐÃ KHỚP - ĐANG CHẠY'}
+                        {isPending
+                          ? '⏳ CHỜ KHỚP ENTRY'
+                          : t2State.isVnEquityT2
+                          ? t2State.statusBadge
+                          : '🟢 ĐÃ KHỚP - ĐANG CHẠY'}
                       </span>
                     </div>
 
@@ -542,15 +550,29 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                     <div>{trade.tpTargetLabel}: <span className="text-emerald-400 font-bold">{prefix}{formatPrice(trade.takeProfit)}{priceSuffix}</span></div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
                     <span className="text-[9px] text-gray-500 font-mono">
                       Giá thị trường: <span className="text-cyan-300 font-bold">{prefix}{formatPrice(currentPrice)}{priceSuffix}</span>
                     </span>
                     <button
                       onClick={() => handleManualClose(trade.id)}
-                      className="px-2.5 py-1 rounded bg-[#1e293b] hover:bg-rose-600 hover:text-white text-gray-300 text-[10px] font-semibold transition"
+                      disabled={!isPending && t2State.isVnEquityT2 && t2State.isLocked}
+                      title={
+                        !isPending && t2State.isVnEquityT2 && t2State.isLocked
+                          ? `Chuẩn VSD T+2: Cổ phiếu chưa về tài khoản, mở bán từ ${t2State.unlockTimeLabelVi}`
+                          : undefined
+                      }
+                      className={`px-2.5 py-1 rounded text-[10px] font-semibold transition ${
+                        !isPending && t2State.isVnEquityT2 && t2State.isLocked
+                          ? 'bg-slate-800/80 text-amber-300/80 border border-amber-500/30 cursor-not-allowed'
+                          : 'bg-[#1e293b] hover:bg-rose-600 hover:text-white text-gray-300'
+                      }`}
                     >
-                      {isPending ? 'Hủy Lệnh Chờ' : 'Đóng Lệnh Ngay'}
+                      {isPending
+                        ? 'Hủy Lệnh Chờ'
+                        : t2State.isVnEquityT2 && t2State.isLocked
+                        ? `🔒 Mở bán ${t2State.unlockTimeLabelVi}`
+                        : 'Đóng Lệnh Ngay'}
                     </button>
                   </div>
                 </div>
@@ -827,12 +849,20 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                     className="w-full bg-[#141b27] border border-[#232f44] rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-blue-500"
                   >
                     <option value={1}>{isVND ? 'Tiền Thịt (1x)' : 'Spot 1x'}</option>
-                    <option value={2}>{isVND ? 'Margin 2x' : 'Futures 2x'}</option>
+                    <option value={2}>{isVND ? 'Margin 2x (Lãi ~12%/năm)' : 'Futures 2x'}</option>
                     <option value={5}>Đòn bẩy 5x</option>
                     <option value={10}>Đòn bẩy 10x</option>
                   </select>
                 </div>
               </div>
+
+              {isVND && (
+                <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-500/30 text-[10px] text-amber-200 leading-relaxed font-sans">
+                  {symbol.toUpperCase().startsWith('VN30F')
+                    ? '⚡ Hợp đồng tương lai VN30F1M: Giao dịch T+0 hai chiều Long/Short ngay trong phiên.'
+                    : '📌 Quy tắc VSD Việt Nam: Cổ phiếu cơ sở khóa bán chiều T+0 & T+1, mở bán lúc 13:00 ngày T+2. Tự động khấu trừ phí 2 chiều (~0.30%), thuế bán 0.10% và lãi vay Margin 12%/năm (nếu > 1x).'}
+                </div>
+              )}
             </div>
 
             <div className="p-3 bg-[#121927] border-t border-[#1c2738] flex items-center justify-end gap-2">

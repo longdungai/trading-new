@@ -19,6 +19,14 @@ import { DEFAULT_SYMBOLS } from '../../api/marketData';
 import { GLOBAL_SYMBOL_CATALOG } from '../../api/symbolCatalog';
 import { getMarketSessionInfo, isVietnamMarketSymbol } from '../../../utils/marketHours';
 import { analyzeAccumulationZone } from '../../ai/accumulationScanner';
+import {
+  computeVnActiveOrderFlow,
+  computeVnNetPaperPnl,
+  computeVnSbvFxPressure,
+  computeVnT2SettlementState,
+  scanVnMomentumBreakouts,
+} from '../vnExecutionEngines';
+import { evaluateAlertRulesPure, SmartAlertRule } from '../../alerts/smartAlertCenter';
 
 describe('Vietnam Stock & Derivatives Institutional Upgrades (6 Pillars)', () => {
   it('1. classifies HOSE, HNX, UPCOM, INDEX, and VN30F1M Derivative boards accurately', () => {
@@ -234,5 +242,340 @@ describe('Vietnam Stock & Derivatives Institutional Upgrades (6 Pillars)', () =>
     const acc = analyzeAccumulationZone(hpgSym);
     expect(Number(((acc.entryZone[0] * 100) % 5).toFixed(4))).toBe(0);
     expect(Number(((acc.entryZone[1] * 100) % 5).toFixed(4))).toBe(0);
+  });
+
+  it('8. computes Intraday Active Buy/Sell Imbalance, VWAP, Whale Spike Bars & Put-Through integration', () => {
+    const fptSym: MarketSymbol = {
+      symbol: 'FPT',
+      name: 'FPT Corp',
+      type: 'vn30',
+      baseAsset: 'FPT',
+      quoteAsset: 'VND',
+      price: 132.5,
+      change24h: 3.1,
+      high24h: 133.0,
+      low24h: 129.0,
+      volume24h: 8_500_000,
+    };
+
+    const candles: Candle[] = Array.from({ length: 16 }, (_, idx) => {
+      const isWhaleBuy = idx === 14;
+      return {
+        time: 1762050000 + idx * 900,
+        open: 129 + idx * 0.2,
+        high: 129.3 + idx * 0.22,
+        low: 128.95 + idx * 0.2,
+        close: 129.28 + idx * 0.22, // closes near top of bar -> strong active buy
+        volume: isWhaleBuy ? 1_200_000 : 250_000,
+      };
+    });
+
+    const flow = computeVnActiveOrderFlow(candles, fptSym, {
+      symbol: 'FPT',
+      latestDate: '2026-11-02',
+      floor: 'HOSE',
+      nmVolume: 8_500_000,
+      nmValueBillionVnd: 1115.2,
+      ptVolume: 900_000,
+      ptValueBillionVnd: 118.8,
+      ptSharePct: 9.6,
+      total5dPtBillionVnd: 320.5,
+      vwapPrice: 131.2,
+      officialRefPrice: 128.5,
+      officialCeilingPrice: 137.4,
+      officialFloorPrice: 119.6,
+    });
+
+    expect(flow.activeBuyPct).toBeGreaterThan(60);
+    expect(flow.regime).toBe('STRONG_BUY_ABSORPTION');
+    expect(flow.vwapPrice).toBe(131.2);
+    expect(flow.priceVsVwapPct).toBeGreaterThan(0);
+    expect(flow.ptValueBillionVnd).toBe(118.8);
+    expect(flow.whaleBars.length).toBeGreaterThanOrEqual(1);
+    expect(flow.whaleBars[0].side).toBe('ACTIVE_BUY');
+  });
+
+  it('9. enforces Vietnam VSD T+2.5 Settlement Lock (13:00 Day T+2 skipping weekends) & 0.40% Fee+Tax + 12% Margin Interest', () => {
+    // Case A: Bought Monday 2026-11-02 10:00 GMT+7 (03:00 UTC)
+    const monFillMs = Date.parse('2026-11-02T03:00:00Z');
+    // Tuesday 14:00 GMT+7 (07:00 UTC) -> T+1 still locked!
+    const tueCheck = computeVnT2SettlementState(
+      monFillMs,
+      Date.parse('2026-11-03T07:00:00Z'),
+      'FPT',
+      'VND'
+    );
+    expect(tueCheck.isVnEquityT2).toBe(true);
+    expect(tueCheck.isLocked).toBe(true);
+    expect(tueCheck.businessDaysElapsed).toBe(1);
+
+    // Wednesday 11:00 GMT+7 (04:00 UTC) -> Morning of T+2 BEFORE 13:00 still locked!
+    const wedMorningCheck = computeVnT2SettlementState(
+      monFillMs,
+      Date.parse('2026-11-04T04:00:00Z'),
+      'FPT',
+      'VND'
+    );
+    expect(wedMorningCheck.isLocked).toBe(true);
+
+    // Wednesday 13:05 GMT+7 (06:05 UTC) -> UNLOCKED!
+    const wedAfternoonCheck = computeVnT2SettlementState(
+      monFillMs,
+      Date.parse('2026-11-04T06:05:00Z'),
+      'FPT',
+      'VND'
+    );
+    expect(wedAfternoonCheck.isLocked).toBe(false);
+
+    // Case B: Bought Thursday 2026-11-05 14:00 GMT+7 -> Friday is T+1, skips Sat/Sun -> unlocks Monday 2026-11-09 13:00 GMT+7 (06:00 UTC)
+    const thuFillMs = Date.parse('2026-11-05T07:00:00Z');
+    const sunCheck = computeVnT2SettlementState(
+      thuFillMs,
+      Date.parse('2026-11-08T10:00:00Z'),
+      'HPG',
+      'VND'
+    );
+    expect(sunCheck.isLocked).toBe(true);
+    const monAfternoonCheck = computeVnT2SettlementState(
+      thuFillMs,
+      Date.parse('2026-11-09T06:01:00Z'),
+      'HPG',
+      'VND'
+    );
+    expect(monAfternoonCheck.isLocked).toBe(false);
+
+    // Case C: VN30F1M Derivative is T+0 (never locked)
+    const derivCheck = computeVnT2SettlementState(
+      monFillMs,
+      Date.parse('2026-11-02T03:05:00Z'),
+      'VN30F1M',
+      'VND'
+    );
+    expect(derivCheck.isLocked).toBe(false);
+
+    // Net PnL with 2x Margin held for 10 days on +5% stock gain:
+    // Gross on capital = +10.00%, Fee+Tax = 0.40% * 2 = 0.80%, Margin interest = 1 * (12%/365)*10 ≈ 0.33% -> Net ≈ +8.87%
+    const pnl = computeVnNetPaperPnl({
+      symbol: 'SSI',
+      quoteAsset: 'VND',
+      action: 'BUY',
+      entryPrice: 30.0,
+      exitPrice: 31.5,
+      capital: 100_000_000,
+      leverage: 2,
+      filledTimeMs: monFillMs,
+      evalTimeMs: monFillMs + 10 * 86_400_000,
+    });
+    expect(pnl.frictionPctOnCapital).toBeGreaterThan(1.1);
+    expect(pnl.netPnlPercent).toBeCloseTo(8.87, 1);
+  });
+
+  it('10. triggers Vietnam-specific Smart Alerts (VN_VOLUME_BREAKOUT, VN_NEAR_FLOOR_WARNING, VN30F_BASIS_EXTREME)', () => {
+    const nowMs = Date.parse('2026-11-02T03:00:00Z'); // 10:00 GMT+7 Monday
+    const mockSyms: MarketSymbol[] = [
+      {
+        symbol: 'SSI',
+        name: 'SSI Securities',
+        type: 'vn30',
+        baseAsset: 'SSI',
+        quoteAsset: 'VND',
+        price: 27.95, // Floor on ref 30.00 is 27.90 -> dist to floor ~0.18%!
+        change24h: -6.83,
+        high24h: 29.8,
+        low24h: 27.9,
+        volume24h: 22_000_000,
+      },
+      {
+        symbol: 'FPT',
+        name: 'FPT Corp',
+        type: 'vn30',
+        baseAsset: 'FPT',
+        quoteAsset: 'VND',
+        price: 135.0,
+        change24h: 3.4,
+        high24h: 135.5,
+        low24h: 131.0,
+        volume24h: 8_000_000,
+      },
+      {
+        symbol: 'VN30',
+        name: 'VN30',
+        type: 'index',
+        baseAsset: 'VN30',
+        quoteAsset: 'VND',
+        price: 1850.0,
+        change24h: 0.5,
+        high24h: 1855,
+        low24h: 1840,
+        volume24h: 180_000_000,
+      },
+      {
+        symbol: 'VN30F1M',
+        name: 'VN30F1M',
+        type: 'index',
+        baseAsset: 'VN30F1M',
+        quoteAsset: 'VND',
+        price: 1859.2, // +9.2 pts basis
+        change24h: 0.9,
+        high24h: 1862,
+        low24h: 1848,
+        volume24h: 210_000,
+      },
+    ];
+
+    const fptCandles: Candle[] = Array.from({ length: 22 }, (_, i) => ({
+      time: 1760000000 + i * 86400,
+      open: 130,
+      high: 135,
+      low: 129,
+      close: 135,
+      volume: i === 21 ? 6_500_000 : 10_000_000, // At 10:00 GMT+7 (~26% weight), 6.5M vs 2.6M expected => ~2.5x RVOL!
+    }));
+
+    const rules: SmartAlertRule[] = [
+      {
+        id: 'r_vol',
+        symbol: 'FPT',
+        condition: 'VN_VOLUME_BREAKOUT',
+        threshold: 1.8,
+        enabled: true,
+        oneShot: true,
+        cooldownMinutes: 30,
+        createdAtMs: nowMs - 60_000,
+      },
+      {
+        id: 'r_floor',
+        symbol: 'SSI',
+        condition: 'VN_NEAR_FLOOR_WARNING',
+        threshold: 1.2,
+        enabled: true,
+        oneShot: true,
+        cooldownMinutes: 30,
+        createdAtMs: nowMs - 60_000,
+      },
+      {
+        id: 'r_basis',
+        symbol: 'VN30F1M',
+        condition: 'VN30F_BASIS_EXTREME',
+        threshold: 6.0,
+        enabled: true,
+        oneShot: true,
+        cooldownMinutes: 30,
+        createdAtMs: nowMs - 60_000,
+      },
+    ];
+
+    const res = evaluateAlertRulesPure({
+      rules,
+      symbols: mockSyms,
+      activeSymbol: 'FPT',
+      activeCandles: fptCandles,
+      nowMs,
+    });
+
+    expect(res.newlyTriggered.length).toBe(3);
+    expect(res.newlyTriggered.map((e) => e.ruleId).sort()).toEqual(['r_basis', 'r_floor', 'r_vol']);
+  });
+
+  it('11. scans Vietnam CANSLIM / VCP / Breakout Leaders & evaluates SBV USD/VND Liquidity Pressure Gauge', () => {
+    const sampleUniverse: MarketSymbol[] = [
+      {
+        symbol: 'VNINDEX',
+        name: 'VN-Index',
+        type: 'index',
+        baseAsset: 'VNINDEX',
+        quoteAsset: 'VND',
+        price: 1288.5,
+        change24h: 1.35,
+        high24h: 1290,
+        low24h: 1272,
+        volume24h: 850_000_000,
+      },
+      {
+        symbol: 'FPT',
+        name: 'FPT Corp',
+        type: 'vn30',
+        baseAsset: 'FPT',
+        quoteAsset: 'VND',
+        price: 136.4,
+        change24h: 4.2,
+        high24h: 136.8,
+        low24h: 131.5,
+        volume24h: 9_200_000,
+      },
+      {
+        symbol: 'ACB',
+        name: 'Asia Commercial Bank',
+        type: 'vn30',
+        baseAsset: 'ACB',
+        quoteAsset: 'VND',
+        price: 25.85,
+        change24h: 0.4,
+        high24h: 25.95,
+        low24h: 25.6, // tight 1.37% intraday range -> VCP_TIGHT_BASE
+        volume24h: 7_500_000,
+      },
+      {
+        symbol: 'VIC',
+        name: 'Vingroup',
+        type: 'vn30',
+        baseAsset: 'VIC',
+        quoteAsset: 'VND',
+        price: 41.2,
+        change24h: -0.5,
+        high24h: 41.8,
+        low24h: 41.0,
+        volume24h: 3_100_000,
+      },
+    ];
+
+    const momentum = scanVnMomentumBreakouts(sampleUniverse);
+    expect(momentum.marketRegime).toBe('FTD_CONFIRMED');
+    expect(momentum.breakoutCount).toBeGreaterThanOrEqual(1);
+    const fptCand = momentum.candidates.find((c) => c.symbol === 'FPT')!;
+    expect(fptCand.setupType).toBe('BREAKOUT_LEADER');
+    expect(fptCand.stopLossPrice).toBeLessThan(fptCand.pivotBuyPrice);
+
+    // SBV FX Stress Gauge
+    const severeFx = computeVnSbvFxPressure({
+      updatedAt: Date.now(),
+      overallRegime: 'RISK_OFF',
+      overallScore: -45,
+      regimeHeadline: 'Stress',
+      indicators: [
+        {
+          id: 'USDVND',
+          name: 'USD/VND',
+          shortLabel: 'USD/VND',
+          category: 'FX',
+          value: 25_780,
+          change24h: 110,
+          changePercent: 0.42,
+          unit: 'VND',
+          status: 'BEARISH_RISK',
+          impactSummary: 'FX high',
+          source: 'Yahoo',
+        },
+        {
+          id: 'DXY',
+          name: 'DXY',
+          shortLabel: 'DXY',
+          category: 'FX',
+          value: 106.4,
+          change24h: 0.5,
+          changePercent: 0.48,
+          unit: 'pts',
+          status: 'BEARISH_RISK',
+          impactSummary: 'DXY high',
+          source: 'Yahoo',
+        },
+      ],
+      globalAlerts: [],
+      economicCalendar: [],
+    } as any);
+
+    expect(severeFx).not.toBeNull();
+    expect(severeFx!.regime).toBe('SEVERE_FX_STRESS');
+    expect(severeFx!.recommendedMaxEquityPct).toBe(40);
   });
 });

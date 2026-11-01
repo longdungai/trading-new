@@ -32,6 +32,49 @@ export interface VnMarketForeignLeaderItem {
   netVol: number;
 }
 
+export interface VnSymbolLiquidityAndPt {
+  symbol: string;
+  latestDate: string;
+  floor: string;
+  nmVolume: number;
+  nmValueBillionVnd: number;
+  ptVolume: number;
+  ptValueBillionVnd: number;
+  ptSharePct: number;
+  total5dPtBillionVnd: number;
+  vwapPrice: number | null;
+  officialRefPrice: number | null;
+  officialCeilingPrice: number | null;
+  officialFloorPrice: number | null;
+}
+
+export interface VnPutThroughLeaderItem {
+  symbol: string;
+  tradingDate: string;
+  ptVolume: number;
+  ptValueBillionVnd: number;
+  impliedPtPrice: number | null;
+  closePrice: number;
+  pctChange: number;
+  dealTag: string;
+}
+
+export interface VnCorporateEventItem {
+  id: string;
+  symbol: string;
+  eventType: string;
+  typeLabelVi: string;
+  note: string;
+  effectiveDate: string | null;
+  actualDate: string | null;
+  disclosureDate: string | null;
+  daysToExDate: number | null;
+  cashDividendVnd: number | null;
+  ratioPct: number | null;
+  isImminentExDateWarning: boolean;
+  riskHint: string | null;
+}
+
 export interface VnSymbolFundamentals {
   symbol: string;
   companyNameVi: string;
@@ -65,14 +108,30 @@ export interface VnStockInsightsPayload {
     topSell: VnMarketForeignLeaderItem[];
   };
   fundamentals: VnSymbolFundamentals | null;
+  liquidityAndPt?: VnSymbolLiquidityAndPt | null;
+  marketPutThroughLeaders?: VnPutThroughLeaderItem[];
+  corporateEvents?: VnCorporateEventItem[];
+  upcomingMarketEvents?: VnCorporateEventItem[];
 }
 
-const NON_CORPORATE = new Set(['VNINDEX', 'VN30', 'HNXINDEX', 'UPCOMINDEX', 'VN30F1M', 'VN30F2M']);
+const NON_CORPORATE = new Set([
+  'VNINDEX',
+  'VN30',
+  'HNXINDEX',
+  'UPCOMINDEX',
+  'VN30F1M',
+  'VN30F2M',
+]);
 
 const insightsCache = new Map<string, { ts: number; data: VnStockInsightsPayload }>();
 const fundamentalsQuickMap = new Map<string, VnSymbolFundamentals>();
 const foreignQuickMap = new Map<string, VnSymbolForeignFlow>();
+const liquidityQuickMap = new Map<string, VnSymbolLiquidityAndPt>();
+const eventsQuickMap = new Map<string, VnCorporateEventItem[]>();
+
 let cachedMarketLeaders: VnStockInsightsPayload['marketLeaders'] | null = null;
+let cachedPutThroughLeaders: VnPutThroughLeaderItem[] | null = null;
+let cachedUpcomingEvents: VnCorporateEventItem[] | null = null;
 let cachedMarketLeadersTs = 0;
 
 const CACHE_TTL_MS = 45_000;
@@ -83,6 +142,85 @@ export function getCachedVnFundamentals(symbol: string): VnSymbolFundamentals | 
 
 export function getCachedVnForeignFlow(symbol: string): VnSymbolForeignFlow | undefined {
   return foreignQuickMap.get(symbol.trim().toUpperCase());
+}
+
+export function getCachedVnLiquidityAndPt(symbol: string): VnSymbolLiquidityAndPt | undefined {
+  return liquidityQuickMap.get(symbol.trim().toUpperCase());
+}
+
+export function getCachedVnCorporateEvents(symbol: string): VnCorporateEventItem[] | undefined {
+  return eventsQuickMap.get(symbol.trim().toUpperCase());
+}
+
+function getVnIsoDateOffset(daysOffset = 0): string {
+  const vnNowMs = Date.now() + 7 * 3600 * 1000 + daysOffset * 86400 * 1000;
+  return new Date(vnNowMs).toISOString().slice(0, 10);
+}
+
+function diffCalendarDaysFromVnToday(targetDateStr: string | null): number | null {
+  if (!targetDateStr) return null;
+  const clean = targetDateStr.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+  const todayStr = getVnIsoDateOffset(0);
+  const tTarget = Date.parse(`${clean}T00:00:00Z`);
+  const tToday = Date.parse(`${todayStr}T00:00:00Z`);
+  if (!Number.isFinite(tTarget) || !Number.isFinite(tToday)) return null;
+  return Math.round((tTarget - tToday) / 86400000);
+}
+
+function parseCorporateEventRow(r: any): VnCorporateEventItem | null {
+  const code = String(r.code || '').toUpperCase();
+  const type = String(r.type || '').toUpperCase();
+  const typeDesc = String(r.typeDesc || type || 'Sự kiện quyền');
+  const effectiveDate = r.effectiveDate ? String(r.effectiveDate).slice(0, 10) : null;
+  const disclosureDate = r.disclosureDate ? String(r.disclosureDate).slice(0, 10) : null;
+  const actualDate = r.actualDate ? String(r.actualDate).slice(0, 10) : null;
+
+  const daysToExDate = diffCalendarDaysFromVnToday(effectiveDate);
+  if (daysToExDate !== null && daysToExDate > 200) return null;
+
+  const lowerDesc = typeDesc.toLowerCase();
+  const isRightsAction =
+    type.includes('DIV') ||
+    type.includes('ISSUE') ||
+    lowerDesc.includes('cổ tức') ||
+    lowerDesc.includes('phát hành');
+
+  const isSupplyListing = type.includes('LISTED') || lowerDesc.includes('bổ sung');
+
+  const isImminentExDateWarning =
+    isRightsAction && daysToExDate !== null && daysToExDate >= 0 && daysToExDate <= 6;
+
+  let riskHint: string | null = null;
+  if (isImminentExDateWarning) {
+    riskHint =
+      type.includes('ISSUE') || type.includes('KIND') || type.includes('STOCK')
+        ? `⚠️ Còn ${daysToExDate} ngày tới GDKHQ: Lưu ý rủi ro chôn vốn CP thưởng/phát hành thêm 3–6 tháng!`
+        : `⚠️ Còn ${daysToExDate} ngày tới GDKHQ: Lưu ý điều chỉnh giá tham chiếu & thuế cổ tức tiền 5%!`;
+  } else if (isSupplyListing) {
+    riskHint = '📦 Cổ phiếu phát hành/thưởng niêm yết bổ sung — chú ý áp lực cung chốt lời ngắn hạn.';
+  }
+
+  const toNum = (v: any) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  return {
+    id: String(r.id || `${code}_${type}_${effectiveDate || disclosureDate}`),
+    symbol: code,
+    eventType: type,
+    typeLabelVi: typeDesc,
+    note: String(r.note || typeDesc),
+    effectiveDate,
+    actualDate,
+    disclosureDate,
+    daysToExDate,
+    cashDividendVnd: toNum(r.dividend),
+    ratioPct: toNum(r.ratio),
+    isImminentExDateWarning,
+    riskHint,
+  };
 }
 
 async function fetchJsonSafe(url: string, timeoutMs = 5500): Promise<any | null> {
@@ -105,10 +243,20 @@ async function fetchJsonSafe(url: string, timeoutMs = 5500): Promise<any | null>
 
 async function fetchViaClientProxyFallback(cleanSym: string): Promise<VnStockInsightsPayload> {
   const isCorp = !NON_CORPORATE.has(cleanSym);
-
   const needLeaders = !cachedMarketLeaders || Date.now() - cachedMarketLeadersTs > 90_000;
+  const todayStr = getVnIsoDateOffset(0);
+  const futureStr = getVnIsoDateOffset(50);
 
-  const [foreignJson, buyLeadJson, sellLeadJson, simpJson] = await Promise.all([
+  const [
+    foreignJson,
+    buyLeadJson,
+    sellLeadJson,
+    simpJson,
+    pricePtJson,
+    mktPtJson,
+    symEventsJson,
+    mktEventsJson,
+  ] = await Promise.all([
     isCorp
       ? fetchJsonSafe(
           `/api/vndirect/v4/foreigns?q=code:${encodeURIComponent(cleanSym)}&sort=tradingDate:desc&size=10`
@@ -126,6 +274,26 @@ async function fetchViaClientProxyFallback(cleanSym: string): Promise<VnStockIns
       : Promise.resolve(null),
     isCorp
       ? fetchJsonSafe(`/api/simplize/api/company/summary/${encodeURIComponent(cleanSym.toLowerCase())}`)
+      : Promise.resolve(null),
+    isCorp
+      ? fetchJsonSafe(
+          `/api/vndirect/v4/stock_prices?q=code:${encodeURIComponent(cleanSym)}&sort=date:desc&size=5`
+        )
+      : Promise.resolve(null),
+    needLeaders
+      ? fetchJsonSafe(
+          '/api/vndirect/v4/stock_prices?q=type:STOCK~floor:HOSE~ptValue:gt:15000000000&sort=date:desc~ptValue:desc&size=12'
+        )
+      : Promise.resolve(null),
+    isCorp
+      ? fetchJsonSafe(
+          `/api/vndirect/v4/events?q=locale:VN~code:${encodeURIComponent(cleanSym)}&sort=disclosureDate:desc&size=8`
+        )
+      : Promise.resolve(null),
+    needLeaders
+      ? fetchJsonSafe(
+          `/api/vndirect/v4/events?q=locale:VN~effectiveDate:gte:${todayStr}~effectiveDate:lte:${futureStr}&sort=effectiveDate:asc&size=24`
+        )
       : Promise.resolve(null),
   ]);
 
@@ -177,6 +345,43 @@ async function fetchViaClientProxyFallback(cleanSym: string): Promise<VnStockIns
     };
   }
 
+  let liquidityAndPt: VnSymbolLiquidityAndPt | null = null;
+  const ptRows = Array.isArray(pricePtJson?.data) ? pricePtJson.data : [];
+  if (ptRows.length > 0) {
+    const r0 = ptRows[0];
+    const nmVolume = Math.round(Number(r0.nmVolume) || 0);
+    const nmValueBillionVnd = parseFloat(((Number(r0.nmValue) || 0) / 1e9).toFixed(2));
+    const ptVolume = Math.round(Number(r0.ptVolume) || 0);
+    const ptValueBillionVnd = parseFloat(((Number(r0.ptValue) || 0) / 1e9).toFixed(2));
+    const totalVal = nmValueBillionVnd + ptValueBillionVnd;
+    liquidityAndPt = {
+      symbol: cleanSym,
+      latestDate: String(r0.date || ''),
+      floor: String(r0.floor || 'HOSE'),
+      nmVolume,
+      nmValueBillionVnd,
+      ptVolume,
+      ptValueBillionVnd,
+      ptSharePct:
+        totalVal > 0 ? parseFloat(((ptValueBillionVnd / totalVal) * 100).toFixed(1)) : 0,
+      total5dPtBillionVnd: parseFloat(
+        ptRows.reduce((s: number, r: any) => s + (Number(r.ptValue) || 0) / 1e9, 0).toFixed(2)
+      ),
+      vwapPrice: Number.isFinite(Number(r0.average))
+        ? parseFloat(Number(r0.average).toFixed(2))
+        : null,
+      officialRefPrice: Number.isFinite(Number(r0.basicPrice))
+        ? parseFloat(Number(r0.basicPrice).toFixed(2))
+        : null,
+      officialCeilingPrice: Number.isFinite(Number(r0.ceilingPrice))
+        ? parseFloat(Number(r0.ceilingPrice).toFixed(2))
+        : null,
+      officialFloorPrice: Number.isFinite(Number(r0.floorPrice))
+        ? parseFloat(Number(r0.floorPrice).toFixed(2))
+        : null,
+    };
+  }
+
   if (needLeaders && (buyLeadJson || sellLeadJson)) {
     const mapL = (r: any): VnMarketForeignLeaderItem => ({
       symbol: String(r.code || ''),
@@ -203,6 +408,60 @@ async function fetchViaClientProxyFallback(cleanSym: string): Promise<VnStockIns
       topSell,
     };
     cachedMarketLeadersTs = Date.now();
+  }
+
+  if (needLeaders && mktPtJson) {
+    const mRows = Array.isArray(mktPtJson?.data) ? mktPtJson.data : [];
+    const latestDate = String(mRows[0]?.date || '');
+    cachedPutThroughLeaders = mRows
+      .filter((r: any) => String(r.date || '') === latestDate && String(r.code || '').length === 3)
+      .slice(0, 6)
+      .map((r: any) => {
+        const ptVolume = Math.round(Number(r.ptVolume) || 0);
+        const ptValueBillionVnd = parseFloat(((Number(r.ptValue) || 0) / 1e9).toFixed(2));
+        const impliedPtPrice =
+          ptVolume > 0
+            ? parseFloat(((Number(r.ptValue) || 0) / ptVolume / 1000).toFixed(2))
+            : null;
+        const ceil = Number(r.ceilingPrice) || 0;
+        const flr = Number(r.floorPrice) || 0;
+        let dealTag = 'Trao tay tổ chức';
+        if (impliedPtPrice && ceil > 0 && impliedPtPrice >= ceil - 0.08) {
+          dealTag = 'Thỏa thuận giá Trần';
+        } else if (impliedPtPrice && flr > 0 && impliedPtPrice <= flr + 0.08) {
+          dealTag = 'Thỏa thuận giá Sàn';
+        }
+        return {
+          symbol: String(r.code || ''),
+          tradingDate: latestDate,
+          ptVolume,
+          ptValueBillionVnd,
+          impliedPtPrice,
+          closePrice: Number(r.close) || 0,
+          pctChange: parseFloat((Number(r.pctChange) || 0).toFixed(2)),
+          dealTag,
+        };
+      });
+  }
+
+  const corporateEvents = (Array.isArray(symEventsJson?.data) ? symEventsJson.data : [])
+    .map(parseCorporateEventRow)
+    .filter((x: VnCorporateEventItem | null): x is VnCorporateEventItem => Boolean(x))
+    .slice(0, 5);
+
+  if (needLeaders && mktEventsJson) {
+    cachedUpcomingEvents = (Array.isArray(mktEventsJson?.data) ? mktEventsJson.data : [])
+      .filter((r: any) => String(r.code || '').length === 3)
+      .map(parseCorporateEventRow)
+      .filter(
+        (ev: VnCorporateEventItem | null): ev is VnCorporateEventItem =>
+          Boolean(ev) &&
+          (ev!.eventType.includes('DIV') ||
+            ev!.eventType.includes('ISSUE') ||
+            ev!.typeLabelVi.toLowerCase().includes('cổ tức') ||
+            ev!.typeLabelVi.toLowerCase().includes('phát hành'))
+      )
+      .slice(0, 8);
   }
 
   let fundamentals: VnSymbolFundamentals | null = null;
@@ -241,9 +500,9 @@ async function fetchViaClientProxyFallback(cleanSym: string): Promise<VnStockIns
         toNum(d.netIncomeGrowthQoq) !== null
           ? parseFloat(Number(d.netIncomeGrowthQoq).toFixed(2))
           : null,
-      officialRefPrice: div1000(d.priceReferrance),
-      officialCeilingPrice: div1000(d.priceCeiling),
-      officialFloorPrice: div1000(d.priceFloor),
+      officialRefPrice: div1000(d.priceReferrance) ?? liquidityAndPt?.officialRefPrice ?? null,
+      officialCeilingPrice: div1000(d.priceCeiling) ?? liquidityAndPt?.officialCeilingPrice ?? null,
+      officialFloorPrice: div1000(d.priceFloor) ?? liquidityAndPt?.officialFloorPrice ?? null,
       avgVolume10d: toNum(d.volume10dAvg) !== null ? Math.round(Number(d.volume10dAvg)) : null,
       source: 'Simplize / BCTC Doanh nghiệp',
     };
@@ -252,6 +511,12 @@ async function fetchViaClientProxyFallback(cleanSym: string): Promise<VnStockIns
   const sourcesUsed: string[] = [];
   if (foreignFlow || (cachedMarketLeaders?.topBuy.length ?? 0) > 0) {
     sourcesUsed.push('VNDirect/VSD Foreign Flow');
+  }
+  if (liquidityAndPt || (cachedPutThroughLeaders?.length ?? 0) > 0) {
+    sourcesUsed.push('HOSE/VNDirect Put-Through & VWAP');
+  }
+  if (corporateEvents.length > 0 || (cachedUpcomingEvents?.length ?? 0) > 0) {
+    sourcesUsed.push('VSD/VNDirect Corporate Rights');
   }
   if (fundamentals) {
     sourcesUsed.push(fundamentals.source);
@@ -265,6 +530,10 @@ async function fetchViaClientProxyFallback(cleanSym: string): Promise<VnStockIns
     foreignFlow,
     marketLeaders: cachedMarketLeaders ?? { tradingDate: null, topBuy: [], topSell: [] },
     fundamentals,
+    liquidityAndPt,
+    marketPutThroughLeaders: cachedPutThroughLeaders ?? [],
+    corporateEvents,
+    upcomingMarketEvents: cachedUpcomingEvents ?? [],
   };
 }
 
@@ -291,6 +560,7 @@ export async function fetchVnStockInsights(
     serverJson.ok === true &&
     (serverJson.foreignFlow ||
       serverJson.fundamentals ||
+      serverJson.liquidityAndPt ||
       (serverJson.marketLeaders?.topBuy?.length ?? 0) > 0)
   ) {
     payload = serverJson as VnStockInsightsPayload;
@@ -298,8 +568,13 @@ export async function fetchVnStockInsights(
       cachedMarketLeaders = payload.marketLeaders;
       cachedMarketLeadersTs = Date.now();
     }
+    if (payload.marketPutThroughLeaders?.length) {
+      cachedPutThroughLeaders = payload.marketPutThroughLeaders;
+    }
+    if (payload.upcomingMarketEvents?.length) {
+      cachedUpcomingEvents = payload.upcomingMarketEvents;
+    }
   } else {
-    // 2. Fallback: Direct proxied feeds (/api/vndirect & /api/simplize) for Vite local dev
     payload = await fetchViaClientProxyFallback(cleanSym);
   }
 
@@ -308,6 +583,12 @@ export async function fetchVnStockInsights(
   }
   if (payload.foreignFlow) {
     foreignQuickMap.set(cleanSym, payload.foreignFlow);
+  }
+  if (payload.liquidityAndPt) {
+    liquidityQuickMap.set(cleanSym, payload.liquidityAndPt);
+  }
+  if (payload.corporateEvents && payload.corporateEvents.length > 0) {
+    eventsQuickMap.set(cleanSym, payload.corporateEvents);
   }
 
   insightsCache.set(cleanSym, { ts: Date.now(), data: payload });

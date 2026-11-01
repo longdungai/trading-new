@@ -26,11 +26,13 @@ import { FedPivotIntelligenceView } from './FedPivotIntelligenceView';
 import { VnGoldFxArbitrageView, IntermarketCorrelationView } from './VnGoldAndCorrelationViews';
 import { MarketNewsAndBreadthView } from './MarketNewsAndBreadthView';
 import { VnMarketIntelligenceView } from './VnMarketIntelligenceView';
+import { GlobalCryptoAndWallStreetView } from './GlobalCryptoAndWallStreetView';
 import { Candle } from '../../types';
 
 export type MacroModalTab =
   | 'indicators'
   | 'vn_market'
+  | 'global_markets'
   | 'fed_pivot'
   | 'vn_gold_fx'
   | 'correlation'
@@ -222,6 +224,19 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
 
             <button
               type="button"
+              onClick={() => setActiveTab('global_markets')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition ${
+                activeTab === 'global_markets'
+                  ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400/55 shadow-sm'
+                  : 'text-slate-300 hover:text-white bg-[#101829] border-slate-800/90'
+              }`}
+            >
+              <span className="shrink-0">🌎</span>
+              <span>Crypto &amp; Phố Wall (Options • Funding • 11 Ngành Mỹ)</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('fed_pivot')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition ${
                 activeTab === 'fed_pivot'
@@ -329,6 +344,14 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
               currentSymbol={currentSymbol}
               activeCandles={activeCandles}
               macroSnapshot={snapshot}
+              onSelectSymbol={onSelectSymbol}
+              onClose={onClose}
+            />
+          ) : activeTab === 'global_markets' ? (
+            <GlobalCryptoAndWallStreetView
+              symbols={symbols}
+              currentSymbol={currentSymbol}
+              activeCandles={activeCandles}
               onSelectSymbol={onSelectSymbol}
               onClose={onClose}
             />

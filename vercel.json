@@ -46,6 +46,26 @@
       "destination": "https://fred.stlouisfed.org/:path*"
     },
     {
+      "source": "/api/deribit/:path*",
+      "destination": "https://www.deribit.com/:path*"
+    },
+    {
+      "source": "/api/cboe/:path*",
+      "destination": "https://cdn.cboe.com/:path*"
+    },
+    {
+      "source": "/api/coingecko/:path*",
+      "destination": "https://api.coingecko.com/:path*"
+    },
+    {
+      "source": "/api/llama/:path*",
+      "destination": "https://stablecoins.llama.fi/:path*"
+    },
+    {
+      "source": "/api/nasdaq/:path*",
+      "destination": "https://api.nasdaq.com/:path*"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

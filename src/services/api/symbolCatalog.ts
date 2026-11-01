@@ -139,22 +139,71 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
   { symbol: 'VEA', name: 'Tổng Công ty Máy động lực & Máy nông nghiệp VN (UPCOM)', type: 'stock', baseAsset: 'VEA', quoteAsset: 'VND', category: 'Cổ tức cao (UPCOM)', defaultPrice: 42.50 },
   { symbol: 'QNS', name: 'CTCP Đường Quảng Ngãi (UPCOM)', type: 'stock', baseAsset: 'QNS', quoteAsset: 'VND', category: 'Thực phẩm & Đường (UPCOM)', defaultPrice: 49.20 },
 
-  // ========== US STOCKS ==========
-  { symbol: 'NVDA', name: 'NVIDIA Corp', type: 'stock', baseAsset: 'NVDA', quoteAsset: 'USD', category: 'AI Hardware / Tech', defaultPrice: 132.80 },
-  { symbol: 'TSLA', name: 'Tesla Inc', type: 'stock', baseAsset: 'TSLA', quoteAsset: 'USD', category: 'EV & Robotics', defaultPrice: 248.50 },
-  { symbol: 'AAPL', name: 'Apple Inc', type: 'stock', baseAsset: 'AAPL', quoteAsset: 'USD', category: 'Big Tech', defaultPrice: 228.40 },
-  { symbol: 'MSFT', name: 'Microsoft Corp', type: 'stock', baseAsset: 'MSFT', quoteAsset: 'USD', category: 'AI & Cloud Leader', defaultPrice: 418.20 },
-  { symbol: 'AMZN', name: 'Amazon.com Inc', type: 'stock', baseAsset: 'AMZN', quoteAsset: 'USD', category: 'E-Commerce & AWS Cloud', defaultPrice: 188.50 },
-  { symbol: 'GOOGL', name: 'Alphabet Inc (Google)', type: 'stock', baseAsset: 'GOOGL', quoteAsset: 'USD', category: 'Search & Cloud AI', defaultPrice: 165.20 },
-  { symbol: 'META', name: 'Meta Platforms Inc', type: 'stock', baseAsset: 'META', quoteAsset: 'USD', category: 'Social Media & AI', defaultPrice: 512.40 },
-  { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock', baseAsset: 'AMD', quoteAsset: 'USD', category: 'Semiconductor Chips', defaultPrice: 148.60 },
-  { symbol: 'SPY', name: 'S&P 500 ETF', type: 'index', baseAsset: 'SPY', quoteAsset: 'USD', category: 'Macro Index ETF', defaultPrice: 562.40 },
-  { symbol: 'QQQ', name: 'Invesco QQQ Trust (Nasdaq-100)', type: 'index', baseAsset: 'QQQ', quoteAsset: 'USD', category: 'Tech Index ETF', defaultPrice: 485.60 },
+  // ========== PHỐ WALL (US STOCKS), 11 SECTOR SPDR ETFs & GLOBAL INDICES ==========
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', type: 'index', baseAsset: 'SPY', quoteAsset: 'USD', category: 'US Benchmark ETF (S&P 500)', defaultPrice: 582.40 },
+  { symbol: 'QQQ', name: 'Invesco QQQ Trust (Nasdaq-100)', type: 'index', baseAsset: 'QQQ', quoteAsset: 'USD', category: 'US Tech Index ETF (Nasdaq-100)', defaultPrice: 504.20 },
+  { symbol: 'DIA', name: 'SPDR Dow Jones Industrial Average ETF', type: 'index', baseAsset: 'DIA', quoteAsset: 'USD', category: 'US Bluechip Benchmark (Dow 30)', defaultPrice: 423.80 },
+  { symbol: 'IWM', name: 'iShares Russell 2000 Small-Cap ETF', type: 'index', baseAsset: 'IWM', quoteAsset: 'USD', category: 'US Small-Cap Benchmark (Russell 2000)', defaultPrice: 221.50 },
+  { symbol: 'SOXX', name: 'iShares Semiconductor ETF', type: 'index', baseAsset: 'SOXX', quoteAsset: 'USD', category: 'US Sector ETF — Bán dẫn (Semiconductors)', defaultPrice: 229.40 },
+  { symbol: 'NVDA', name: 'NVIDIA Corp', type: 'stock', baseAsset: 'NVDA', quoteAsset: 'USD', category: 'AI Hardware / Semiconductors', defaultPrice: 138.60 },
+  { symbol: 'TSLA', name: 'Tesla Inc', type: 'stock', baseAsset: 'TSLA', quoteAsset: 'USD', category: 'EV, Autonomous & Robotics', defaultPrice: 254.50 },
+  { symbol: 'AAPL', name: 'Apple Inc', type: 'stock', baseAsset: 'AAPL', quoteAsset: 'USD', category: 'Magnificent 7 / Consumer Tech', defaultPrice: 231.40 },
+  { symbol: 'MSFT', name: 'Microsoft Corp', type: 'stock', baseAsset: 'MSFT', quoteAsset: 'USD', category: 'Magnificent 7 / Cloud & AI', defaultPrice: 424.80 },
+  { symbol: 'AMZN', name: 'Amazon.com Inc', type: 'stock', baseAsset: 'AMZN', quoteAsset: 'USD', category: 'Magnificent 7 / E-Commerce & AWS', defaultPrice: 196.40 },
+  { symbol: 'GOOGL', name: 'Alphabet Inc (Google)', type: 'stock', baseAsset: 'GOOGL', quoteAsset: 'USD', category: 'Magnificent 7 / Search & Cloud AI', defaultPrice: 174.20 },
+  { symbol: 'META', name: 'Meta Platforms Inc', type: 'stock', baseAsset: 'META', quoteAsset: 'USD', category: 'Magnificent 7 / Social Media & AI', defaultPrice: 578.50 },
+  { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock', baseAsset: 'AMD', quoteAsset: 'USD', category: 'Semiconductor Chips', defaultPrice: 156.40 },
+  { symbol: 'AVGO', name: 'Broadcom Inc', type: 'stock', baseAsset: 'AVGO', quoteAsset: 'USD', category: 'Custom AI Silicon & Networking', defaultPrice: 176.80 },
+  { symbol: 'TSM', name: 'Taiwan Semiconductor (TSMC ADR)', type: 'stock', baseAsset: 'TSM', quoteAsset: 'USD', category: 'Global Foundry Leader (NYSE ADR)', defaultPrice: 194.50 },
+  { symbol: 'ASML', name: 'ASML Holding NV (NASDAQ)', type: 'stock', baseAsset: 'ASML', quoteAsset: 'USD', category: 'EUV Lithography Monopoly', defaultPrice: 712.00 },
+  { symbol: 'ARM', name: 'Arm Holdings plc', type: 'stock', baseAsset: 'ARM', quoteAsset: 'USD', category: 'CPU & Edge AI Architecture', defaultPrice: 154.00 },
+  { symbol: 'MU', name: 'Micron Technology Inc', type: 'stock', baseAsset: 'MU', quoteAsset: 'USD', category: 'HBM3E Memory & AI DRAM', defaultPrice: 106.50 },
+  { symbol: 'INTC', name: 'Intel Corp', type: 'stock', baseAsset: 'INTC', quoteAsset: 'USD', category: 'x86 & US Foundry', defaultPrice: 23.40 },
+  { symbol: 'QCOM', name: 'Qualcomm Inc', type: 'stock', baseAsset: 'QCOM', quoteAsset: 'USD', category: 'Mobile & Edge AI Chips', defaultPrice: 171.20 },
+  { symbol: 'SMCI', name: 'Super Micro Computer', type: 'stock', baseAsset: 'SMCI', quoteAsset: 'USD', category: 'AI Server Infrastructure', defaultPrice: 46.80 },
+  { symbol: 'PLTR', name: 'Palantir Technologies', type: 'stock', baseAsset: 'PLTR', quoteAsset: 'USD', category: 'Enterprise & Defense AI', defaultPrice: 44.20 },
+  { symbol: 'MSTR', name: 'Strategy (MicroStrategy)', type: 'stock', baseAsset: 'MSTR', quoteAsset: 'USD', category: 'Bitcoin Treasury Proxy', defaultPrice: 238.40 },
+  { symbol: 'COIN', name: 'Coinbase Global Inc', type: 'stock', baseAsset: 'COIN', quoteAsset: 'USD', category: 'US Crypto Exchange & Custody', defaultPrice: 214.60 },
+  { symbol: 'NFLX', name: 'Netflix Inc', type: 'stock', baseAsset: 'NFLX', quoteAsset: 'USD', category: 'Streaming & Entertainment', defaultPrice: 758.20 },
+  { symbol: 'CRM', name: 'Salesforce Inc', type: 'stock', baseAsset: 'CRM', quoteAsset: 'USD', category: 'Enterprise Cloud & Agentforce AI', defaultPrice: 294.50 },
+  { symbol: 'ORCL', name: 'Oracle Corp', type: 'stock', baseAsset: 'ORCL', quoteAsset: 'USD', category: 'Cloud Infrastructure & Database', defaultPrice: 174.80 },
+  { symbol: 'UBER', name: 'Uber Technologies Inc', type: 'stock', baseAsset: 'UBER', quoteAsset: 'USD', category: 'Mobility & Autonomous Network', defaultPrice: 78.60 },
+  { symbol: 'PANW', name: 'Palo Alto Networks', type: 'stock', baseAsset: 'PANW', quoteAsset: 'USD', category: 'Cybersecurity Leader', defaultPrice: 368.00 },
+  { symbol: 'CRWD', name: 'CrowdStrike Holdings', type: 'stock', baseAsset: 'CRWD', quoteAsset: 'USD', category: 'Cloud Endpoint Security', defaultPrice: 312.50 },
+  { symbol: 'JPM', name: 'JPMorgan Chase & Co', type: 'stock', baseAsset: 'JPM', quoteAsset: 'USD', category: 'US Money-Center Banking', defaultPrice: 224.80 },
+  { symbol: 'GS', name: 'Goldman Sachs Group', type: 'stock', baseAsset: 'GS', quoteAsset: 'USD', category: 'US Investment Banking', defaultPrice: 518.40 },
+  { symbol: 'BAC', name: 'Bank of America Corp', type: 'stock', baseAsset: 'BAC', quoteAsset: 'USD', category: 'US Commercial Banking', defaultPrice: 42.10 },
+  { symbol: 'V', name: 'Visa Inc', type: 'stock', baseAsset: 'V', quoteAsset: 'USD', category: 'Global Payments Network', defaultPrice: 289.40 },
+  { symbol: 'LLY', name: 'Eli Lilly & Co', type: 'stock', baseAsset: 'LLY', quoteAsset: 'USD', category: 'Biopharma & GLP-1 Leader', defaultPrice: 892.50 },
+  { symbol: 'UNH', name: 'UnitedHealth Group', type: 'stock', baseAsset: 'UNH', quoteAsset: 'USD', category: 'Managed Healthcare Leader', defaultPrice: 568.00 },
+  { symbol: 'COST', name: 'Costco Wholesale Corp', type: 'stock', baseAsset: 'COST', quoteAsset: 'USD', category: 'Consumer Retail Leader', defaultPrice: 889.00 },
+  { symbol: 'WMT', name: 'Walmart Inc', type: 'stock', baseAsset: 'WMT', quoteAsset: 'USD', category: 'Global Retail Giant', defaultPrice: 81.40 },
+  { symbol: 'XOM', name: 'Exxon Mobil Corp', type: 'stock', baseAsset: 'XOM', quoteAsset: 'USD', category: 'US Integrated Oil & Gas', defaultPrice: 119.60 },
+  { symbol: 'CVX', name: 'Chevron Corp', type: 'stock', baseAsset: 'CVX', quoteAsset: 'USD', category: 'US Integrated Energy', defaultPrice: 152.30 },
+  { symbol: 'CAT', name: 'Caterpillar Inc', type: 'stock', baseAsset: 'CAT', quoteAsset: 'USD', category: 'Heavy Industrials & Infrastructure', defaultPrice: 388.50 },
+  { symbol: 'LMT', name: 'Lockheed Martin Corp', type: 'stock', baseAsset: 'LMT', quoteAsset: 'USD', category: 'Aerospace & Defense', defaultPrice: 562.00 },
+  // --- 11 S&P 500 Sector SPDR ETFs ---
+  { symbol: 'XLK', name: 'Technology Select Sector SPDR', type: 'index', baseAsset: 'XLK', quoteAsset: 'USD', category: 'US Sector ETF — Công nghệ', defaultPrice: 228.50 },
+  { symbol: 'XLF', name: 'Financial Select Sector SPDR', type: 'index', baseAsset: 'XLF', quoteAsset: 'USD', category: 'US Sector ETF — Tài chính Ngân hàng', defaultPrice: 46.80 },
+  { symbol: 'XLV', name: 'Health Care Select Sector SPDR', type: 'index', baseAsset: 'XLV', quoteAsset: 'USD', category: 'US Sector ETF — Y tế Dược phẩm', defaultPrice: 151.20 },
+  { symbol: 'XLE', name: 'Energy Select Sector SPDR', type: 'index', baseAsset: 'XLE', quoteAsset: 'USD', category: 'US Sector ETF — Năng lượng Dầu khí', defaultPrice: 90.40 },
+  { symbol: 'XLI', name: 'Industrial Select Sector SPDR', type: 'index', baseAsset: 'XLI', quoteAsset: 'USD', category: 'US Sector ETF — Công nghiệp & Quốc phòng', defaultPrice: 136.80 },
+  { symbol: 'XLY', name: 'Consumer Discretionary Select SPDR', type: 'index', baseAsset: 'XLY', quoteAsset: 'USD', category: 'US Sector ETF — Tiêu dùng Không thiết yếu', defaultPrice: 201.40 },
+  { symbol: 'XLP', name: 'Consumer Staples Select Sector SPDR', type: 'index', baseAsset: 'XLP', quoteAsset: 'USD', category: 'US Sector ETF — Hàng Tiêu dùng Thiết yếu', defaultPrice: 82.10 },
+  { symbol: 'XLC', name: 'Communication Services Select SPDR', type: 'index', baseAsset: 'XLC', quoteAsset: 'USD', category: 'US Sector ETF — Truyền thông & Internet', defaultPrice: 92.60 },
+  { symbol: 'XLU', name: 'Utilities Select Sector SPDR', type: 'index', baseAsset: 'XLU', quoteAsset: 'USD', category: 'US Sector ETF — Điện & Tiện ích AI Data Center', defaultPrice: 80.50 },
+  { symbol: 'XLB', name: 'Materials Select Sector SPDR', type: 'index', baseAsset: 'XLB', quoteAsset: 'USD', category: 'US Sector ETF — Nguyên vật liệu & Hóa chất', defaultPrice: 95.20 },
+  { symbol: 'XLRE', name: 'Real Estate Select Sector SPDR', type: 'index', baseAsset: 'XLRE', quoteAsset: 'USD', category: 'US Sector ETF — Bất động sản Mỹ (REITs)', defaultPrice: 44.10 },
+  // --- Global Equity Benchmarks ---
+  { symbol: 'N225', name: 'Nikkei 225 Index (Nhật Bản)', type: 'index', baseAsset: 'N225', quoteAsset: 'USD', category: 'Chỉ số Chứng khoán Nhật Bản (Tokyo)', defaultPrice: 38920.00 },
+  { symbol: 'HSI', name: 'Hang Seng Index (Hồng Kông)', type: 'index', baseAsset: 'HSI', quoteAsset: 'USD', category: 'Chỉ số Chứng khoán Hồng Kông', defaultPrice: 20540.00 },
+  { symbol: 'DAX', name: 'DAX Performance Index (Đức / Châu Âu)', type: 'index', baseAsset: 'DAX', quoteAsset: 'USD', category: 'Chỉ số Chứng khoán Đức / Châu Âu', defaultPrice: 19480.00 },
 ];
 
 // LocalStorage Persistence Keys
 export const STORAGE_KEYS = {
-  SYMBOLS: 'quant_ai_symbols_v8',
+  SYMBOLS: 'quant_ai_symbols_v9',
+  LEGACY_SYMBOLS_V8: 'quant_ai_symbols_v8',
   LEGACY_SYMBOLS_V7: 'quant_ai_symbols_v7',
   FAVORITES: 'quant_ai_favorites_v7',
   LAST_SYMBOL: 'quant_ai_last_symbol_v7',
@@ -169,15 +218,21 @@ export function saveSymbolsToStorage(symbols: MarketSymbol[]) {
   }
 }
 
-// Load symbols list from LocalStorage, fallback to DEFAULT_SYMBOLS (with seamless v7 custom symbol migration)
+// Load symbols list from LocalStorage, fallback to DEFAULT_SYMBOLS (with seamless v8/v7 custom symbol migration)
 export function loadSymbolsFromStorage(): MarketSymbol[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.SYMBOLS);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const validated = parsed.filter((s): s is MarketSymbol =>
-          Boolean(s && typeof s === 'object' && s.symbol && typeof s.symbol === 'string' && typeof s.price === 'number')
+        const validated = parsed.filter((s: unknown): s is MarketSymbol =>
+          Boolean(
+            s &&
+              typeof s === 'object' &&
+              'symbol' in s &&
+              typeof (s as MarketSymbol).symbol === 'string' &&
+              typeof (s as MarketSymbol).price === 'number'
+          )
         );
         if (validated.length > 0) {
           return validated;
@@ -185,20 +240,23 @@ export function loadSymbolsFromStorage(): MarketSymbol[] {
       }
     }
 
-    // Migrate any user-created custom symbols from v7 while injecting v8 Vietnam 10-sector + VN30F1M universe
-    const legacyV7 = localStorage.getItem(STORAGE_KEYS.LEGACY_SYMBOLS_V7);
-    if (legacyV7) {
-      const parsedLegacy = JSON.parse(legacyV7);
+    // Migrate any user-created custom symbols from v8/v7 while injecting v9 Global US + Crypto Narrative universe
+    const legacyRaw =
+      localStorage.getItem(STORAGE_KEYS.LEGACY_SYMBOLS_V8) ||
+      localStorage.getItem(STORAGE_KEYS.LEGACY_SYMBOLS_V7);
+    if (legacyRaw) {
+      const parsedLegacy = JSON.parse(legacyRaw);
       if (Array.isArray(parsedLegacy)) {
         const defaultSet = new Set(DEFAULT_SYMBOLS.map(d => d.symbol.toUpperCase()));
         const customExtras = parsedLegacy.filter(
-          (s): s is MarketSymbol =>
+          (s: unknown): s is MarketSymbol =>
             Boolean(
               s &&
                 typeof s === 'object' &&
-                typeof s.symbol === 'string' &&
-                typeof s.price === 'number' &&
-                !defaultSet.has(s.symbol.toUpperCase())
+                'symbol' in s &&
+                typeof (s as MarketSymbol).symbol === 'string' &&
+                typeof (s as MarketSymbol).price === 'number' &&
+                !defaultSet.has((s as MarketSymbol).symbol.toUpperCase())
             )
         );
         const merged = [...customExtras, ...DEFAULT_SYMBOLS];

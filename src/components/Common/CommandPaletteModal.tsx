@@ -96,6 +96,18 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         },
       },
       {
+        id: 'cmd_global_markets',
+        title: '🌎 Mở Chuyên Trang Crypto 24/7 & Phố Wall (Deribit/CBOE Options • 11 Ngành Mỹ)',
+        subtitle: 'Thanh lý đòn bẩy 25x, Max Pain / Call-Put Wall, BTC.D & Stablecoin Mint, Sóng 11 Ngành S&P 500 & BCTC Mỹ',
+        badge: 'GLOBAL',
+        keywords: 'crypto pho wall us stocks options max pain call wall put wall deribit cboe funding liquidation sp500 earnings',
+        icon: 'macro',
+        onExecute: () => {
+          onOpenMacroTab('global_markets');
+          onClose();
+        },
+      },
+      {
         id: 'cmd_replay',
         title: '🎬 Bật / Tắt Chế Độ Bar Replay (Tua Ngược Lịch Sử Tập Giao Dịch)',
         subtitle: 'Cắt nến quá khứ, chạy từng nến 1x/2x/5x và vào lệnh tập không thiên kiến tương lai',

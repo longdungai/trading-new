@@ -30,6 +30,11 @@ import {
   roundToVnTickSize,
 } from '../../services/vnMarket/vnStockMicrostructure';
 import {
+  checkUsPdtRuleWarning,
+  isCryptoSymbol,
+  isUsOrGlobalEquitySymbol,
+} from '../../services/globalMarket/globalExecutionEngines';
+import {
   UserPaperTrade,
   getUserPaperTrades,
   addUserPaperTrade,
@@ -856,13 +861,47 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                 </div>
               </div>
 
-              {isVND && (
+              {isVND ? (
                 <div className="p-2 rounded-lg bg-amber-950/30 border border-amber-500/30 text-[10px] text-amber-200 leading-relaxed font-sans">
                   {symbol.toUpperCase().startsWith('VN30F')
                     ? '⚡ Hợp đồng tương lai VN30F1M: Giao dịch T+0 hai chiều Long/Short ngay trong phiên.'
                     : '📌 Quy tắc VSD Việt Nam: Cổ phiếu cơ sở khóa bán chiều T+0 & T+1, mở bán lúc 13:00 ngày T+2. Tự động khấu trừ phí 2 chiều (~0.30%), thuế bán 0.10% và lãi vay Margin 12%/năm (nếu > 1x).'}
                 </div>
-              )}
+              ) : isCryptoSymbol(activeSymbol) || quoteAsset === 'USDT' ? (
+                <div className="p-2 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-[10px] text-cyan-200 leading-relaxed font-sans">
+                  🪙 <b>Chuẩn Khớp Lệnh Crypto 24/7:</b> Tự động khấu trừ phí Taker hai chiều (Perp 0.08%×Đòn bẩy / Spot 0.10%) và phí <b>Funding Rate mỗi 8h</b> khi mở vị thế đòn bẩy &gt; 1x.
+                </div>
+              ) : isUsOrGlobalEquitySymbol(activeSymbol) ? (
+                (() => {
+                  const pdt = checkUsPdtRuleWarning(
+                    paperTrades.map((t) => ({
+                      symbol: t.symbol,
+                      openedAt: t.filledTime || t.openTime,
+                      closedAt: t.closeTime,
+                      status: t.status,
+                    })),
+                    testCapital
+                  );
+                  return (
+                    <div
+                      className={`p-2 rounded-lg border text-[10px] leading-relaxed font-sans space-y-1 ${
+                        pdt.status === 'PDT_RESTRICTED'
+                          ? 'bg-rose-950/40 border-rose-500/45 text-rose-200'
+                          : pdt.status === 'APPROACHING_LIMIT'
+                          ? 'bg-amber-950/35 border-amber-500/40 text-amber-200'
+                          : 'bg-indigo-950/30 border-indigo-500/35 text-indigo-200'
+                      }`}
+                    >
+                      <div className="font-bold">🌎 {pdt.badgeVi}</div>
+                      <div>
+                        Thanh toán <b>SEC T+1</b> • Phí SEC/FINRA TAF (~0.015%) • Lãi vay Margin USD{' '}
+                        <b>~8.0%/năm</b> (khi Đòn bẩy &gt; 1x).
+                      </div>
+                      {pdt.warningVi && <div className="text-rose-300 font-semibold">{pdt.warningVi}</div>}
+                    </div>
+                  );
+                })()
+              ) : null}
             </div>
 
             <div className="p-3 bg-[#121927] border-t border-[#1c2738] flex items-center justify-end gap-2">

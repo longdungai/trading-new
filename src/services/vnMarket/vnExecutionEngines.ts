@@ -12,6 +12,11 @@ import {
   getCachedVnFundamentals,
   VnSymbolLiquidityAndPt,
 } from './vnStockInsightsClient';
+import {
+  computeGlobalPaperTradeNetPnl,
+  isCryptoSymbol,
+  isUsOrGlobalEquitySymbol,
+} from '../globalMarket/globalExecutionEngines';
 
 // ============================================================================
 // 1. INTRADAY SHARK TAPE, ACTIVE BUY/SELL IMBALANCE & PUT-THROUGH ANALYTICS
@@ -341,11 +346,30 @@ export function computeVnNetPaperPnl(params: {
   const isVN = params.quoteAsset === 'VND' || isVnStockOrIndexSymbol(cleanSym);
 
   if (!isVN) {
+    const marketKind =
+      params.quoteAsset === 'USDT' || isCryptoSymbol(cleanSym)
+        ? 'crypto'
+        : isUsOrGlobalEquitySymbol(cleanSym)
+        ? 'us_equity'
+        : 'commodity';
+    const globalRes = computeGlobalPaperTradeNetPnl({
+      marketKind,
+      direction: isBuy ? 'LONG' : 'SHORT',
+      entryPrice: params.entryPrice,
+      currentPrice: params.exitPrice,
+      leverage: lev,
+      openedAtMs: params.filledTimeMs || params.evalTimeMs,
+      closedOrNowMs: params.evalTimeMs,
+    });
+    const friction = globalRes.feeCostPct + globalRes.carryOrMarginCostPct;
+    const globalDays = params.filledTimeMs
+      ? Math.max(0, Math.floor((params.evalTimeMs - params.filledTimeMs) / 86_400_000))
+      : 0;
     return {
-      netPnlPercent: parseFloat(grossPctOnCapital.toFixed(2)),
-      netPnlAmount: parseFloat((params.capital * (grossPctOnCapital / 100)).toFixed(2)),
-      frictionPctOnCapital: 0,
-      holdingDays: 0,
+      netPnlPercent: globalRes.netPnlPct,
+      netPnlAmount: parseFloat((params.capital * (globalRes.netPnlPct / 100)).toFixed(2)),
+      frictionPctOnCapital: parseFloat(friction.toFixed(2)),
+      holdingDays: globalDays,
     };
   }
 

@@ -23,6 +23,15 @@ import {
 } from '../../services/vnMarket/vnStockMicrostructure';
 import { getCachedVnFundamentals } from '../../services/vnMarket/vnStockInsightsClient';
 import {
+  computeCryptoLiquidationAndCarry,
+  isCryptoSymbol,
+  isUsOrGlobalEquitySymbol,
+} from '../../services/globalMarket/globalExecutionEngines';
+import {
+  getCachedGlobalInsights,
+  GLOBAL_INSIGHTS_UPDATED_EVENT,
+} from '../../services/globalMarket/globalMarketInsightsClient';
+import {
   calculateBollingerBands,
   calculateEMA,
   calculateSuperTrend,
@@ -95,6 +104,18 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
   // VPVR coordinate tick for 60fps zoom/pan sync
   const [vpvrCoordTick, setVpvrCoordTick] = useState(0);
+  const [globalInsightsTick, setGlobalInsightsTick] = useState(0);
+
+  useEffect(() => {
+    const onGlobalUpdated = (e: Event) => {
+      const detailSym = (e as CustomEvent)?.detail?.symbol;
+      if (!detailSym || detailSym === symbolName.toUpperCase()) {
+        setGlobalInsightsTick(t => t + 1);
+      }
+    };
+    window.addEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, onGlobalUpdated);
+    return () => window.removeEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, onGlobalUpdated);
+  }, [symbolName]);
 
   // Track hover state and previous symbol/timeframe to preserve pan/zoom on real-time ticks
   const isHoveringRef = useRef<boolean>(false);
@@ -560,6 +581,139 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     }
 
+    // 7B. Global Institutional Price Lines: Crypto Liquidation Magnets & Deribit/CBOE Options Walls
+    if (
+      settings.globalOptionsAndLiqLines !== false &&
+      symbolName &&
+      !isVnStockOrIndexSymbol(currentSymbol || symbolName) &&
+      lastCandle
+    ) {
+      const spot = currentSymbol?.price || lastCandle.close;
+      const gInsights = getCachedGlobalInsights(symbolName);
+
+      if (isCryptoSymbol(currentSymbol || symbolName)) {
+        const liq = computeCryptoLiquidationAndCarry(
+          symbolName,
+          spot,
+          candles,
+          gInsights?.perpCarry
+        );
+        priceLinesRef.current.push(
+          candleSeries.createPriceLine({
+            price: liq.shortLiq25x,
+            color: '#fb7185',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: '🧲 SHORT LIQ 25x',
+          }),
+          candleSeries.createPriceLine({
+            price: liq.longLiq25x,
+            color: '#34d399',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: '🧲 LONG LIQ 25x',
+          })
+        );
+
+        const opt = gInsights?.optionsSummary;
+        if (opt && 'isDirectUnderlying' in opt && opt.isDirectUnderlying) {
+          if (opt.callWallPrice && opt.callWallPrice > spot * 0.8 && opt.callWallPrice < spot * 1.3) {
+            priceLinesRef.current.push(
+              candleSeries.createPriceLine({
+                price: opt.callWallPrice,
+                color: '#f472b6',
+                lineWidth: 1,
+                lineStyle: LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: 'DERIBIT CALL WALL',
+              })
+            );
+          }
+          if (opt.maxPainPrice && opt.maxPainPrice > spot * 0.8 && opt.maxPainPrice < spot * 1.25) {
+            priceLinesRef.current.push(
+              candleSeries.createPriceLine({
+                price: opt.maxPainPrice,
+                color: '#facc15',
+                lineWidth: 1,
+                lineStyle: LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: 'DERIBIT MAX PAIN',
+              })
+            );
+          }
+          if (opt.putWallPrice && opt.putWallPrice > spot * 0.75 && opt.putWallPrice < spot * 1.2) {
+            priceLinesRef.current.push(
+              candleSeries.createPriceLine({
+                price: opt.putWallPrice,
+                color: '#38bdf8',
+                lineWidth: 1,
+                lineStyle: LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: 'DERIBIT PUT WALL',
+              })
+            );
+          }
+        }
+      } else if (isUsOrGlobalEquitySymbol(currentSymbol || symbolName) && gInsights) {
+        const opt = gInsights.optionsSummary;
+        if (opt) {
+          if (opt.callWallPrice && opt.callWallPrice > spot * 0.8 && opt.callWallPrice < spot * 1.3) {
+            priceLinesRef.current.push(
+              candleSeries.createPriceLine({
+                price: opt.callWallPrice,
+                color: '#f472b6',
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'CBOE CALL WALL',
+              })
+            );
+          }
+          if (opt.maxPainPrice && opt.maxPainPrice > spot * 0.8 && opt.maxPainPrice < spot * 1.25) {
+            priceLinesRef.current.push(
+              candleSeries.createPriceLine({
+                price: opt.maxPainPrice,
+                color: '#facc15',
+                lineWidth: 1,
+                lineStyle: LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: 'CBOE MAX PAIN',
+              })
+            );
+          }
+          if (opt.putWallPrice && opt.putWallPrice > spot * 0.75 && opt.putWallPrice < spot * 1.2) {
+            priceLinesRef.current.push(
+              candleSeries.createPriceLine({
+                price: opt.putWallPrice,
+                color: '#38bdf8',
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'CBOE PUT WALL',
+              })
+            );
+          }
+        }
+
+        const uq = gInsights.usQuote;
+        const extPrice = uq?.preMarketPrice ?? uq?.postMarketPrice ?? null;
+        if (extPrice && Math.abs(extPrice - spot) / spot >= 0.002) {
+          priceLinesRef.current.push(
+            candleSeries.createPriceLine({
+              price: extPrice,
+              color: '#a78bfa',
+              lineWidth: 1,
+              lineStyle: LineStyle.Dotted,
+              axisLabelVisible: true,
+              title: uq?.preMarketPrice ? 'PRE-MARKET' : 'AFTER-HOURS',
+            })
+          );
+        }
+      }
+    }
+
     // 8. Update Kronos Ghost Candlesticks, Walk-Forward & AI Forecast Paths
     if (
       settings.kronosGhostCandles &&
@@ -673,6 +827,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     vpvrProfile,
     compareSymbolName,
     compareCandles,
+    globalInsightsTick,
   ]);
 
   const wf = aiPrediction?.walkForward;

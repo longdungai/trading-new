@@ -10,6 +10,7 @@ import {
   getCachedVnForeignFlow,
   getCachedVnFundamentals,
 } from '../vnMarket/vnStockInsightsClient';
+import { getCachedGlobalInsights } from '../globalMarket/globalMarketInsightsClient';
 
 export type SmartAlertConditionType =
   | 'PRICE_ABOVE'
@@ -23,7 +24,11 @@ export type SmartAlertConditionType =
   | 'VN_VOLUME_BREAKOUT'
   | 'VN_NEAR_FLOOR_WARNING'
   | 'VN30F_BASIS_EXTREME'
-  | 'VN_FOREIGN_NET_BUY';
+  | 'VN_FOREIGN_NET_BUY'
+  | 'CRYPTO_FUNDING_EXTREME'
+  | 'CRYPTO_BASIS_SQUEEZE'
+  | 'US_EXTENDED_GAP'
+  | 'US_EARNINGS_WARNING';
 
 export interface SmartAlertRule {
   id: string;
@@ -317,6 +322,14 @@ export function getConditionLabelVi(cond: SmartAlertConditionType): string {
       return 'VN30F1M Lệch Basis |đ| ≥';
     case 'VN_FOREIGN_NET_BUY':
       return 'VN Khối ngoại mua ròng ≥ (tỷ)';
+    case 'CRYPTO_FUNDING_EXTREME':
+      return 'Crypto |Funding 8h| nóng ≥ (%)';
+    case 'CRYPTO_BASIS_SQUEEZE':
+      return 'Crypto |Perp-Spot Basis| ≥ (%)';
+    case 'US_EXTENDED_GAP':
+      return 'Mỹ |Gap Pre/After-Hours| ≥ (%)';
+    case 'US_EARNINGS_WARNING':
+      return 'Mỹ Sắp ra BCTC ≤ (ngày)';
   }
 }
 
@@ -533,6 +546,69 @@ export function evaluateAlertRulesPure(params: {
           severity = 'SUCCESS';
           title = `🌍 Khối ngoại gom mạnh ${rule.symbol}: +${flow.latestNetBillionVnd.toFixed(1)} tỷ VNĐ`;
           message = `Nhà đầu tư nước ngoài mua ròng +${flow.latestNetBillionVnd.toFixed(2)} tỷ VNĐ mã ${rule.symbol} (vượt ngưỡng +${rule.threshold} tỷ). Lũy kế 10 phiên: ${flow.total10dNetBillionVnd >= 0 ? '+' : ''}${flow.total10dNetBillionVnd.toFixed(1)} tỷ.`;
+        }
+        break;
+      }
+      case 'CRYPTO_FUNDING_EXTREME': {
+        const gData = getCachedGlobalInsights(rule.symbol);
+        const carry = gData?.perpCarry;
+        if (carry && Math.abs(carry.fundingRate8hPct) >= rule.threshold) {
+          matched = true;
+          const isOverLong = carry.fundingRate8hPct > 0;
+          severity = isOverLong ? 'WARNING' : 'SUCCESS';
+          const sign = carry.fundingRate8hPct >= 0 ? '+' : '';
+          title = `⚡ ${rule.symbol}: Funding 8h cực trị ${sign}${carry.fundingRate8hPct.toFixed(4)}%`;
+          message = isOverLong
+            ? `Funding Rate đạt +${carry.fundingRate8hPct.toFixed(4)}%/8h (~+${carry.annualizedFundingPct.toFixed(1)}%/năm) — Đòn bẩy Long đang quá tải, cảnh giác râu nến quét thanh lý Long!`
+            : `Funding Rate âm sâu ${carry.fundingRate8hPct.toFixed(4)}%/8h — Đám đông đang Short đuổi, xác suất nổ Short Squeeze đẩy giá tăng ngược rất cao!`;
+        }
+        break;
+      }
+      case 'CRYPTO_BASIS_SQUEEZE': {
+        const gData = getCachedGlobalInsights(rule.symbol);
+        const carry = gData?.perpCarry;
+        if (carry && Math.abs(carry.perpSpotBasisPct) >= rule.threshold) {
+          matched = true;
+          severity = 'WARNING';
+          const sign = carry.perpSpotBasisPct >= 0 ? '+' : '';
+          title = `🧲 ${rule.symbol}: Lệch Perp-Spot Basis ${sign}${carry.perpSpotBasisPct.toFixed(3)}%`;
+          message = `Giá Futures Mark (${carry.markPrice}) đang lệch ${sign}${carry.perpSpotBasisPct.toFixed(3)}% so với Spot Index (${carry.indexPrice}) — Tín hiệu mất cân bằng dòng tiền phái sinh!`;
+        }
+        break;
+      }
+      case 'US_EXTENDED_GAP': {
+        const gData = getCachedGlobalInsights(rule.symbol);
+        const uq = gData?.usQuote;
+        const extGap = uq?.preMarketChangePct ?? uq?.postMarketChangePct ?? null;
+        const extPrice = uq?.preMarketPrice ?? uq?.postMarketPrice ?? null;
+        if (extGap !== null && extPrice !== null && Math.abs(extGap) >= rule.threshold) {
+          matched = true;
+          severity = extGap >= 0 ? 'SUCCESS' : 'WARNING';
+          const sign = extGap >= 0 ? '+' : '';
+          const sessionTag = uq?.preMarketPrice ? 'Pre-Market' : 'After-Hours';
+          title = `🌅 ${rule.symbol} nhảy Gap ${sessionTag} ${sign}${extGap.toFixed(2)}% ($${extPrice})`;
+          message = `Cổ phiếu Mỹ ${rule.symbol} biến động mạnh ngoài giờ (${sessionTag}: $${extPrice}, ${sign}${extGap.toFixed(2)}% so với giá đóng cửa $${uq?.regularPrice ?? ''}).`;
+        }
+        break;
+      }
+      case 'US_EARNINGS_WARNING': {
+        const gData = getCachedGlobalInsights(rule.symbol);
+        const uq = gData?.usQuote;
+        const days = uq?.daysToEarnings;
+        if (
+          uq &&
+          typeof days === 'number' &&
+          days >= 0 &&
+          days <= rule.threshold &&
+          uq.earningsDateIso
+        ) {
+          matched = true;
+          severity = 'CRITICAL';
+          const moveTxt = gData?.optionsSummary?.impliedMovePct
+            ? ` (Options Implied Move ±${gData.optionsSummary.impliedMovePct.toFixed(1)}%)`
+            : '';
+          title = `📊 CẢNH BÁO BCTC MỸ: ${rule.symbol} công bố sau ${days} ngày (${uq.earningsDateIso})`;
+          message = `${rule.symbol} sắp công bố KQKD (${uq.earningsSession || 'BMO/AMC'})${moveTxt}. Cẩn trọng rủi ro nhảy Gap qua đêm xuyên thủng Stop-Loss thông thường!`;
         }
         break;
       }

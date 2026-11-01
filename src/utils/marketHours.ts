@@ -33,8 +33,19 @@ export interface MarketSessionInfo {
 }
 
 const US_EQUITY_SET = new Set([
-  'NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'AMD', 'SPY', 'QQQ',
+  'NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'AMD',
+  'AVGO', 'TSM', 'ASML', 'ARM', 'MU', 'INTC', 'QCOM', 'SMCI',
+  'PLTR', 'NFLX', 'CRM', 'ORCL', 'ADBE', 'UBER', 'PANW', 'CRWD',
+  'MSTR', 'COIN', 'SQ', 'PYPL', 'V', 'MA',
+  'JPM', 'GS', 'BAC', 'MS', 'WFC', 'BRK-B',
+  'LLY', 'UNH', 'JNJ', 'ABBV', 'MRK',
+  'COST', 'WMT', 'HD', 'MCD', 'NKE', 'DIS',
+  'XOM', 'CVX', 'COP', 'CAT', 'LMT', 'GE', 'BA',
+  'SPY', 'QQQ', 'DIA', 'IWM', 'SOXX',
+  'XLK', 'XLF', 'XLV', 'XLE', 'XLI', 'XLY', 'XLP', 'XLC', 'XLU', 'XLB', 'XLRE',
 ]);
+
+const GLOBAL_INDEX_SET = new Set(['N225', 'HSI', 'DAX']);
 
 const HNX_SET = new Set([
   'PVS', 'SHS', 'IDC', 'MBS', 'CEO', 'TNG', 'VCS', 'HUT', 'NVB', 'THD', 'PVI', 'BVS', 'LAS', 'DTD', 'VGS',
@@ -136,7 +147,7 @@ export function isVietnamMarketSymbol(
 ): boolean {
   const sym = item.symbol.toUpperCase();
   if (sym === 'VNINDEX' || sym === 'VN30' || isVnDerivativeTicker(sym)) return true;
-  if (US_EQUITY_SET.has(sym)) return false;
+  if (US_EQUITY_SET.has(sym) || GLOBAL_INDEX_SET.has(sym)) return false;
   return item.quoteAsset === 'VND' || item.type === 'vn30';
 }
 
@@ -501,13 +512,126 @@ export function getMarketSessionInfo(
     };
   }
 
-  // 3. CỔ PHIẾU MỸ (NYSE / NASDAQ — America/New_York ET)
+  // 3A. CHỈ SỐ QUỐC TẾ CHÂU Á & CHÂU ÂU (N225 Tokyo • HSI Hong Kong • DAX Frankfurt)
+  if (GLOBAL_INDEX_SET.has(sym)) {
+    const cfg =
+      sym === 'N225'
+        ? {
+            tz: 'Asia/Tokyo',
+            tzShort: 'JST',
+            exchangeName: 'Tokyo Stock Exchange (Nikkei 225)',
+            shortExchange: 'TSE',
+            openMins: 540, // 09:00
+            lunchStart: 690, // 11:30
+            lunchEnd: 750, // 12:30
+            closeMins: 930, // 15:30 JST
+            summary: 'Thứ 2 – Thứ 6: Sáng 09:00–11:30 JST • Chiều 12:30–15:30 JST (07:00–13:30 giờ VN)',
+          }
+        : sym === 'HSI'
+        ? {
+            tz: 'Asia/Hong_Kong',
+            tzShort: 'HKT',
+            exchangeName: 'Hong Kong Stock Exchange (Hang Seng)',
+            shortExchange: 'HKEX',
+            openMins: 570, // 09:30
+            lunchStart: 720, // 12:00
+            lunchEnd: 780, // 13:00
+            closeMins: 960, // 16:00 HKT
+            summary: 'Thứ 2 – Thứ 6: Sáng 09:30–12:00 HKT • Chiều 13:00–16:00 HKT (08:30–15:00 giờ VN)',
+          }
+        : {
+            tz: 'Europe/Berlin',
+            tzShort: 'CET',
+            exchangeName: 'Frankfurt XETRA (DAX 40)',
+            shortExchange: 'XETRA',
+            openMins: 540, // 09:00
+            lunchStart: -1,
+            lunchEnd: -1,
+            closeMins: 1050, // 17:30 CET
+            summary: 'Thứ 2 – Thứ 6: 09:00–17:30 CET/CEST (14:00–22:30 hoặc 15:00–23:30 giờ VN)',
+          };
+
+    const loc = getZonedParts(now, cfg.tz);
+    const locMins = loc.hour * 60 + loc.minute;
+    const isWeekendLoc = loc.weekday === 0 || loc.weekday === 6;
+    const isLunchLoc =
+      !isWeekendLoc && cfg.lunchStart > 0 && locMins >= cfg.lunchStart && locMins < cfg.lunchEnd;
+    const isOpenLoc =
+      !isWeekendLoc && !isLunchLoc && locMins >= cfg.openMins && locMins < cfg.closeMins;
+    const locClock = `${pad2(loc.hour)}:${pad2(loc.minute)} ${cfg.tzShort} (${vnClock})`;
+    const rows: TradingScheduleRow[] =
+      cfg.lunchStart > 0
+        ? [
+            {
+              label: 'Phiên Sáng',
+              timeRange: `${pad2(Math.floor(cfg.openMins / 60))}:${pad2(cfg.openMins % 60)} – ${pad2(Math.floor(cfg.lunchStart / 60))}:${pad2(cfg.lunchStart % 60)} ${cfg.tzShort}`,
+              isActive: !isWeekendLoc && locMins >= cfg.openMins && locMins < cfg.lunchStart,
+            },
+            {
+              label: 'Nghỉ trưa',
+              timeRange: `${pad2(Math.floor(cfg.lunchStart / 60))}:${pad2(cfg.lunchStart % 60)} – ${pad2(Math.floor(cfg.lunchEnd / 60))}:${pad2(cfg.lunchEnd % 60)} ${cfg.tzShort}`,
+              isActive: isLunchLoc,
+            },
+            {
+              label: 'Phiên Chiều',
+              timeRange: `${pad2(Math.floor(cfg.lunchEnd / 60))}:${pad2(cfg.lunchEnd % 60)} – ${pad2(Math.floor(cfg.closeMins / 60))}:${pad2(cfg.closeMins % 60)} ${cfg.tzShort}`,
+              isActive: !isWeekendLoc && locMins >= cfg.lunchEnd && locMins < cfg.closeMins,
+            },
+          ]
+        : [
+            {
+              label: 'Phiên Khớp lệnh Liên tục XETRA',
+              timeRange: '09:00 – 17:30 CET',
+              isActive: isOpenLoc,
+            },
+          ];
+
+    return {
+      exchangeName: cfg.exchangeName,
+      shortExchange: cfg.shortExchange,
+      isOpen: isOpenLoc,
+      is24x7: false,
+      hasRealOrderBook: false,
+      state: isWeekendLoc
+        ? 'WEEKEND_CLOSED'
+        : isOpenLoc
+        ? 'OPEN'
+        : isLunchLoc
+        ? 'LUNCH_BREAK'
+        : locMins < cfg.openMins
+        ? 'PRE_OPEN'
+        : 'DAILY_CLOSED',
+      badgeText: isWeekendLoc
+        ? `${cfg.shortExchange} ĐÓNG CỬA • CUỐI TUẦN`
+        : isOpenLoc
+        ? `${cfg.shortExchange} • ĐANG MỞ CỬA`
+        : isLunchLoc
+        ? `${cfg.shortExchange} • NGHỈ TRƯA`
+        : `${cfg.shortExchange} ĐÃ ĐÓNG CỬA`,
+      shortBadge: isOpenLoc ? cfg.shortExchange : isLunchLoc ? 'Nghỉ trưa' : 'Đóng cửa',
+      statusHeadline: isOpenLoc
+        ? `Đang giao dịch trực tiếp trên ${cfg.exchangeName}`
+        : isLunchLoc
+        ? `Tạm nghỉ trưa giữa phiên trên ${cfg.exchangeName}`
+        : `Ngoài giờ giao dịch ${cfg.exchangeName}`,
+      scheduleSummary: cfg.summary,
+      scheduleRows: rows,
+      nextSessionLabel: isOpenLoc
+        ? `Đóng cửa lúc ${pad2(Math.floor(cfg.closeMins / 60))}:${pad2(cfg.closeMins % 60)} ${cfg.tzShort}`
+        : `Mở cửa lúc ${pad2(Math.floor(cfg.openMins / 60))}:${pad2(cfg.openMins % 60)} ${cfg.tzShort}`,
+      currentExchangeTime: locClock,
+    };
+  }
+
+  // 3B. CỔ PHIẾU & ETF PHỐ WALL MỸ (NYSE / NASDAQ — America/New_York ET)
   const et = getZonedParts(now, 'America/New_York');
   const etMins = et.hour * 60 + et.minute;
   const etClock = `${pad2(et.hour)}:${pad2(et.minute)} ET (${vnClock})`;
 
   if (US_EQUITY_SET.has(sym) || (symbolObj.type === 'stock' && symbolObj.quoteAsset === 'USD') || symbolObj.type === 'index') {
     const isWeekendET = et.weekday === 0 || et.weekday === 6;
+    const usPriceBandNote =
+      'Không giới hạn biên độ trần/sàn • Thanh toán bù trừ SEC T+1 • Có Pre-Market & After-Hours';
     const usRows: TradingScheduleRow[] = [
       { label: 'Pre-Market (Trước giờ)', timeRange: '04:00 – 09:30 ET', isActive: !isWeekendET && etMins >= 240 && etMins < 570 },
       { label: 'Phiên Chính (NYSE/NASDAQ)', timeRange: '09:30 – 16:00 ET', isActive: !isWeekendET && etMins >= 570 && etMins < 960 },
@@ -529,6 +653,7 @@ export function getMarketSessionInfo(
         scheduleSummary,
         scheduleRows: usRows,
         nextSessionLabel: 'Mở lại Pre-Market Thứ Hai 04:00 ET (Phiên chính 09:30 ET)',
+        priceBandNote: usPriceBandNote,
         currentExchangeTime: etClock,
       };
     }
@@ -547,6 +672,7 @@ export function getMarketSessionInfo(
         scheduleSummary,
         scheduleRows: usRows,
         nextSessionLabel: `Kết thúc phiên chính lúc 16:00 ET (còn ${formatDurationMinutes(960 - etMins)})`,
+        priceBandNote: usPriceBandNote,
         currentExchangeTime: etClock,
       };
     }
@@ -565,6 +691,7 @@ export function getMarketSessionInfo(
         scheduleSummary,
         scheduleRows: usRows,
         nextSessionLabel: `Mở phiên chính lúc 09:30 ET (còn ${formatDurationMinutes(570 - etMins)})`,
+        priceBandNote: usPriceBandNote,
         currentExchangeTime: etClock,
       };
     }
@@ -583,6 +710,7 @@ export function getMarketSessionInfo(
         scheduleSummary,
         scheduleRows: usRows,
         nextSessionLabel: 'Đóng cửa hoàn toàn lúc 20:00 ET',
+        priceBandNote: usPriceBandNote,
         currentExchangeTime: etClock,
       };
     }
@@ -600,6 +728,7 @@ export function getMarketSessionInfo(
       scheduleSummary,
       scheduleRows: usRows,
       nextSessionLabel: 'Phiên chính kế tiếp: 09:30 ET (Pre-Market từ 04:00 ET)',
+      priceBandNote: usPriceBandNote,
       currentExchangeTime: etClock,
     };
   }

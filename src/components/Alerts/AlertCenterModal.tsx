@@ -48,6 +48,10 @@ import {
   isVnDerivativeSymbol,
   isVnStockOrIndexSymbol,
 } from '../../services/vnMarket/vnStockMicrostructure';
+import {
+  isCryptoSymbol,
+  isUsOrGlobalEquitySymbol,
+} from '../../services/globalMarket/globalExecutionEngines';
 
 interface AlertCenterModalProps {
   currentSymbol: MarketSymbol;
@@ -161,6 +165,14 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
       setThresholdInput('6');
     } else if (nextCond === 'VN_FOREIGN_NET_BUY') {
       setThresholdInput('20');
+    } else if (nextCond === 'CRYPTO_FUNDING_EXTREME') {
+      setThresholdInput('0.03');
+    } else if (nextCond === 'CRYPTO_BASIS_SQUEEZE') {
+      setThresholdInput('0.15');
+    } else if (nextCond === 'US_EXTENDED_GAP') {
+      setThresholdInput('1.5');
+    } else if (nextCond === 'US_EARNINGS_WARNING') {
+      setThresholdInput('3');
     }
   };
 
@@ -525,6 +537,72 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
                       </button>
                     </>
                   )}
+
+                  {isCryptoSymbol(currentSymbol) && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickPreset(
+                            'CRYPTO_FUNDING_EXTREME',
+                            0.03,
+                            currentSymbol.symbol,
+                            'Cảnh báo Funding 8h quá nóng / Short Squeeze'
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/35 text-fuchsia-300 text-[11px] font-bold transition"
+                      >
+                        ⚡ Funding |8h| ≥ 0.03%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickPreset(
+                            'CRYPTO_BASIS_SQUEEZE',
+                            0.15,
+                            currentSymbol.symbol,
+                            'Lệch Perp-Spot Basis bất thường'
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/35 text-cyan-300 text-[11px] font-bold transition"
+                      >
+                        🧲 Perp-Spot Basis ≥ 0.15%
+                      </button>
+                    </>
+                  )}
+
+                  {isUsOrGlobalEquitySymbol(currentSymbol) && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickPreset(
+                            'US_EXTENDED_GAP',
+                            1.5,
+                            currentSymbol.symbol,
+                            'Nhảy Gap Pre-Market / After-Hours ≥ 1.5%'
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/35 text-violet-300 text-[11px] font-bold transition"
+                      >
+                        🌅 Gap Pre/After-Hours ≥ 1.5%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQuickPreset(
+                            'US_EARNINGS_WARNING',
+                            3,
+                            currentSymbol.symbol,
+                            'Cảnh báo bẫy Gap BCTC Mỹ trước 3 ngày'
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-rose-300 text-[11px] font-bold transition"
+                      >
+                        📊 Cảnh báo BCTC Mỹ ≤ 3 ngày
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -575,6 +653,10 @@ export const AlertCenterModal: React.FC<AlertCenterModalProps> = ({
                       <option value="VN_NEAR_FLOOR_WARNING">🇻🇳 VN Cảnh báo sát Sàn ≤ (%)</option>
                       <option value="VN_FOREIGN_NET_BUY">🇻🇳 VN Khối ngoại mua ròng ≥ (tỷ)</option>
                       <option value="VN30F_BASIS_EXTREME">🇻🇳 VN30F1M Lệch Basis |điểm| ≥</option>
+                      <option value="CRYPTO_FUNDING_EXTREME">🪙 Crypto |Funding 8h| nóng ≥ (%)</option>
+                      <option value="CRYPTO_BASIS_SQUEEZE">🪙 Crypto |Perp-Spot Basis| ≥ (%)</option>
+                      <option value="US_EXTENDED_GAP">🌎 Mỹ |Gap Pre/After-Hours| ≥ (%)</option>
+                      <option value="US_EARNINGS_WARNING">🌎 Mỹ Sắp ra BCTC ≤ (ngày)</option>
                       <option value="FED_PIVOT_AT_LEAST">Fed Pivot Score ≥ (0–7)</option>
                     </select>
                   </div>

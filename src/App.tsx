@@ -68,12 +68,18 @@ import { TradingChart } from './components/Chart/TradingChart';
 import { IndicatorPanels } from './components/Chart/IndicatorPanels';
 import { AIPredictionCard } from './components/AIInsight/AIPredictionCard';
 import { VnStockQuickCard } from './components/AIInsight/VnStockQuickCard';
+import { GlobalMarketQuickCard } from './components/AIInsight/GlobalMarketQuickCard';
 import { TradeSetupCard } from './components/AIInsight/TradeSetupCard';
 import { RiskCalculator } from './components/AIInsight/RiskCalculator';
 import {
   isVnDerivativeSymbol,
   isVnStockOrIndexSymbol,
 } from './services/vnMarket/vnStockMicrostructure';
+import {
+  isCryptoSymbol,
+  isUsOrGlobalEquitySymbol,
+} from './services/globalMarket/globalExecutionEngines';
+import { getCachedGlobalInsights } from './services/globalMarket/globalMarketInsightsClient';
 import { Watchlist } from './components/Market/Watchlist';
 import { OrderBook } from './components/Market/OrderBook';
 import { SentimentMeter } from './components/Market/SentimentMeter';
@@ -188,6 +194,7 @@ export const App: React.FC = () => {
     kronosGhostCandles: true,
     kronosWalkForward: true,
     vnPriceLimits: true,
+    globalOptionsAndLiqLines: true,
   });
 
   // Kronos Foundation Model Configuration & Optional Cloud Override
@@ -957,12 +964,15 @@ export const App: React.FC = () => {
   }, [macroSnapshot]);
 
   const marketSentiment: MarketSentiment = useMemo(() => {
+    const perSymbolFunding =
+      getCachedGlobalInsights(currentSymbol.symbol)?.perpCarry?.fundingRate8hPct ??
+      liveBtcFundingPct8h;
     return getMarketSentiment(
       currentSymbol,
       candles,
       symbols,
       liveCryptoFng,
-      liveBtcFundingPct8h
+      perSymbolFunding
     );
   }, [currentSymbol, candles, symbols, liveCryptoFng, liveBtcFundingPct8h]);
 
@@ -1326,6 +1336,25 @@ export const App: React.FC = () => {
                         }}
                       />
                     )}
+                    {!isVnStockOrIndexSymbol(currentSymbol) &&
+                      (isCryptoSymbol(currentSymbol) ||
+                        isUsOrGlobalEquitySymbol(currentSymbol)) && (
+                        <GlobalMarketQuickCard
+                          currentSymbol={currentSymbol}
+                          symbols={symbols}
+                          candles={effectiveCandles}
+                          stopLossPrice={
+                            strategyHub?.bestStrategy?.stopLoss ||
+                            tradeSetup?.stopLoss ||
+                            null
+                          }
+                          onSelectSymbol={handleSelectSymbol}
+                          onOpenGlobalMacroTab={() => {
+                            setMacroModalTab('global_markets');
+                            setIsMacroModalOpen(true);
+                          }}
+                        />
+                      )}
                     <AIPredictionCard
                       prediction={aiPrediction}
                       quoteAsset={currentSymbol.quoteAsset}

@@ -70,6 +70,40 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/fred/, ''),
         secure: false,
       },
+      '/api/deribit': {
+        target: 'https://www.deribit.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/deribit/, ''),
+        secure: false,
+      },
+      '/api/cboe': {
+        target: 'https://cdn.cboe.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/cboe/, ''),
+        secure: false,
+      },
+      '/api/coingecko': {
+        target: 'https://api.coingecko.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/coingecko/, ''),
+        secure: false,
+      },
+      '/api/llama': {
+        target: 'https://stablecoins.llama.fi',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/llama/, ''),
+        secure: false,
+      },
+      '/api/nasdaq': {
+        target: 'https://api.nasdaq.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/nasdaq/, ''),
+        secure: false,
+        headers: {
+          Origin: 'https://www.nasdaq.com',
+          Referer: 'https://www.nasdaq.com/',
+        },
+      },
     },
   },
 });

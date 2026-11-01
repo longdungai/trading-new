@@ -211,7 +211,7 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
           <span>Hỗ Trợ / Kháng Cự</span>
         </button>
 
-        {isVnAsset && (
+        {isVnAsset ? (
           <button
             onClick={() => onToggle('vnPriceLimits')}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
@@ -222,6 +222,18 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
             title="Hiển thị đường Giá Trần (Tím), Tham Chiếu (Vàng) & Giá Sàn (Xanh lơ) chuẩn HOSE/HNX/UPCOM trực tiếp trên đồ thị"
           >
             <span>🇻🇳 Trần/TC/Sàn</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => onToggle('globalOptionsAndLiqLines')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+              settings.globalOptionsAndLiqLines !== false
+                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/60 shadow-sm shadow-cyan-500/15'
+                : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+            }`}
+            title="Hiển thị Call Wall / Max Pain / Put Wall (Deribit & CBOE) và Vùng Thanh Lý Đòn Bẩy 25x trên đồ thị"
+          >
+            <span>🧲 Options Wall / Liq</span>
           </button>
         )}
 

@@ -50,6 +50,7 @@ export interface IndicatorSettings {
   kronosGhostCandles: boolean;
   kronosWalkForward: boolean;
   vnPriceLimits?: boolean;
+  globalOptionsAndLiqLines?: boolean;
 }
 
 export type KronosModelKey = 'kronos-mini' | 'kronos-small' | 'kronos-base';

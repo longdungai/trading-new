@@ -1,10 +1,15 @@
-const CACHE_NAME = 'trading-new-shell-v6';
+const CACHE_NAME = 'trading-new-shell-v7';
 
 const BYPASS_PATTERNS = [
   '/api/',
   'binance.com',
   'binance.vision',
   'yahoo.com',
+  'deribit.com',
+  'cboe.com',
+  'coingecko.com',
+  'llama.fi',
+  'nasdaq.com',
   'entrade.com.vn',
   'vndirect.com.vn',
   'simplize.vn',

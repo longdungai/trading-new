@@ -1,5 +1,6 @@
 import { Candle, MarketSentiment, MarketSymbol, Timeframe } from '../../types';
 import { fetchBinanceKlines, fetchBinance24hTickersForSymbols } from './binance';
+import { getMarketSessionInfo } from '../../utils/marketHours';
 
 export const DEFAULT_SYMBOLS: MarketSymbol[] = [
   // ===================== HÀNG HÓA: VÀNG & DẦU MỎ (COMMODITIES) =====================
@@ -1093,15 +1094,25 @@ async function fetchSingleEntradeQuote(sym: string, isIndex: boolean): Promise<L
   return null;
 }
 
-async function refreshMacroAndStockQuotes(symbols: MarketSymbol[]): Promise<void> {
+async function refreshMacroAndStockQuotes(
+  symbols: MarketSymbol[],
+  onlyOpenExchanges: boolean = false
+): Promise<void> {
+  const nowDate = new Date();
   const nonBinanceItems = symbols.filter(s => {
     const upper = s.symbol.toUpperCase();
-    const isBinanceGoldOrCrypto =
-      s.type === 'crypto' || upper === 'PAXGUSDT' || upper === 'XAUUSD' || upper === 'GOLD';
-    return !isBinanceGoldOrCrypto;
+    const isBinance24x7 = s.type === 'crypto' || upper === 'PAXGUSDT';
+    if (isBinance24x7) return false;
+    if (onlyOpenExchanges && macroQuoteCache.has(s.symbol)) {
+      return getMarketSessionInfo(s, nowDate).isOpen;
+    }
+    return true;
   });
 
-  if (nonBinanceItems.length === 0) return;
+  if (nonBinanceItems.length === 0) {
+    lastMacroSyncTs = Date.now();
+    return;
+  }
 
   const yahooMapToAppSymbols = new Map<string, MarketSymbol[]>();
   const directEntradeItems: MarketSymbol[] = [];
@@ -1202,36 +1213,39 @@ async function refreshMacroAndStockQuotes(symbols: MarketSymbol[]): Promise<void
   lastMacroSyncTs = Date.now();
 }
 
-// Fetch real-time quotes across ALL Watchlist markets (Binance Crypto/Gold + Yahoo Commodities/US/HOSE + Entrade VNINDEX/VN30/HNX)
+// Fetch real-time quotes across ALL Watchlist markets (Binance Crypto/PAXG + Yahoo Commodities/US/HOSE + Entrade VNINDEX/VN30/HNX)
 export async function fetchAllLiveMarketQuotes(
   symbols: MarketSymbol[],
   options?: { forceMacroRefresh?: boolean }
 ): Promise<Map<string, LiveQuoteUpdate>> {
   const quotes = new Map<string, LiveQuoteUpdate>();
 
-  // 1. Collect Binance symbols (Crypto + PAXGUSDT for Gold)
-  const binanceQuerySymbols = new Set<string>(['PAXGUSDT']);
+  // 1. Collect Binance 24/7 symbols (Crypto + PAXGUSDT)
+  const binanceQuerySymbols = new Set<string>();
   for (const s of symbols) {
-    if (s.type === 'crypto') {
-      binanceQuerySymbols.add(s.symbol.replace(/[/_-]/g, '').toUpperCase());
+    const upper = s.symbol.toUpperCase();
+    if (s.type === 'crypto' || upper === 'PAXGUSDT') {
+      binanceQuerySymbols.add(upper.replace(/[/_-]/g, ''));
     }
   }
 
   // 2. Check whether Macro / Stock quotes need an initial or periodic refresh
   const hasUncachedNonCrypto = symbols.some(s => {
     const upper = s.symbol.toUpperCase();
-    const isBinance = s.type === 'crypto' || upper === 'PAXGUSDT' || upper === 'XAUUSD' || upper === 'GOLD';
+    const isBinance = s.type === 'crypto' || upper === 'PAXGUSDT';
     return !isBinance && !macroQuoteCache.has(s.symbol) && upper !== 'SJC';
   });
 
-  const shouldRefreshMacro =
+  const isColdOrForced =
     Boolean(options?.forceMacroRefresh) ||
     lastMacroSyncTs === 0 ||
-    hasUncachedNonCrypto ||
-    Date.now() - lastMacroSyncTs >= MACRO_CACHE_TTL_MS;
+    hasUncachedNonCrypto;
+
+  const shouldRefreshMacro =
+    isColdOrForced || Date.now() - lastMacroSyncTs >= MACRO_CACHE_TTL_MS;
 
   const macroTask = shouldRefreshMacro
-    ? (macroSyncInFlight ??= refreshMacroAndStockQuotes(symbols).finally(() => {
+    ? (macroSyncInFlight ??= refreshMacroAndStockQuotes(symbols, !isColdOrForced).finally(() => {
         macroSyncInFlight = null;
       }))
     : Promise.resolve();
@@ -1241,12 +1255,12 @@ export async function fetchAllLiveMarketQuotes(
     macroTask,
   ]);
 
-  // Populate Macro / Stock quotes from freshly updated cache
+  // Populate Macro / Stock / Commodity quotes from freshly updated cache
   for (const [sym, q] of macroQuoteCache.entries()) {
     quotes.set(sym, q);
   }
 
-  // Populate Crypto & Gold quotes from Binance
+  // Populate 24/7 Crypto & PAXGUSDT quotes from Binance
   const binanceMap = new Map<string, LiveQuoteUpdate>();
   if (Array.isArray(tickerList)) {
     const now = Date.now();
@@ -1266,16 +1280,9 @@ export async function fetchAllLiveMarketQuotes(
     }
   }
 
-  const paxgQuote = binanceMap.get('PAXGUSDT');
   for (const s of symbols) {
     const upper = s.symbol.toUpperCase();
-    if (upper === 'XAUUSD' || upper === 'GOLD' || upper === 'PAXGUSDT') {
-      if (paxgQuote) {
-        quotes.set(s.symbol, paxgQuote);
-      }
-      continue;
-    }
-    if (s.type === 'crypto') {
+    if (s.type === 'crypto' || upper === 'PAXGUSDT') {
       const binKey = upper.replace(/[/_-]/g, '');
       const live = binanceMap.get(binKey);
       if (live) {
@@ -1319,17 +1326,13 @@ export async function fetchMarketData(
   symbolObj: MarketSymbol,
   timeframe: Timeframe = '1h'
 ): Promise<Candle[]> {
-  // 1. Gold (XAUUSD / PAXGUSDT) or Crypto -> Live Binance API
+  // 1. 24/7 Crypto & Tokenized Gold (PAXGUSDT) -> Live Binance API
   const isBinanceEligible =
-    symbolObj.type === 'crypto' ||
-    symbolObj.symbol === 'PAXGUSDT' ||
-    symbolObj.symbol === 'XAUUSD' ||
-    symbolObj.symbol === 'GOLD';
+    symbolObj.type === 'crypto' || symbolObj.symbol.toUpperCase() === 'PAXGUSDT';
 
   if (isBinanceEligible) {
     try {
-      const binSymbol = symbolObj.symbol === 'XAUUSD' || symbolObj.symbol === 'GOLD' ? 'PAXGUSDT' : symbolObj.symbol;
-      const klines = await fetchBinanceKlines(binSymbol, timeframe, 250);
+      const klines = await fetchBinanceKlines(symbolObj.symbol, timeframe, 250);
       if (klines && klines.length > 0) {
         return klines;
       }
@@ -1338,7 +1341,7 @@ export async function fetchMarketData(
     }
   }
 
-  // 2. Vietnam Stocks/Indices (VNINDEX, VN30, HOSE/HNX), Commodities (Oil/Silver), or US Stocks -> Yahoo Finance / DNSE Entrade
+  // 2. Vietnam Stocks/Indices (VNINDEX, VN30, HOSE/HNX), Spot/COMEX Commodities (XAUUSD, Oil, Silver), or US Stocks -> Yahoo Finance / DNSE Entrade
   if (
     symbolObj.type === 'vn30' ||
     symbolObj.type === 'stock' ||
@@ -1422,12 +1425,103 @@ export function generateRealisticKlines(
   }));
 }
 
-export function getMarketSentiment(): MarketSentiment {
+let cachedCryptoFng: { value: number; ts: number } | null = null;
+
+export async function fetchLiveCryptoFearAndGreed(): Promise<number | null> {
+  if (cachedCryptoFng && Date.now() - cachedCryptoFng.ts < 600_000) {
+    return cachedCryptoFng.value;
+  }
+  try {
+    const res = await fetch('https://api.alternative.me/fng/?limit=1');
+    if (res.ok) {
+      const json = await res.json();
+      const val = parseInt(json?.data?.[0]?.value, 10);
+      if (Number.isFinite(val) && val >= 0 && val <= 100) {
+        cachedCryptoFng = { value: val, ts: Date.now() };
+        return val;
+      }
+    }
+  } catch {
+    // fallback to calculated RSI + market breadth if offline
+  }
+  return cachedCryptoFng ? cachedCryptoFng.value : null;
+}
+
+function classifySentimentScore(score: number): MarketSentiment['sentimentClassification'] {
+  if (score >= 75) return 'Extreme Greed';
+  if (score >= 56) return 'Greed';
+  if (score >= 45) return 'Neutral';
+  if (score >= 25) return 'Fear';
+  return 'Extreme Fear';
+}
+
+export function getMarketSentiment(
+  currentSymbol?: MarketSymbol,
+  candles: Candle[] = [],
+  symbols: MarketSymbol[] = [],
+  liveCryptoFng?: number | null
+): MarketSentiment {
+  // 1. Compute real RSI(14) and Realized Volatility from actual historical candles
+  let rsi14 = 50;
+  let avgRangePct = 1.5;
+
+  if (candles.length >= 15) {
+    let gains = 0;
+    let losses = 0;
+    for (let i = candles.length - 14; i < candles.length; i++) {
+      const diff = candles[i].close - candles[i - 1].close;
+      if (diff >= 0) gains += diff;
+      else losses -= diff;
+    }
+    const rs = losses === 0 ? 100 : gains / losses;
+    rsi14 = Math.round(100 - 100 / (1 + rs));
+
+    const recent = candles.slice(-20);
+    const sumRange = recent.reduce(
+      (acc, c) => acc + (c.close > 0 ? ((c.high - c.low) / c.close) * 100 : 0),
+      0
+    );
+    avgRangePct = parseFloat((sumRange / recent.length).toFixed(2));
+  }
+
+  // 2. Compute real Market Breadth across peer group in Watchlist
+  const peerList =
+    currentSymbol && symbols.length > 0
+      ? symbols.filter(s =>
+          isVietnamSymbol(currentSymbol)
+            ? isVietnamSymbol(s)
+            : currentSymbol.type === 'crypto'
+            ? s.type === 'crypto'
+            : s.type === currentSymbol.type
+        )
+      : symbols;
+
+  const activeList = peerList.length > 0 ? peerList : symbols;
+  const advancers = activeList.filter(s => s.change24h > 0).length;
+  const decliners = activeList.filter(s => s.change24h < 0).length;
+  const totalTracked = activeList.length;
+  const breadthRatio = totalTracked > 0 ? advancers / totalTracked : 0.5;
+
+  const isCrypto = currentSymbol?.type === 'crypto' || currentSymbol?.symbol === 'PAXGUSDT';
+  const useLiveFng = isCrypto && typeof liveCryptoFng === 'number';
+
+  const compositeScore = useLiveFng
+    ? liveCryptoFng
+    : Math.max(0, Math.min(100, Math.round(rsi14 * 0.6 + breadthRatio * 100 * 0.4)));
+
   return {
-    fearAndGreedIndex: 74,
-    sentimentClassification: 'Greed',
-    longShortRatio: 1.38,
-    fundingRate: 0.014,
-    volatilityIndex: 17.8,
+    fearAndGreedIndex: compositeScore,
+    sentimentClassification: classifySentimentScore(compositeScore),
+    longShortRatio: decliners > 0 ? parseFloat((advancers / decliners).toFixed(2)) : advancers,
+    fundingRate: 0,
+    volatilityIndex: avgRangePct,
+    isLiveCryptoFng: useLiveFng,
+    sourceLabel: useLiveFng
+      ? 'Alternative.me Crypto F&G (Thực tế)'
+      : 'Tính từ RSI(14) & Độ rộng nhóm mã thực tế',
+    advancers,
+    decliners,
+    totalTracked,
+    rsi14,
   };
 }

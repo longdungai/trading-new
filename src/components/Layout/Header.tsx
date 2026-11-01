@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { MarketSymbol, SignalAction, Timeframe } from '../../types';
 import { formatPercent, formatPrice, formatVolume } from '../../utils/formatters';
+import { getMarketSessionInfo } from '../../utils/marketHours';
 
 interface HeaderProps {
   currentSymbol: MarketSymbol;
@@ -47,6 +48,14 @@ export const Header: React.FC<HeaderProps> = ({
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'commodity' | 'crypto' | 'vn30' | 'stock'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [nowClock, setNowClock] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNowClock(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const session = getMarketSessionInfo(currentSymbol, nowClock);
 
   const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1D', '1W', '1M'];
 
@@ -119,9 +128,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-1 text-[9px] text-slate-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-emerald-400 font-mono font-semibold tracking-wider">
-                  LIVE TERMINAL
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    session.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  }`}
+                />
+                <span
+                  className={`font-mono font-semibold tracking-wider ${
+                    session.isOpen ? 'text-emerald-400' : 'text-amber-300'
+                  }`}
+                >
+                  {session.isOpen ? 'MARKET OPEN' : 'MARKET CLOSED'}
                 </span>
               </div>
             </div>
@@ -166,17 +183,36 @@ export const Header: React.FC<HeaderProps> = ({
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {/* Real-Time Price & 24h Institutional Metrics */}
+          {/* Real-Time Price & Official Session Metrics */}
           <div className="flex items-center gap-3 font-mono tabular-nums pl-0.5">
             <div>
-              <div
-                className={`text-sm sm:text-base font-extrabold leading-tight ${
-                  isPositive ? 'text-emerald-400' : 'text-rose-400'
-                }`}
-              >
-                {prefix}
-                {formatPrice(currentSymbol.price)}
-                {suffix}
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`text-sm sm:text-base font-extrabold leading-tight ${
+                    isPositive ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {prefix}
+                  {formatPrice(currentSymbol.price)}
+                  {suffix}
+                </span>
+                <span
+                  title={`${session.statusHeadline}\n${session.scheduleSummary}\n${session.nextSessionLabel}`}
+                  className={`hidden lg:inline-flex items-center gap-1 text-[8.5px] font-sans font-bold px-1.5 py-0.5 rounded border ${
+                    session.isOpen
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                      : session.state === 'LUNCH_BREAK'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/35'
+                      : 'bg-slate-800/90 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      session.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
+                    }`}
+                  />
+                  {session.badgeText}
+                </span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span
@@ -204,11 +240,11 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* 24h High / Low / Vol (Visible on Desktop >= 1280px) */}
+            {/* Session High / Low / Vol (Visible on Desktop >= 1536px) */}
             <div className="hidden 2xl:flex items-center gap-3.5 pl-3 border-l border-slate-800/80 text-[10px]">
               <div>
                 <div className="text-slate-500 font-sans text-[9px] uppercase font-semibold">
-                  Đỉnh 24h
+                  {session.is24x7 ? 'Đỉnh 24h' : 'Cao Phiên'}
                 </div>
                 <div className="text-emerald-300 font-semibold">
                   {prefix}
@@ -218,7 +254,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div>
                 <div className="text-slate-500 font-sans text-[9px] uppercase font-semibold">
-                  Đáy 24h
+                  {session.is24x7 ? 'Đáy 24h' : 'Thấp Phiên'}
                 </div>
                 <div className="text-rose-300 font-semibold">
                   {prefix}
@@ -228,7 +264,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div>
                 <div className="text-slate-500 font-sans text-[9px] uppercase font-semibold">
-                  KL 24h
+                  {session.is24x7 ? 'KL 24h' : 'GTGD Phiên'}
                 </div>
                 <div className="text-slate-200 font-semibold">
                   {formatVolume(currentSymbol.volume24h)}

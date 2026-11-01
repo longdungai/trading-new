@@ -17,6 +17,7 @@ import {
 import {
   DEFAULT_SYMBOLS,
   fetchAllLiveMarketQuotes,
+  fetchLiveCryptoFearAndGreed,
   fetchMarketData,
   getMarketSentiment,
 } from './services/api/marketData';
@@ -270,11 +271,11 @@ export const App: React.FC = () => {
     }
   };
 
-  // Real-time Watchlist WebSocket stream for all Crypto + Gold (PAXGUSDT) symbols
+  // Real-time Watchlist WebSocket stream strictly for 24/7 Binance Crypto + PAXGUSDT symbols
   const binanceWatchlistKey = useMemo(() => {
-    const list = ['PAXGUSDT'];
+    const list: string[] = [];
     for (const s of symbols) {
-      if (s.type === 'crypto') {
+      if (s.type === 'crypto' || s.symbol.toUpperCase() === 'PAXGUSDT') {
         list.push(s.symbol.replace(/[/_-]/g, '').toUpperCase());
       }
     }
@@ -288,16 +289,12 @@ export const App: React.FC = () => {
     const streamSymbols = binanceWatchlistKey.split(',').filter(Boolean);
 
     watchlistWsRef.current.connect(streamSymbols, (batch) => {
-      const paxg = batch.get('PAXGUSDT');
-
       setSymbols(prev => {
         let changed = false;
         const next = prev.map(s => {
           const upper = s.symbol.toUpperCase();
           const tick =
-            upper === 'XAUUSD' || upper === 'GOLD' || upper === 'PAXGUSDT'
-              ? paxg
-              : s.type === 'crypto'
+            s.type === 'crypto' || upper === 'PAXGUSDT'
               ? batch.get(upper.replace(/[/_-]/g, ''))
               : undefined;
           if (!tick || (s.price === tick.price && s.change24h === tick.change24h)) {
@@ -322,9 +319,7 @@ export const App: React.FC = () => {
 
       const curUpper = currentSymbolRef.current.symbol.toUpperCase();
       const activeTick =
-        curUpper === 'XAUUSD' || curUpper === 'GOLD' || curUpper === 'PAXGUSDT'
-          ? paxg
-          : currentSymbolRef.current.type === 'crypto'
+        currentSymbolRef.current.type === 'crypto' || curUpper === 'PAXGUSDT'
           ? batch.get(curUpper.replace(/[/_-]/g, ''))
           : undefined;
       if (activeTick) {
@@ -404,21 +399,19 @@ export const App: React.FC = () => {
       }
 
       const isDepthSupported =
-        symbolObj.type === 'crypto' ||
-        symbolObj.symbol === 'PAXGUSDT' ||
-        symbolObj.symbol === 'XAUUSD' ||
-        symbolObj.symbol === 'GOLD';
+        symbolObj.type === 'crypto' || symbolObj.symbol.toUpperCase() === 'PAXGUSDT';
 
       if (isDepthSupported && currentSymbolRef.current.symbol === symbolObj.symbol) {
         try {
-          const depthSymbol = symbolObj.symbol === 'XAUUSD' || symbolObj.symbol === 'GOLD' ? 'PAXGUSDT' : symbolObj.symbol;
-          const depth = await fetchBinanceOrderBook(depthSymbol, 12);
+          const depth = await fetchBinanceOrderBook(symbolObj.symbol, 10);
           if (currentSymbolRef.current.symbol === symbolObj.symbol) {
             setOrderBook(depth);
           }
         } catch (e) {
           console.warn('Depth fetch error', e);
         }
+      } else if (!isDepthSupported && currentSymbolRef.current.symbol === symbolObj.symbol) {
+        setOrderBook(null);
       }
     } catch (e) {
       console.error('Error fetching market data', e);
@@ -445,20 +438,18 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadData(currentSymbol, timeframe);
 
-    // Setup Binance WebSocket for real-time crypto & PAXG gold price updates
-    const streamSymbol = currentSymbol.symbol === 'XAUUSD' || currentSymbol.symbol === 'GOLD' ? 'PAXGUSDT' : currentSymbol.symbol;
+    // Setup Binance WebSocket & real Level-2 OrderBook polling strictly for 24/7 Crypto & PAXGUSDT
     const isBinanceStreamable =
-      currentSymbol.type === 'crypto' ||
-      currentSymbol.symbol === 'PAXGUSDT' ||
-      currentSymbol.symbol === 'XAUUSD' ||
-      currentSymbol.symbol === 'GOLD';
+      currentSymbol.type === 'crypto' || currentSymbol.symbol.toUpperCase() === 'PAXGUSDT';
+
+    let depthInterval: ReturnType<typeof setInterval> | null = null;
 
     if (isBinanceStreamable) {
       if (!wsRef.current) {
         wsRef.current = new BinanceWebSocket();
       }
 
-      wsRef.current.connect(streamSymbol, timeframe, (newCandle) => {
+      wsRef.current.connect(currentSymbol.symbol, timeframe, (newCandle) => {
         setCandles(prev => {
           if (prev.length === 0) return [newCandle];
           const last = prev[prev.length - 1];
@@ -484,11 +475,29 @@ export const App: React.FC = () => {
           return next;
         });
       });
+
+      const activeSym = currentSymbol.symbol;
+      depthInterval = setInterval(async () => {
+        if (document.visibilityState === 'hidden') return;
+        try {
+          const depth = await fetchBinanceOrderBook(activeSym, 10);
+          if (currentSymbolRef.current.symbol === activeSym) {
+            setOrderBook(depth);
+          }
+        } catch {
+          // keep last valid real depth snapshot
+        }
+      }, 4000);
+    } else {
+      setOrderBook(null);
     }
 
     return () => {
       if (wsRef.current) {
         wsRef.current.disconnect();
+      }
+      if (depthInterval) {
+        clearInterval(depthInterval);
       }
     };
   }, [currentSymbol.symbol, timeframe]);
@@ -574,9 +583,21 @@ export const App: React.FC = () => {
     return generateTradeSetup(currentSymbol.symbol, candles, timeframe);
   }, [currentSymbol.symbol, candles, timeframe]);
 
-  const marketSentiment: MarketSentiment = useMemo(() => {
-    return getMarketSentiment();
+  const [liveCryptoFng, setLiveCryptoFng] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchLiveCryptoFearAndGreed().then(val => {
+      if (active && val !== null) setLiveCryptoFng(val);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  const marketSentiment: MarketSentiment = useMemo(() => {
+    return getMarketSentiment(currentSymbol, candles, symbols, liveCryptoFng);
+  }, [currentSymbol, candles, symbols, liveCryptoFng]);
 
   const isVND = Boolean(
     currentSymbol?.quoteAsset === 'VND' ||
@@ -674,6 +695,7 @@ export const App: React.FC = () => {
                 currentPrice={currentSymbol.price}
                 symbol={currentSymbol.symbol}
                 quoteAsset={currentSymbol.quoteAsset}
+                marketSymbol={currentSymbol}
               />
             </aside>
           )}
@@ -871,6 +893,7 @@ export const App: React.FC = () => {
                       currentPrice={currentSymbol.price}
                       symbol={currentSymbol.symbol}
                       quoteAsset={currentSymbol.quoteAsset}
+                      marketSymbol={currentSymbol}
                     />
                   </div>
                 )}

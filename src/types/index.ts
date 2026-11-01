@@ -283,7 +283,13 @@ export interface OrderBook {
 export interface MarketSentiment {
   fearAndGreedIndex: number; // 0 - 100
   sentimentClassification: 'Extreme Fear' | 'Fear' | 'Neutral' | 'Greed' | 'Extreme Greed';
-  longShortRatio: number; // e.g. 1.25
-  fundingRate: number; // e.g. 0.01%
+  longShortRatio: number;
+  fundingRate: number;
   volatilityIndex: number;
+  isLiveCryptoFng?: boolean;
+  sourceLabel?: string;
+  advancers?: number;
+  decliners?: number;
+  totalTracked?: number;
+  rsi14?: number;
 }

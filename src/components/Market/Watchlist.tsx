@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MarketSymbol, MarketType } from '../../types';
 import {
   Star,
@@ -20,6 +20,7 @@ import {
   Gem,
 } from 'lucide-react';
 import { formatPercent, formatPrice } from '../../utils/formatters';
+import { getMarketSessionInfo } from '../../utils/marketHours';
 import { GLOBAL_SYMBOL_CATALOG, CatalogItem } from '../../services/api/symbolCatalog';
 import { analyzeAccumulationZone } from '../../services/ai/accumulationScanner';
 import { AccumulationRadarModal } from './AccumulationRadarModal';
@@ -51,6 +52,12 @@ export const Watchlist: React.FC<WatchlistProps> = ({
   const [search, setSearch] = useState('');
   const [isManageMode, setIsManageMode] = useState<boolean>(false);
   const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
+  const [nowClock, setNowClock] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNowClock(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -291,6 +298,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
             const isVND = s.quoteAsset === 'VND';
             const isCommodity = s.type === 'commodity' || s.symbol.includes('XAU') || s.symbol.includes('OIL') || s.symbol.includes('PAXG');
             const acc = accumulationMap.get(s.symbol);
+            const session = getMarketSessionInfo(s, nowClock);
 
             return (
               <div
@@ -306,7 +314,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                     : 'hover:bg-[#101827] border-l-[3px] border-transparent'
                 }`}
               >
-                {/* Left Part: Star + Name + Gom Badge */}
+                {/* Left Part: Star + Name + Session & Gom Badge */}
                 <div className="flex items-center gap-2 min-w-0">
                   <button
                     onClick={(e) => {
@@ -334,6 +342,28 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                           : 'bg-indigo-500/15 text-indigo-400'
                       }`}>
                         {isCommodity ? 'HH' : s.type === 'vn30' ? 'VN30' : s.type}
+                      </span>
+
+                      <span
+                        title={`${session.exchangeName}: ${session.statusHeadline}\n${session.nextSessionLabel}`}
+                        className={`text-[7.5px] px-1 py-0.2 rounded font-semibold flex items-center gap-0.5 ${
+                          session.isOpen
+                            ? 'bg-emerald-500/12 text-emerald-400'
+                            : session.state === 'LUNCH_BREAK'
+                            ? 'bg-amber-500/15 text-amber-300'
+                            : 'bg-slate-800/90 text-slate-400'
+                        }`}
+                      >
+                        <span
+                          className={`w-1 h-1 rounded-full ${
+                            session.isOpen
+                              ? 'bg-emerald-400'
+                              : session.state === 'LUNCH_BREAK'
+                              ? 'bg-amber-400'
+                              : 'bg-slate-500'
+                          }`}
+                        />
+                        {session.shortBadge}
                       </span>
 
                       {/* Gom Badge */}

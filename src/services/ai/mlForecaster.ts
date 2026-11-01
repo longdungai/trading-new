@@ -1,8 +1,17 @@
-import { AIPrediction, AIPredictionScenario, Candle, KronosConfig } from '../../types';
+import {
+  AIPrediction,
+  AIPredictionScenario,
+  Candle,
+  KronosConfig,
+  KronosVolumeProfile,
+  Timeframe,
+} from '../../types';
 import { calculateEMA, calculateMACD, calculateRSI } from '../indicators';
 import {
   KRONOS_MODELS,
   KronosPredictionOutput,
+  evaluateKronosMTFConfluence,
+  evaluateKronosWalkForward,
   loadKronosConfig,
   runKronosLocalEngine,
 } from './kronosClient';
@@ -12,7 +21,9 @@ export function generateAIPrediction(
   candles: Candle[],
   forecastBars: number = 24,
   customKronosConfig?: KronosConfig,
-  cloudOverride?: KronosPredictionOutput | null
+  cloudOverride?: KronosPredictionOutput | null,
+  activeTimeframe: Timeframe = '1h',
+  realMtfMap?: Partial<Record<Timeframe, Candle[]>>
 ): AIPrediction {
   const cfg = customKronosConfig || loadKronosConfig();
   const effectiveBars = cfg.predLen || forecastBars || 24;
@@ -238,6 +249,58 @@ export function generateAIPrediction(
       : currentPrice * 0.03;
   const volForecast = parseFloat(((spreadEnd / Math.max(1e-8, currentPrice)) * 50).toFixed(2));
 
+  // 4. Phase 2.1: Historical Walk-Forward Verification (Back-Projection on closed bars)
+  const walkForward = evaluateKronosWalkForward(candles, cfg);
+
+  // 5. Phase 2.2: 6D Predicted Volume Histogram & Liquidity Surge Profile
+  let volumeProfile: KronosVolumeProfile | undefined = undefined;
+  if (kronosOut.predictedCandles && kronosOut.predictedCandles.length > 0) {
+    const safeAvgHistVol = Math.max(1, avgVol);
+    const predVols = kronosOut.predictedCandles.map(c => c.volume || 0);
+    const avgPredictedVolume = predVols.reduce((s, v) => s + v, 0) / predVols.length;
+    let peakPredictedVolume = 0;
+    let peakBarOffset = 1;
+    predVols.forEach((v, idx) => {
+      if (v > peakPredictedVolume) {
+        peakPredictedVolume = v;
+        peakBarOffset = idx + 1;
+      }
+    });
+
+    const volumeChangePercent = parseFloat(
+      (((avgPredictedVolume - safeAvgHistVol) / safeAvgHistVol) * 100).toFixed(1)
+    );
+    const peakRatio = peakPredictedVolume / safeAvgHistVol;
+    const surgeDetected = peakRatio >= 1.38 || volumeChangePercent >= 22;
+
+    const liquidityRegime: KronosVolumeProfile['liquidityRegime'] = surgeDetected
+      ? 'SURGE'
+      : volumeChangePercent >= 6
+      ? 'ACCUMULATION'
+      : volumeChangePercent <= -18
+      ? 'DRY_UP'
+      : 'NORMAL';
+
+    volumeProfile = {
+      avgHistoricalVolume: Math.round(safeAvgHistVol),
+      avgPredictedVolume: Math.round(avgPredictedVolume),
+      peakPredictedVolume: Math.round(peakPredictedVolume),
+      peakBarOffset,
+      volumeChangePercent,
+      surgeDetected,
+      liquidityRegime,
+    };
+
+    if (surgeDetected) {
+      aiReasoning.push(
+        `Cảnh báo Thanh Khoản 6D: Kronos dự báo bùng nổ khối lượng (${peakRatio.toFixed(2)}x TB) quanh nến tương lai thứ +${peakBarOffset}.`
+      );
+    }
+  }
+
+  // 6. Phase 2.3: Multi-Timeframe Kronos Confluence Matrix (15m • 1h • 4h • 1D)
+  const mtfConfluence = evaluateKronosMTFConfluence(candles, activeTimeframe, cfg, realMtfMap);
+
   return {
     symbol,
     currentPrice,
@@ -250,6 +313,9 @@ export function generateAIPrediction(
     medianForecast: kronosOut.times.map((t, i) => ({ time: t, price: kronosOut.p50[i] })),
     predictedCandles: kronosOut.predictedCandles,
     kronosMeta: kronosOut.meta,
+    walkForward,
+    volumeProfile,
+    mtfConfluence,
     scenarios,
     volatilityForecast: volForecast,
     aiReasoning,

@@ -45,6 +45,7 @@ export interface IndicatorSettings {
   aiForecast: boolean;
   monteCarloPaths: boolean;
   kronosGhostCandles: boolean;
+  kronosWalkForward: boolean;
 }
 
 export type KronosModelKey = 'kronos-mini' | 'kronos-small' | 'kronos-base';
@@ -67,6 +68,60 @@ export interface KronosMetadata {
   s2Bits: number;
   tokenEntropy: number;
   latencyMs: number;
+}
+
+export interface KronosWalkForwardValidation {
+  holdoutBars: number;
+  directionalAccuracy: number; // 0 - 100%
+  mapePercent: number;
+  rmse: number;
+  anchorTime: number;
+  anchorPrice: number;
+  backtestPath: { time: number; price: number }[];
+  grade: 'EXCELLENT' | 'GOOD' | 'MODERATE';
+}
+
+export interface KronosVolumeProfile {
+  avgHistoricalVolume: number;
+  avgPredictedVolume: number;
+  peakPredictedVolume: number;
+  peakBarOffset: number;
+  volumeChangePercent: number;
+  surgeDetected: boolean;
+  liquidityRegime: 'SURGE' | 'ACCUMULATION' | 'NORMAL' | 'DRY_UP';
+}
+
+export interface KronosMTFItem {
+  timeframe: '15m' | '1h' | '4h' | '1D';
+  label: string;
+  direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  expectedReturnPct: number;
+  bullProb: number;
+  confidence: number;
+  isRealFetched?: boolean;
+}
+
+export interface KronosMTFConfluence {
+  items: KronosMTFItem[];
+  alignmentCount: number;
+  dominantDirection: 'BULLISH' | 'BEARISH' | 'MIXED';
+  summaryLabel: string;
+}
+
+export interface KronosAlphaRankItem {
+  symbol: string;
+  name: string;
+  type: MarketType;
+  quoteAsset: string;
+  currentPrice: number;
+  change24h: number;
+  volume24h: number;
+  expectedReturn24Bar: number;
+  targetPriceP50: number;
+  tailRiskP05Pct: number;
+  bullProbability: number;
+  alphaScore: number;
+  signalTag: 'TOP_LONG' | 'ACCUMULATE' | 'NEUTRAL' | 'REDUCE' | 'TOP_SHORT';
 }
 
 export interface SupportResistanceLevel {
@@ -124,6 +179,9 @@ export interface AIPrediction {
   medianForecast: { time: number; price: number }[]; // Kronos P50
   predictedCandles: Candle[]; // Kronos Full OHLCV Ghost Candlesticks
   kronosMeta: KronosMetadata;
+  walkForward?: KronosWalkForwardValidation;
+  volumeProfile?: KronosVolumeProfile;
+  mtfConfluence?: KronosMTFConfluence;
   scenarios: AIPredictionScenario[];
   volatilityForecast: number;
   aiReasoning: string[];

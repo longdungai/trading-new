@@ -107,11 +107,14 @@ export const App: React.FC = () => {
     aiForecast: true,
     monteCarloPaths: false,
     kronosGhostCandles: true,
+    kronosWalkForward: true,
   });
 
   // Kronos Foundation Model Configuration & Optional Cloud Override
   const [kronosConfig, setKronosConfig] = useState<KronosConfig>(() => loadKronosConfig());
   const [kronosCloudOutput, setKronosCloudOutput] = useState<KronosPredictionOutput | null>(null);
+  const [mtfCandlesMap, setMtfCandlesMap] = useState<Partial<Record<Timeframe, Candle[]>>>({});
+  const mtfCacheRef = useRef<Map<string, { ts: number; map: Partial<Record<Timeframe, Candle[]>> }>>(new Map());
 
   const handleUpdateKronosConfig = useCallback((nextCfg: KronosConfig) => {
     setKronosConfig(nextCfg);
@@ -369,9 +372,46 @@ export const App: React.FC = () => {
     };
   }, [currentSymbol.symbol, candles.length, kronosConfig]);
 
+  // Background Multi-Timeframe Klines Fetcher (15m • 1h • 4h • 1D) with 60s per-symbol cache
+  useEffect(() => {
+    let active = true;
+    const symKey = currentSymbol.symbol;
+    const cached = mtfCacheRef.current.get(symKey);
+
+    if (cached && Date.now() - cached.ts < 60000) {
+      setMtfCandlesMap(cached.map);
+      return;
+    }
+
+    const mtfList: Timeframe[] = ['15m', '1h', '4h', '1D'];
+    Promise.allSettled(mtfList.map(tf => fetchMarketData(currentSymbol, tf))).then(results => {
+      if (!active) return;
+      const nextMap: Partial<Record<Timeframe, Candle[]>> = {};
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled' && res.value && res.value.length >= 28) {
+          nextMap[mtfList[idx]] = res.value;
+        }
+      });
+      mtfCacheRef.current.set(symKey, { ts: Date.now(), map: nextMap });
+      setMtfCandlesMap(nextMap);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [currentSymbol.symbol]);
+
   const aiPrediction: AIPrediction | null = useMemo(() => {
-    return generateAIPrediction(currentSymbol.symbol, candles, kronosConfig.predLen, kronosConfig, kronosCloudOutput);
-  }, [currentSymbol.symbol, candles, kronosConfig, kronosCloudOutput]);
+    return generateAIPrediction(
+      currentSymbol.symbol,
+      candles,
+      kronosConfig.predLen,
+      kronosConfig,
+      kronosCloudOutput,
+      timeframe,
+      mtfCandlesMap
+    );
+  }, [currentSymbol.symbol, candles, kronosConfig, kronosCloudOutput, timeframe, mtfCandlesMap]);
 
   const strategyHub: StrategyAnalysisHub = useMemo(() => {
     return generateStrategyHub(currentSymbol.symbol, candles, timeframe);
@@ -432,6 +472,7 @@ export const App: React.FC = () => {
             symbols={symbols}
             onSelectSymbol={handleSelectSymbol}
             onClose={() => setActiveView('chart')}
+            kronosModelKey={kronosConfig.modelKey}
           />
         </div>
 
@@ -546,6 +587,10 @@ export const App: React.FC = () => {
                     onUpdateKronosConfig={handleUpdateKronosConfig}
                     showGhostCandles={settings.kronosGhostCandles}
                     onToggleGhostCandles={() => handleToggleIndicator('kronosGhostCandles')}
+                    showWalkForward={settings.kronosWalkForward}
+                    onToggleWalkForward={() => handleToggleIndicator('kronosWalkForward')}
+                    activeTimeframe={timeframe}
+                    onSelectTimeframe={setTimeframe}
                   />
                   <TradeSetupCard
                     strategyHub={strategyHub}
@@ -563,6 +608,8 @@ export const App: React.FC = () => {
                     currentPrice={currentSymbol.price}
                     stopLossPrice={strategyHub?.bestStrategy?.stopLoss || tradeSetup?.stopLoss || currentSymbol.price * 0.95}
                     quoteAsset={currentSymbol.quoteAsset}
+                    aiPrediction={aiPrediction}
+                    strategyHub={strategyHub}
                   />
                   <TradeSetupCard
                     strategyHub={strategyHub}

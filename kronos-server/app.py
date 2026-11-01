@@ -268,6 +268,67 @@ def predict_batch_klines(req: BatchPredictRequest):
     }
 
 
+@app.post("/api/kronos/walk-forward")
+def walk_forward_verify(req: PredictRequest):
+    if len(req.candles) < 45:
+        raise HTTPException(status_code=400, detail="Need at least 45 historical candles for walk-forward verification")
+
+    holdout = min(24, max(12, min(req.pred_len, len(req.candles) // 4)))
+    history = req.candles[:-holdout]
+    actual = req.candles[-holdout:]
+
+    predictor, cfg = get_or_load_predictor(req.model_key)
+    lookback = min(len(history), cfg["context_length"] - holdout)
+    sliced = history[-lookback:]
+
+    df = pd.DataFrame([
+        {
+            "open": c.open,
+            "high": c.high,
+            "low": c.low,
+            "close": c.close,
+            "volume": c.volume or 0.0
+        }
+        for c in sliced
+    ])
+
+    x_timestamp = pd.Series(pd.to_datetime([c.time for c in sliced], unit="s"), name="timestamps")
+    y_timestamp = pd.Series(pd.to_datetime([c.time for c in actual], unit="s"), name="timestamps")
+
+    _, quantiles, _ = predictor.predict_quantiles(
+        df=df,
+        x_timestamp=x_timestamp,
+        y_timestamp=y_timestamp,
+        pred_len=holdout,
+        T=req.temperature,
+        top_p=req.top_p,
+        sample_count=req.sample_count,
+        verbose=False
+    )
+
+    p50 = np.array(quantiles["p50"], dtype=np.float64)
+    y_true = np.array([c.close for c in actual], dtype=np.float64)
+    anchor_close = float(sliced[-1].close)
+
+    mape = float(np.mean(np.abs(p50 - y_true) / np.maximum(1e-8, y_true)) * 100.0)
+    rmse = float(np.sqrt(np.mean((p50 - y_true) ** 2)))
+    dir_hits = np.mean(((p50 - anchor_close) * (y_true - anchor_close)) >= 0) * 100.0
+
+    backtest_path = [{"time": int(sliced[-1].time), "price": round(anchor_close, 4)}]
+    for i, c in enumerate(actual):
+        backtest_path.append({"time": int(c.time), "price": round(float(p50[i]), 4)})
+
+    return {
+        "success": True,
+        "symbol": req.symbol,
+        "holdout_bars": holdout,
+        "directional_accuracy": round(float(dir_hits), 1),
+        "mape_percent": round(mape, 2),
+        "rmse": round(rmse, 4),
+        "backtest_path": backtest_path
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 7860))

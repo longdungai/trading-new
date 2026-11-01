@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   Zap,
   Activity,
+  History,
 } from 'lucide-react';
 
 interface IndicatorToolbarProps {
@@ -113,6 +114,18 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
       >
         <BrainCircuit className="w-3 h-3 text-cyan-400" />
         <span>Nến AI Kronos</span>
+      </button>
+
+      <button
+        onClick={() => onToggle('kronosWalkForward')}
+        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-bold border shrink-0 transition ${
+          settings.kronosWalkForward
+            ? 'bg-amber-500/25 text-amber-300 border-amber-400/70 shadow-sm shadow-amber-500/20'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <History className="w-3 h-3 text-amber-400" />
+        <span>Kiểm Định Quá Khứ AI</span>
       </button>
 
       <button

@@ -56,6 +56,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
   // AI Forecast Series References
   const kronosCandleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const kronosWalkForwardRef = useRef<ISeriesApi<'Line'> | null>(null);
   const aiBullishRef = useRef<ISeriesApi<'Line'> | null>(null);
   const aiBaseRef = useRef<ISeriesApi<'Line'> | null>(null);
   const aiBearishRef = useRef<ISeriesApi<'Line'> | null>(null);
@@ -168,6 +169,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       wickDownColor: '#fb923c',
     });
 
+    // Kronos Walk-Forward Historical Back-Projection Line
+    kronosWalkForwardRef.current = chart.addLineSeries({
+      color: '#fbbf24',
+      lineWidth: 2,
+      lineStyle: LineStyle.Dashed,
+      title: 'AI Kiểm Định',
+    });
+
     // AI Lines
     aiBullishRef.current = chart.addLineSeries({ color: '#10b981', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Kronos P85' });
     aiBaseRef.current = chart.addLineSeries({ color: '#38bdf8', lineWidth: 2, lineStyle: LineStyle.Solid, title: 'Kronos P50' });
@@ -222,12 +231,45 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }));
     candleSeries.setData(formattedCandles);
 
-    // 2. Update Volume Data
-    const formattedVolume = candles.map(c => ({
+    // 2. Update Volume Data (Historical + Kronos 6D Predicted Future Volume)
+    const lastCandle = candles[candles.length - 1];
+    const formattedVolume: { time: any; value: number; color: string }[] = candles.map(c => ({
       time: c.time as any,
       value: c.volume,
       color: c.close >= c.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)',
     }));
+
+    if (
+      settings.kronosGhostCandles &&
+      aiPrediction?.predictedCandles &&
+      aiPrediction.predictedCandles.length > 0 &&
+      lastCandle
+    ) {
+      const avgHistVol =
+        aiPrediction.volumeProfile?.avgHistoricalVolume ||
+        candles.slice(-20).reduce((s, x) => s + (x.volume || 0), 0) / Math.min(20, candles.length) ||
+        1;
+      let prevVolTime = lastCandle.time;
+
+      for (const pc of aiPrediction.predictedCandles) {
+        if (pc.time > prevVolTime) {
+          const isSurge = (pc.volume || 0) >= avgHistVol * 1.38;
+          const isUp = pc.close >= pc.open;
+          formattedVolume.push({
+            time: pc.time as any,
+            value: pc.volume || 0,
+            color: isSurge
+              ? isUp
+                ? 'rgba(34, 211, 238, 0.78)'
+                : 'rgba(251, 146, 60, 0.78)'
+              : isUp
+              ? 'rgba(6, 182, 212, 0.42)'
+              : 'rgba(249, 115, 22, 0.42)',
+          });
+          prevVolTime = pc.time;
+        }
+      }
+    }
     volumeSeries.setData(formattedVolume);
 
     const closes = candles.map(c => c.close);
@@ -323,26 +365,49 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     }
 
-    // 8. Update Kronos Ghost Candlesticks & AI Forecast Paths
-    const lastCandle = candles[candles.length - 1];
+    // 8. Update Kronos Ghost Candlesticks, Walk-Forward Back-Projection & AI Forecast Paths
     if (
       settings.kronosGhostCandles &&
       aiPrediction &&
       aiPrediction.predictedCandles &&
       aiPrediction.predictedCandles.length > 0 &&
-      kronosCandleSeriesRef.current
+      kronosCandleSeriesRef.current &&
+      lastCandle
     ) {
-      kronosCandleSeriesRef.current.setData(
-        aiPrediction.predictedCandles.map(c => ({
-          time: c.time as any,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-        }))
-      );
+      let prevTime = lastCandle.time;
+      const validGhost: { time: any; open: number; high: number; low: number; close: number }[] = [];
+      for (const c of aiPrediction.predictedCandles) {
+        if (c.time > prevTime) {
+          validGhost.push({
+            time: c.time as any,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+          });
+          prevTime = c.time;
+        }
+      }
+      kronosCandleSeriesRef.current.setData(validGhost);
     } else if (kronosCandleSeriesRef.current) {
       kronosCandleSeriesRef.current.setData([]);
+    }
+
+    // 8b. Update Kronos Historical Walk-Forward Verification Line
+    if (
+      settings.kronosWalkForward &&
+      aiPrediction?.walkForward?.backtestPath &&
+      aiPrediction.walkForward.backtestPath.length > 1 &&
+      kronosWalkForwardRef.current
+    ) {
+      kronosWalkForwardRef.current.setData(
+        aiPrediction.walkForward.backtestPath.map(p => ({
+          time: p.time as any,
+          value: p.price,
+        }))
+      );
+    } else if (kronosWalkForwardRef.current) {
+      kronosWalkForwardRef.current.setData([]);
     }
 
     if (settings.aiForecast && aiPrediction && aiPrediction.scenarios.length > 0 && lastCandle) {
@@ -353,21 +418,21 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       if (bullScenario && aiBullishRef.current) {
         aiBullishRef.current.setData([
           { time: lastCandle.time as any, value: lastCandle.close },
-          ...bullScenario.path.map(p => ({ time: p.time as any, value: p.price })),
+          ...bullScenario.path.filter(p => p.time > lastCandle.time).map(p => ({ time: p.time as any, value: p.price })),
         ]);
       } else if (aiBullishRef.current) aiBullishRef.current.setData([]);
 
       if (baseScenario && aiBaseRef.current) {
         aiBaseRef.current.setData([
           { time: lastCandle.time as any, value: lastCandle.close },
-          ...baseScenario.path.map(p => ({ time: p.time as any, value: p.price })),
+          ...baseScenario.path.filter(p => p.time > lastCandle.time).map(p => ({ time: p.time as any, value: p.price })),
         ]);
       } else if (aiBaseRef.current) aiBaseRef.current.setData([]);
 
       if (bearScenario && aiBearishRef.current) {
         aiBearishRef.current.setData([
           { time: lastCandle.time as any, value: lastCandle.close },
-          ...bearScenario.path.map(p => ({ time: p.time as any, value: p.price })),
+          ...bearScenario.path.filter(p => p.time > lastCandle.time).map(p => ({ time: p.time as any, value: p.price })),
         ]);
       } else if (aiBearishRef.current) aiBearishRef.current.setData([]);
     } else {
@@ -381,11 +446,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       if (mcUpperRef.current && mcLowerRef.current) {
         mcUpperRef.current.setData([
           { time: lastCandle.time as any, value: lastCandle.close },
-          ...aiPrediction.upperConfidenceBound.map(p => ({ time: p.time as any, value: p.price })),
+          ...aiPrediction.upperConfidenceBound.filter(p => p.time > lastCandle.time).map(p => ({ time: p.time as any, value: p.price })),
         ]);
         mcLowerRef.current.setData([
           { time: lastCandle.time as any, value: lastCandle.close },
-          ...aiPrediction.lowerConfidenceBound.map(p => ({ time: p.time as any, value: p.price })),
+          ...aiPrediction.lowerConfidenceBound.filter(p => p.time > lastCandle.time).map(p => ({ time: p.time as any, value: p.price })),
         ]);
       }
     } else {
@@ -402,8 +467,33 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }
   }, [candles, timeframe, settings, srLevels, fibLevels, aiPrediction]);
 
+  const wf = aiPrediction?.walkForward;
+  const vp = aiPrediction?.volumeProfile;
+
   return (
     <div className="w-full h-full relative bg-[#090d15]">
+      {/* Kronos Live Chart HUD Legend (Non-intrusive pointer-events-none) */}
+      {(settings.kronosWalkForward || settings.kronosGhostCandles) && aiPrediction && (
+        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none flex flex-wrap items-center gap-1.5 max-w-[85%]">
+          {settings.kronosWalkForward && wf && (
+            <div className="px-2 py-0.5 rounded-md bg-[#0c121e]/85 backdrop-blur-sm border border-amber-500/40 text-[10px] font-mono flex items-center gap-1.5 shadow">
+              <span className="w-2 h-0.5 bg-amber-400 inline-block" />
+              <span className="text-amber-300 font-bold">Kiểm định {wf.holdoutBars} nến:</span>
+              <span className="text-emerald-300 font-bold">{wf.directionalAccuracy}% đúng hướng</span>
+              <span className="text-gray-400">• MAPE {wf.mapePercent}%</span>
+            </div>
+          )}
+
+          {settings.kronosGhostCandles && vp?.surgeDetected && (
+            <div className="px-2 py-0.5 rounded-md bg-cyan-950/85 backdrop-blur-sm border border-cyan-400/50 text-[10px] font-mono flex items-center gap-1 text-cyan-200 shadow">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+              <span className="font-bold">6D Vol Surge:</span>
+              <span>Đột biến thanh khoản tại nến +{vp.peakBarOffset}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div ref={chartContainerRef} className="w-full h-full min-h-[300px]" />
     </div>
   );

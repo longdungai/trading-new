@@ -148,13 +148,13 @@ export function runBacktest(
           const candleRange = Math.max(1e-8, c.high - c.low);
           const isBullToken =
             c.close > prevC.close &&
-            (c.close > e20 || lowerWick / candleRange > 0.35) &&
+            ((e20 !== null && c.close > e20) || lowerWick / candleRange > 0.35) &&
             currRSI > 46 &&
             currRSI < 72 &&
             (!currMACD || currMACD.histogram >= (prevMACD?.histogram ?? 0));
           const isBearToken =
             c.close < prevC.close &&
-            (c.close < e20 || upperWick / candleRange > 0.35) &&
+            ((e20 !== null && c.close < e20) || upperWick / candleRange > 0.35) &&
             currRSI < 54 &&
             currRSI > 28 &&
             (!currMACD || currMACD.histogram <= (prevMACD?.histogram ?? 0));

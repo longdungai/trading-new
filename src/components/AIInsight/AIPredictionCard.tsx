@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AIPrediction, AIPredictionScenario, KronosConfig, KronosModelKey } from '../../types';
+import { AIPrediction, AIPredictionScenario, KronosConfig, KronosModelKey, Timeframe } from '../../types';
 import { KRONOS_MODELS } from '../../services/ai/kronosClient';
 import {
   Sparkles,
@@ -17,6 +17,9 @@ import {
   Cpu,
   Eye,
   EyeOff,
+  History,
+  BarChart3,
+  Layers,
 } from 'lucide-react';
 import { formatPercent, formatPrice } from '../../utils/formatters';
 
@@ -27,6 +30,10 @@ interface AIPredictionCardProps {
   onUpdateKronosConfig?: (next: KronosConfig) => void;
   showGhostCandles?: boolean;
   onToggleGhostCandles?: () => void;
+  showWalkForward?: boolean;
+  onToggleWalkForward?: () => void;
+  activeTimeframe?: Timeframe;
+  onSelectTimeframe?: (tf: Timeframe) => void;
 }
 
 export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
@@ -36,6 +43,10 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
   onUpdateKronosConfig,
   showGhostCandles = true,
   onToggleGhostCandles,
+  showWalkForward = true,
+  onToggleWalkForward,
+  activeTimeframe = '1h',
+  onSelectTimeframe,
 }) => {
   const [selectedScenario, setSelectedScenario] = useState<AIPredictionScenario | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
@@ -266,6 +277,142 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
             <div className="text-xs font-bold text-gray-200">±{prediction.volatilityForecast}%</div>
           </div>
         </div>
+
+        {/* Phase 2.1 & 2.2: Walk-Forward Verification + 6D Predicted Volume Liquidity Strip */}
+        {(prediction.walkForward || prediction.volumeProfile) && (
+          <div className="space-y-1.5">
+            {prediction.walkForward && (
+              <div className="px-2.5 py-2 rounded-lg bg-[#0d121c] border border-amber-500/25 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-300">
+                    <History className="w-3 h-3 shrink-0" />
+                    <span>Kiểm Định {prediction.walkForward.holdoutBars} Nến Quá Khứ:</span>
+                  </div>
+                  <div className="text-[10px] text-gray-300 font-mono mt-0.5 flex items-center gap-2">
+                    <span>
+                      Đúng hướng:{' '}
+                      <strong className="text-emerald-400">
+                        {prediction.walkForward.directionalAccuracy}%
+                      </strong>
+                    </span>
+                    <span className="text-gray-600">•</span>
+                    <span>
+                      Sai số MAPE:{' '}
+                      <strong className="text-cyan-300">
+                        {prediction.walkForward.mapePercent}%
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                {onToggleWalkForward && (
+                  <button
+                    onClick={onToggleWalkForward}
+                    className={`px-2 py-1 rounded text-[9px] font-bold border shrink-0 transition ${
+                      showWalkForward
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-400/60'
+                        : 'bg-[#161f2e] text-gray-400 border-gray-700 hover:text-white'
+                    }`}
+                  >
+                    {showWalkForward ? 'Đang Vẽ Đối Chiếu' : 'Vẽ Đối Chiếu'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {prediction.volumeProfile && (
+              <div
+                className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[10px] font-mono ${
+                  prediction.volumeProfile.surgeDetected
+                    ? 'bg-cyan-950/50 border-cyan-500/40 text-cyan-200'
+                    : 'bg-[#0d121c] border-[#1b2536] text-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                  <BarChart3
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      prediction.volumeProfile.surgeDetected ? 'text-cyan-400' : 'text-gray-400'
+                    }`}
+                  />
+                  <span className="truncate">
+                    {prediction.volumeProfile.surgeDetected
+                      ? `⚡ Bùng Nổ Thanh Khoản (Nến +${prediction.volumeProfile.peakBarOffset})`
+                      : 'Khối Lượng 6D Dự Báo:'}
+                  </span>
+                </div>
+                <span
+                  className={`font-bold shrink-0 ml-1 ${
+                    prediction.volumeProfile.volumeChangePercent >= 0
+                      ? 'text-cyan-300'
+                      : 'text-amber-300'
+                  }`}
+                >
+                  {prediction.volumeProfile.volumeChangePercent >= 0 ? '+' : ''}
+                  {prediction.volumeProfile.volumeChangePercent}% vs TB20
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Phase 2.3: Multi-Timeframe Kronos Confluence Matrix (15m • 1h • 4h • 1D) */}
+        {prediction.mtfConfluence && prediction.mtfConfluence.items.length > 0 && (
+          <div className="p-2.5 rounded-xl bg-[#0d121c] border border-[#1b2536] space-y-2">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1">
+                <Layers className="w-3 h-3 text-purple-400" />
+                <span>Đồng Thuận Đa Khung:</span>
+              </span>
+              <span
+                className={`px-1.5 py-0.5 rounded font-mono font-bold text-[9px] border ${
+                  prediction.mtfConfluence.dominantDirection === 'BULLISH'
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                    : prediction.mtfConfluence.dominantDirection === 'BEARISH'
+                    ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                    : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                }`}
+              >
+                {prediction.mtfConfluence.summaryLabel}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5 font-mono">
+              {prediction.mtfConfluence.items.map(item => {
+                const isTfActive = item.timeframe === activeTimeframe;
+                const isUp = item.direction === 'BULLISH';
+                const isDown = item.direction === 'BEARISH';
+                return (
+                  <button
+                    key={item.timeframe}
+                    type="button"
+                    onClick={() => onSelectTimeframe && onSelectTimeframe(item.timeframe)}
+                    className={`p-1.5 rounded-lg border text-center transition ${
+                      isTfActive
+                        ? 'bg-[#192438] border-cyan-400 ring-1 ring-cyan-400/30'
+                        : 'bg-[#131b29] border-[#212d42] hover:border-gray-500'
+                    }`}
+                    title={`Chuyển sang khung ${item.timeframe} (${item.label})`}
+                  >
+                    <div className="text-[9px] font-bold text-gray-300 flex items-center justify-center gap-0.5">
+                      <span>{item.timeframe}</span>
+                      {isTfActive && <span className="w-1 h-1 rounded-full bg-cyan-400" />}
+                    </div>
+                    <div
+                      className={`text-[10px] font-extrabold mt-0.5 ${
+                        isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-amber-300'
+                      }`}
+                    >
+                      {isUp ? '▲' : isDown ? '▼' : '•'}
+                      {item.expectedReturnPct >= 0 ? '+' : ''}
+                      {item.expectedReturnPct}%
+                    </div>
+                    <div className="text-[8px] text-gray-400">{item.bullProb}% T</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* 3 Actionable Scenarios (Clickable with Hint) */}
         <div className="space-y-1.5 sm:space-y-2">

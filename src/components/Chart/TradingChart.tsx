@@ -21,6 +21,7 @@ import {
   calculateEMA,
   calculateSuperTrend,
 } from '../../services/indicators';
+import { ChartDrawingOverlay } from './ChartDrawingOverlay';
 
 interface TradingChartProps {
   candles: Candle[];
@@ -32,6 +33,7 @@ interface TradingChartProps {
   aiPrediction: AIPrediction | null;
   symbolName?: string;
   symbolFullName?: string;
+  onQuickCreatePriceAlert?: (price: number) => void;
 }
 
 export const TradingChart: React.FC<TradingChartProps> = ({
@@ -43,6 +45,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   aiPrediction,
   symbolName = '',
   symbolFullName = '',
+  onQuickCreatePriceAlert,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const ohlcHudRef = useRef<HTMLDivElement>(null);
@@ -557,6 +560,16 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           </div>
         )}
       </div>
+
+      <ChartDrawingOverlay
+        chartRef={chartRef}
+        candleSeriesRef={candleSeriesRef}
+        candles={candles}
+        symbolName={symbolName}
+        timeframe={timeframe}
+        aiPrediction={aiPrediction}
+        onQuickCreatePriceAlert={onQuickCreatePriceAlert}
+      />
 
       <div ref={chartContainerRef} className="w-full h-full min-h-[300px] relative z-[1]" />
     </div>

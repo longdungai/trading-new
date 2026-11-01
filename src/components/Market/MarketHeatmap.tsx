@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { KronosModelKey, MarketSymbol } from '../../types';
 import { rankUniverseWithKronosAlpha } from '../../services/ai/kronosClient';
+import { computeSectorRotation } from '../../services/analysis/intermarketCorrelation';
 import {
   Flame,
   ArrowUpRight,
@@ -10,6 +11,7 @@ import {
   TrendingUp,
   TrendingDown,
   Award,
+  Layers,
 } from 'lucide-react';
 import { formatPercent, formatPrice, formatVolume } from '../../utils/formatters';
 
@@ -27,7 +29,9 @@ export const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
   kronosModelKey = 'kronos-small',
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'commodity' | 'crypto' | 'vn30' | 'stock'>('all');
-  const [heatmapMode, setHeatmapMode] = useState<'kronos_alpha' | '24h'>('kronos_alpha');
+  const [heatmapMode, setHeatmapMode] = useState<'kronos_alpha' | '24h' | 'sector_rotation'>('kronos_alpha');
+
+  const sectorList = useMemo(() => computeSectorRotation(symbols), [symbols]);
 
   const filtered = useMemo(() => {
     return symbols.filter(s => {
@@ -171,6 +175,17 @@ export const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
               <Flame className="w-3.5 h-3.5" />
               <span>Biến Động 24h</span>
             </button>
+            <button
+              onClick={() => setHeatmapMode('sector_rotation')}
+              className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition text-[11px] ${
+                heatmapMode === 'sector_rotation'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/30'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Dòng Tiền Ngành</span>
+            </button>
           </div>
 
           {/* Asset Category Tabs */}
@@ -294,7 +309,83 @@ export const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
         </div>
       )}
 
+      {/* Sector Rotation Relative Strength View */}
+      {heatmapMode === 'sector_rotation' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {sectorList.map(sec => {
+            const phaseColor =
+              sec.phase === 'LEADING'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/45'
+                : sec.phase === 'IMPROVING'
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/45'
+                : sec.phase === 'WEAKENING'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/45'
+                : 'bg-rose-500/20 text-rose-300 border-rose-500/45';
+
+            return (
+              <div
+                key={sec.sectorId}
+                className="p-3.5 rounded-xl bg-[#0d1422] border border-slate-800 space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs sm:text-sm font-extrabold text-white">
+                      {sec.sectorName}
+                    </div>
+                    <div className="text-[10.5px] font-mono text-slate-400 mt-0.5">
+                      Độ rộng: <span className="text-emerald-400">{sec.advancers}▲</span> /{' '}
+                      <span className="text-rose-400">{sec.decliners}▼</span> ({sec.breadthPct}% mã tăng) • TB:{' '}
+                      <span className={sec.volumeWeightedChange24h >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                        {sec.volumeWeightedChange24h >= 0 ? '+' : ''}
+                        {sec.volumeWeightedChange24h}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${phaseColor}`}>
+                      {sec.phaseLabel} (RS {sec.relativeStrengthScore >= 0 ? `+${sec.relativeStrengthScore}` : sec.relativeStrengthScore})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sector Breadth Progress Bar */}
+                <div className="w-full h-1.5 rounded-full bg-rose-500/30 overflow-hidden flex">
+                  <div
+                    className="h-full bg-emerald-400 transition-all duration-500"
+                    style={{ width: `${sec.breadthPct}%` }}
+                  />
+                </div>
+
+                {/* Clickable Member Chips */}
+                <div className="flex flex-wrap gap-1.5 pt-0.5 font-mono text-[10.5px]">
+                  {sec.members.map(m => (
+                    <button
+                      key={m.symbol}
+                      onClick={() => onSelectSymbol(m)}
+                      className={`px-2 py-0.5 rounded-lg border transition flex items-center gap-1 ${
+                        m.change24h > 0
+                          ? 'bg-emerald-950/40 border-emerald-500/35 text-emerald-200 hover:border-emerald-400'
+                          : m.change24h < 0
+                          ? 'bg-rose-950/40 border-rose-500/35 text-rose-200 hover:border-rose-400'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <span className="font-bold">{m.symbol}</span>
+                      <span>
+                        {m.change24h >= 0 ? '+' : ''}
+                        {m.change24h.toFixed(2)}%
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Heatmap Grid */}
+      {heatmapMode !== 'sector_rotation' && (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
         {displaySymbols.map(s => {
           const isVND = s.quoteAsset === 'VND';
@@ -365,6 +456,7 @@ export const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
           );
         })}
       </div>
+      )}
     </div>
   );
 };

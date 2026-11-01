@@ -20,8 +20,10 @@ import {
 } from '../../types';
 import { evaluateSymbolMacroImpact } from '../../services/macro/macroIntelligence';
 import { FedPivotIntelligenceView } from './FedPivotIntelligenceView';
+import { VnGoldFxArbitrageView, IntermarketCorrelationView } from './VnGoldAndCorrelationViews';
+import { Coins, GitCompare } from 'lucide-react';
 
-export type MacroModalTab = 'indicators' | 'fed_pivot' | 'alerts' | 'calendar';
+export type MacroModalTab = 'indicators' | 'fed_pivot' | 'vn_gold_fx' | 'correlation' | 'alerts' | 'calendar';
 
 interface MacroIntelligenceModalProps {
   snapshot: MacroIntelligenceSnapshot | null;
@@ -203,6 +205,32 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
                   </span>
                 )
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('vn_gold_fx')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition ${
+                activeTab === 'vn_gold_fx'
+                  ? 'bg-amber-500/20 text-amber-200 border border-amber-500/45'
+                  : 'text-slate-300 hover:text-white bg-[#101829] border border-slate-800'
+              }`}
+            >
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>Vàng Quy Đổi & Tỷ Giá VN</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('correlation')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition ${
+                activeTab === 'correlation'
+                  ? 'bg-sky-500/20 text-sky-200 border border-sky-500/45'
+                  : 'text-slate-300 hover:text-white bg-[#101829] border border-slate-800'
+              }`}
+            >
+              <GitCompare className="w-3.5 h-3.5 text-sky-400" />
+              <span>Tương Quan Liên TT</span>
             </button>
 
             <button
@@ -452,6 +480,24 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
               {activeTab === 'fed_pivot' && (
                 <FedPivotIntelligenceView
                   data={snapshot.fedPivotV2}
+                  symbols={symbols}
+                  onJumpToSymbol={handleJumpToAsset}
+                />
+              )}
+
+              {/* TAB 1.6: VIETNAM GOLD PARITY & FX ARBITRAGE */}
+              {activeTab === 'vn_gold_fx' && (
+                <VnGoldFxArbitrageView
+                  symbols={symbols}
+                  macroSnapshot={snapshot}
+                  onJumpToSymbol={handleJumpToAsset}
+                />
+              )}
+
+              {/* TAB 1.7: INTERMARKET CORRELATION MATRIX & DIVERGENCE */}
+              {activeTab === 'correlation' && (
+                <IntermarketCorrelationView
+                  currentSymbol={currentSymbol}
                   symbols={symbols}
                   onJumpToSymbol={handleJumpToAsset}
                 />

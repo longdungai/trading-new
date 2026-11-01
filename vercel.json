@@ -1,7 +1,7 @@
 {
   "headers": [
     {
-      "source": "/api/(binance|fapi|yahoo|entrade)/(.*)",
+      "source": "/api/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -32,7 +32,7 @@
       "destination": "https://fred.stlouisfed.org/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

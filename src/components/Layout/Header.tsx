@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Bell,
   Bot,
   Flame,
   Search,
@@ -24,6 +25,9 @@ interface HeaderProps {
   onOpenBacktest: () => void;
   onOpenHeatmap: () => void;
   onOpenRadar?: () => void;
+  onOpenAlerts?: () => void;
+  unreadAlertCount?: number;
+  activeAlertRuleCount?: number;
   onRefreshData: () => void;
   isLiveLoading: boolean;
   activeView: 'chart' | 'heatmap';
@@ -39,6 +43,9 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeTimeframe,
   onOpenBacktest,
   onOpenRadar,
+  onOpenAlerts,
+  unreadAlertCount = 0,
+  activeAlertRuleCount = 0,
   onRefreshData,
   isLiveLoading,
   activeView,
@@ -331,6 +338,31 @@ export const Header: React.FC<HeaderProps> = ({
               <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
               <span className="hidden lg:inline">Vùng Gom</span>
               <span className="lg:hidden">Gom</span>
+            </button>
+          )}
+
+          {onOpenAlerts && (
+            <button
+              onClick={onOpenAlerts}
+              title="Trung tâm Chuông Cảnh Báo Thông Minh, Telegram & Đồng bộ Cloud KV"
+              className={`relative p-1.5 sm:p-2 rounded-xl border transition ${
+                unreadAlertCount > 0
+                  ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                  : activeAlertRuleCount > 0
+                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25'
+                  : 'bg-[#101725] hover:bg-[#172236] border-slate-700/70 text-slate-300 hover:text-white'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              {(unreadAlertCount > 0 || activeAlertRuleCount > 0) && (
+                <span
+                  className={`absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full text-[9px] font-mono font-extrabold flex items-center justify-center ${
+                    unreadAlertCount > 0 ? 'bg-rose-500 text-white animate-pulse' : 'bg-cyan-500 text-black'
+                  }`}
+                >
+                  {unreadAlertCount > 0 ? unreadAlertCount : activeAlertRuleCount}
+                </span>
+              )}
             </button>
           )}
 

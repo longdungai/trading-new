@@ -76,6 +76,15 @@ import { MarketHeatmap } from './components/Market/MarketHeatmap';
 import { BacktestModal } from './components/Backtest/BacktestModal';
 import { AccumulationRadarModal } from './components/Market/AccumulationRadarModal';
 import { MacroIntelligenceModal, MacroModalTab } from './components/Macro/MacroIntelligenceModal';
+import { AlertCenterModal } from './components/Alerts/AlertCenterModal';
+import { syncAllPaperTradesWithMarket } from './services/paperTrading/userPaperTrading';
+import {
+  loadSmartAlertRules,
+  loadTriggeredAlertHistory,
+  runSmartAlertMonitoringCycle,
+  SMART_ALERTS_UPDATED_EVENT,
+} from './services/alerts/smartAlertCenter';
+import { checkAndPullCloudWorkspace } from './services/storage/cloudSyncClient';
 import { AlertTriangle, Sparkles, Layers, Shield, LineChart, Flame, Globe2, Target, X } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -94,6 +103,14 @@ export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [isBacktestOpen, setIsBacktestOpen] = useState<boolean>(false);
   const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState<boolean>(false);
+  const [presetAlertPrice, setPresetAlertPrice] = useState<number | null>(null);
+  const [activeAlertRuleCount, setActiveAlertRuleCount] = useState<number>(
+    () => loadSmartAlertRules().filter(r => r.enabled).length
+  );
+  const [unreadAlertCount, setUnreadAlertCount] = useState<number>(
+    () => loadTriggeredAlertHistory().filter(e => !e.read).length
+  );
   const [isMacroModalOpen, setIsMacroModalOpen] = useState<boolean>(false);
   const [macroModalTab, setMacroModalTab] = useState<MacroModalTab>('indicators');
   const [isMacroRefreshing, setIsMacroRefreshing] = useState<boolean>(false);
@@ -756,6 +773,33 @@ export const App: React.FC = () => {
     setAuditEntries(reconciled);
   }, [candles, symbols]);
 
+  // Global Multi-Asset Paper Trading Sync + Smart Alert Monitoring Cycle + Cloud KV Auto-Pull
+  useEffect(() => {
+    const syncAlertCounts = () => {
+      setActiveAlertRuleCount(loadSmartAlertRules().filter(r => r.enabled).length);
+      setUnreadAlertCount(loadTriggeredAlertHistory().filter(e => !e.read).length);
+    };
+    window.addEventListener(SMART_ALERTS_UPDATED_EVENT, syncAlertCounts);
+    void checkAndPullCloudWorkspace().then(({ restoredKeys }) => {
+      if (restoredKeys > 0) {
+        setFavorites(loadFavoritesFromStorage());
+        setAuditEntries(loadForecastAuditEntries());
+        syncAlertCounts();
+      }
+    });
+    return () => window.removeEventListener(SMART_ALERTS_UPDATED_EVENT, syncAlertCounts);
+  }, []);
+
+  useEffect(() => {
+    syncAllPaperTradesWithMarket(symbols);
+    runSmartAlertMonitoringCycle({
+      symbols,
+      activeSymbol: currentSymbol.symbol,
+      activeCandles: candles,
+      macroSnapshot,
+    });
+  }, [symbols, currentSymbol.symbol, candles, macroSnapshot]);
+
   const handlePinAuditCheckpoint = useCallback(() => {
     if (!aiPrediction || candles.length === 0) return;
     const lastCandleTime = candles[candles.length - 1].time;
@@ -843,6 +887,12 @@ export const App: React.FC = () => {
         onOpenBacktest={() => setIsBacktestOpen(true)}
         onOpenHeatmap={() => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap')}
         onOpenRadar={() => setIsRadarOpen(true)}
+        onOpenAlerts={() => {
+          setPresetAlertPrice(null);
+          setIsAlertModalOpen(true);
+        }}
+        unreadAlertCount={unreadAlertCount}
+        activeAlertRuleCount={activeAlertRuleCount}
         onRefreshData={() => {
           void syncLivePrices(true);
           void refreshMacroSnapshot(true, false);
@@ -1053,6 +1103,10 @@ export const App: React.FC = () => {
                 aiPrediction={aiPrediction}
                 symbolName={currentSymbol.symbol}
                 symbolFullName={currentSymbol.name}
+                onQuickCreatePriceAlert={(price) => {
+                  setPresetAlertPrice(price);
+                  setIsAlertModalOpen(true);
+                }}
               />
             </div>
 
@@ -1290,6 +1344,24 @@ export const App: React.FC = () => {
           symbols={symbols}
           onSelectSymbol={handleSelectSymbol}
           onClose={() => setIsRadarOpen(false)}
+        />
+      )}
+
+      {/* Smart Alert Center, Telegram Dispatcher & Cloud KV Sync Modal */}
+      {isAlertModalOpen && (
+        <AlertCenterModal
+          currentSymbol={currentSymbol}
+          symbols={symbols}
+          initialPresetPrice={presetAlertPrice}
+          onSelectSymbol={handleSelectSymbol}
+          onWorkspaceRestored={() => {
+            setFavorites(loadFavoritesFromStorage());
+            setAuditEntries(loadForecastAuditEntries());
+          }}
+          onClose={() => {
+            setIsAlertModalOpen(false);
+            setPresetAlertPrice(null);
+          }}
         />
       )}
 

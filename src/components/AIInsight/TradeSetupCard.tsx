@@ -20,6 +20,7 @@ import {
   Award,
   Clock,
   AlertCircle,
+  Download,
 } from 'lucide-react';
 import { formatPercent, formatPrice, formatTime } from '../../utils/formatters';
 import {
@@ -29,6 +30,9 @@ import {
   updateOpenPaperTradesWithLivePrice,
   closePaperTradeManually,
   clearUserPaperTrades,
+  calculatePaperPortfolioAnalytics,
+  exportPaperTradesToCsv,
+  PAPER_TRADES_UPDATED_EVENT,
 } from '../../services/paperTrading/userPaperTrading';
 
 interface TradeSetupCardProps {
@@ -98,13 +102,21 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
   const currentPrice = strategyHub ? strategyHub.currentPrice : (setup?.currentPrice || 100);
   const activeSymbol = strategyHub?.symbol || setup?.symbol || symbol;
 
-  // Real-time listener for open trades: update PnL and trigger SL/TP
+  // Real-time listener for open trades across ALL symbols (global background sync + active symbol)
   useEffect(() => {
     if (currentPrice > 0 && activeSymbol) {
       const updated = updateOpenPaperTradesWithLivePrice(activeSymbol, currentPrice);
       setPaperTrades(updated);
     }
   }, [currentPrice, activeSymbol]);
+
+  useEffect(() => {
+    const syncFromGlobal = () => {
+      setPaperTrades(getUserPaperTrades());
+    };
+    window.addEventListener(PAPER_TRADES_UPDATED_EVENT, syncFromGlobal);
+    return () => window.removeEventListener(PAPER_TRADES_UPDATED_EVENT, syncFromGlobal);
+  }, []);
 
   if (!currentItem.name) return null;
 
@@ -162,13 +174,27 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
     }
   };
 
-  // Filter trade lists
+  // Filter trade lists & compute full portfolio analytics
   const activeAndPendingTrades = paperTrades.filter(t => t.status === 'OPEN' || t.status === 'PENDING');
   const closedTrades = paperTrades.filter(t => t.status !== 'OPEN' && t.status !== 'PENDING');
   const winTrades = closedTrades.filter(t => t.status === 'TP_HIT' || t.pnlPercent > 0);
-  const lossTrades = closedTrades.filter(t => t.status === 'SL_HIT' || t.pnlPercent < 0);
   const userWinRate = closedTrades.length > 0 ? Math.round((winTrades.length / closedTrades.length) * 100) : 0;
   const totalUserPnL = closedTrades.reduce((sum, t) => sum + t.pnlAmount, 0);
+  const portfolioAnalytics = React.useMemo(
+    () => calculatePaperPortfolioAnalytics(paperTrades),
+    [paperTrades]
+  );
+
+  const handleExportCsv = () => {
+    const csv = exportPaperTradesToCsv(paperTrades);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TradingNew_PaperJournal_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="p-3 sm:p-4 rounded-xl bg-[#101622] border border-[#1f2a3e] flex flex-col gap-3 sm:gap-3.5 shadow-xl select-none">
@@ -491,19 +517,31 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
       {/* ================= TAB 3: USER PERFORMANCE STATS ================= */}
       {activeTab === 'stats' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-1.5 flex-wrap">
             <span className="text-xs font-bold uppercase text-white flex items-center gap-1.5">
               <Award className="w-4 h-4 text-amber-400" />
-              Thống Kê Hiệu Quả Do Bạn Tự Test
+              Hiệu Suất Danh Mục Đa Tài Sản
             </span>
-            <button
-              onClick={handleClearAllTrades}
-              className="flex items-center gap-1 text-[10px] text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 transition"
-              title="Xóa hết lịch sử để test lại từ đầu"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>Xóa Hết Lịch Sử</span>
-            </button>
+            <div className="flex items-center gap-1">
+              {paperTrades.length > 0 && (
+                <button
+                  onClick={handleExportCsv}
+                  className="flex items-center gap-1 text-[10px] text-cyan-300 hover:text-white px-2 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 transition"
+                  title="Xuất toàn bộ nhật ký giao dịch ra file Excel/CSV"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>CSV</span>
+                </button>
+              )}
+              <button
+                onClick={handleClearAllTrades}
+                className="flex items-center gap-1 text-[10px] text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 transition"
+                title="Xóa hết lịch sử để test lại từ đầu"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Xóa</span>
+              </button>
+            </div>
           </div>
 
           {/* Stats Metrics Cards */}
@@ -511,23 +549,81 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
             <div className="p-2.5 rounded-xl bg-[#0d121c] border border-[#1b2536]">
               <div className="text-[9px] text-gray-400 uppercase font-semibold">Tỉ Lệ Thắng</div>
               <div className="text-base font-bold text-emerald-400 mt-0.5">{userWinRate}%</div>
-              <div className="text-[9px] text-gray-500">{winTrades.length} thắng / {closedTrades.length} lệnh</div>
+              <div className="text-[9px] text-gray-500">{winTrades.length}/{closedTrades.length} lệnh</div>
             </div>
 
             <div className="p-2.5 rounded-xl bg-[#0d121c] border border-[#1b2536]">
-              <div className="text-[9px] text-gray-400 uppercase font-semibold">Tổng Lợi Nhuận</div>
+              <div className="text-[9px] text-gray-400 uppercase font-semibold">Profit Factor</div>
+              <div className="text-base font-bold text-cyan-300 mt-0.5">
+                {portfolioAnalytics.profitFactor !== null ? portfolioAnalytics.profitFactor : '—'}
+              </div>
+              <div className="text-[9px] text-gray-500">
+                MaxDD -{portfolioAnalytics.maxDrawdownPct}%
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#0d121c] border border-[#1b2536]">
+              <div className="text-[9px] text-gray-400 uppercase font-semibold">Lợi Nhuận Ròng</div>
               <div className={`text-sm font-bold mt-0.5 truncate ${totalUserPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {totalUserPnL >= 0 ? '+' : ''}{isVND ? `${(totalUserPnL / 1000000).toFixed(2)}Tr` : `$${formatPrice(totalUserPnL)}`}
               </div>
-              <div className="text-[9px] text-gray-500">{isVND ? 'VNĐ' : 'USD'}</div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-[#0d121c] border border-[#1b2536]">
-              <div className="text-[9px] text-gray-400 uppercase font-semibold">Tổng Lệnh Đã Test</div>
-              <div className="text-base font-bold text-blue-400 mt-0.5">{closedTrades.length}</div>
-              <div className="text-[9px] text-gray-500">{activeAndPendingTrades.length} đang chờ/chạy</div>
+              <div className="text-[9px] text-gray-500">{activeAndPendingTrades.length} đang mở</div>
             </div>
           </div>
+
+          {/* SVG Portfolio Equity Curve */}
+          {portfolioAnalytics.equityCurve.length > 1 && (
+            <div className="p-2.5 rounded-xl bg-[#0b111c] border border-slate-800/90 space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-slate-400 font-sans font-semibold">
+                  Đường Cong Tăng Trưởng Lũy Kế (% Return)
+                </span>
+                <span
+                  className={
+                    portfolioAnalytics.equityCurve[portfolioAnalytics.equityCurve.length - 1]
+                      .cumulativeReturnPct >= 0
+                      ? 'text-emerald-400 font-bold'
+                      : 'text-rose-400 font-bold'
+                  }
+                >
+                  {portfolioAnalytics.equityCurve[portfolioAnalytics.equityCurve.length - 1]
+                    .cumulativeReturnPct >= 0
+                    ? '+'
+                    : ''}
+                  {
+                    portfolioAnalytics.equityCurve[portfolioAnalytics.equityCurve.length - 1]
+                      .cumulativeReturnPct
+                  }
+                  %
+                </span>
+              </div>
+              {(() => {
+                const pts = portfolioAnalytics.equityCurve;
+                const vals = pts.map(p => p.cumulativeReturnPct);
+                const minV = Math.min(0, ...vals);
+                const maxV = Math.max(1, ...vals);
+                const span = Math.max(1, maxV - minV);
+                const w = 280;
+                const h = 56;
+                const coords = pts.map((p, idx) => {
+                  const x = (idx / Math.max(1, pts.length - 1)) * w;
+                  const y = h - 6 - ((p.cumulativeReturnPct - minV) / span) * (h - 12);
+                  return `${x.toFixed(1)},${y.toFixed(1)}`;
+                });
+                const isUp = vals[vals.length - 1] >= 0;
+                return (
+                  <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-14 overflow-visible">
+                    <polyline
+                      fill="none"
+                      stroke={isUp ? '#10b981' : '#f43f5e'}
+                      strokeWidth="2"
+                      points={coords.join(' ')}
+                    />
+                  </svg>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Closed Trades List */}
           <div className="space-y-1.5 max-h-48 overflow-y-auto">

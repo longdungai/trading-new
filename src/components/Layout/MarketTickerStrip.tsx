@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { AIPrediction, MacroIntelligenceSnapshot, MarketSymbol } from '../../types';
 import { MacroModalTab } from '../Macro/MacroIntelligenceModal';
+import { computeVnGoldFxArbitrage } from '../../services/macro/vnGoldFxArbitrage';
 import { formatPercent, formatPrice } from '../../utils/formatters';
-import { Activity, AlertTriangle, Cpu, Globe2, Landmark, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, Coins, Cpu, Globe2, Landmark, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface MarketTickerStripProps {
   symbols: MarketSymbol[];
@@ -68,6 +69,15 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
     };
   }, [symbols, favorites]);
 
+  const vnGoldArb = useMemo(
+    () =>
+      computeVnGoldFxArbitrage({
+        symbols,
+        macroSnapshot: macroSnapshot ?? null,
+      }),
+    [symbols, macroSnapshot]
+  );
+
   const isAiBull =
     aiPrediction?.trend === 'STRONG_BULLISH' || aiPrediction?.trend === 'BULLISH';
   const isAiBear =
@@ -75,7 +85,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
 
   return (
     <div className="h-7 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
-      {/* Left: Macro Shock Radar Trigger + Fed Pivot Watch Pill + Market Breadth Pulse */}
+      {/* Left: Macro Shock Radar Trigger + Fed Pivot Watch Pill + VN Gold Parity Pill */}
       {onOpenMacroModal && (
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -138,9 +148,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
               title="Mở cửa sổ chuyên sâu Fed Pivot Intelligence (7 Tín hiệu FRED/BLS/BEA + Lịch sử + 3 Kịch bản)"
             >
               <Landmark className="w-3 h-3 text-emerald-400 shrink-0" />
-              <span className="font-bold text-cyan-300">
-                Fed Pivot
-              </span>
+              <span className="font-bold text-cyan-300">Fed Pivot</span>
               {macroSnapshot.fedPivotV2 ? (
                 <span className="text-[9px] font-bold text-emerald-300">
                   {macroSnapshot.fedPivotV2.pivotScore.toFixed(1)}/7
@@ -155,6 +163,21 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
                   </span>
                 )
               )}
+            </button>
+          )}
+
+          {vnGoldArb && (
+            <button
+              type="button"
+              onClick={() => onOpenMacroModal('vn_gold_fx')}
+              className="hidden sm:flex px-2 py-0.5 rounded-md border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-mono items-center gap-1 shrink-0 text-amber-200 transition"
+              title="Xem Giá Vàng Thế Giới quy đổi VNĐ/lượng, Máy tính độ vênh SJC/Nhẫn 9999 & Áp lực Tỷ giá USD/VND"
+            >
+              <Coins className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="font-bold">Vàng quy đổi:</span>
+              <span className="text-white font-extrabold">
+                {vnGoldArb.worldCifParityMillionPerTael.toFixed(2)}tr
+              </span>
             </button>
           )}
         </div>

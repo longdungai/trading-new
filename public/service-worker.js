@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trading-new-shell-v3';
+const CACHE_NAME = 'trading-new-shell-v4';
 
 const BYPASS_PATTERNS = [
   '/api/',
@@ -10,6 +10,7 @@ const BYPASS_PATTERNS = [
   'stlouisfed.org',
   'newyorkfed.org',
   'alternative.me',
+  'cryptocompare.com',
   'googleapis.com',
   'telegram.org',
 ];

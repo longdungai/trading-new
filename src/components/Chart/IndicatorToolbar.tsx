@@ -13,6 +13,9 @@ import {
   PanelLeftOpen,
   Maximize2,
   Minimize2,
+  BarChart2,
+  Play,
+  GitCompare,
 } from 'lucide-react';
 
 interface IndicatorToolbarProps {
@@ -22,6 +25,10 @@ interface IndicatorToolbarProps {
   onToggleLeftDock?: () => void;
   isZenMode?: boolean;
   onToggleZenMode?: () => void;
+  isReplayMode?: boolean;
+  onToggleReplayMode?: () => void;
+  compareSymbol?: string | null;
+  onChangeCompareSymbol?: (sym: string | null) => void;
 }
 
 export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
@@ -31,6 +38,10 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
   onToggleLeftDock,
   isZenMode = false,
   onToggleZenMode,
+  isReplayMode = false,
+  onToggleReplayMode,
+  compareSymbol = null,
+  onChangeCompareSymbol,
 }) => {
   return (
     <div className="h-9 sm:h-[38px] bg-[#080d16] border-b border-slate-800/80 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0">
@@ -59,7 +70,57 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
           </>
         )}
 
-        {/* Cluster 1: Flagship Kronos AI Projections */}
+        {/* Bar Replay & Compare Tools */}
+        {onToggleReplayMode && (
+          <button
+            type="button"
+            onClick={onToggleReplayMode}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+              isReplayMode
+                ? 'bg-purple-600 text-white border-purple-400 shadow-sm shadow-purple-500/30 animate-pulse'
+                : 'bg-[#101726] text-purple-300 border-purple-500/35 hover:bg-purple-500/15'
+            }`}
+            title="Tua ngược lịch sử tập giao dịch từng cây nến (Không thiên kiến nhìn trước tương lai)"
+          >
+            <Play className="w-3 h-3" />
+            <span>Bar Replay</span>
+          </button>
+        )}
+
+        {onChangeCompareSymbol && (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#101726] border border-slate-800 text-[11px] shrink-0">
+            <GitCompare className="w-3 h-3 text-sky-400" />
+            <select
+              value={compareSymbol || ''}
+              onChange={e => onChangeCompareSymbol(e.target.value ? e.target.value : null)}
+              className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer text-[11px]"
+              title="Chồng đường biến động % của tài sản khác lên biểu đồ để so sánh dẫn dắt giá"
+            >
+              <option value="" className="bg-[#0b111d]">
+                So sánh: Tắt
+              </option>
+              <option value="BTCUSDT" className="bg-[#0b111d]">
+                vs BTCUSDT
+              </option>
+              <option value="XAUUSD" className="bg-[#0b111d]">
+                vs Vàng XAUUSD
+              </option>
+              <option value="VNINDEX" className="bg-[#0b111d]">
+                vs VNINDEX
+              </option>
+              <option value="OIL_WTI" className="bg-[#0b111d]">
+                vs Dầu WTI
+              </option>
+              <option value="NVDA" className="bg-[#0b111d]">
+                vs NVDA
+              </option>
+            </select>
+          </div>
+        )}
+
+        <div className="h-4 w-px bg-slate-800 shrink-0 mx-0.5" />
+
+        {/* Cluster 1: Flagship Kronos AI Projections & Institutional Volume Profile */}
         <button
           onClick={() => onToggle('kronosGhostCandles')}
           className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
@@ -70,6 +131,31 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
         >
           <BrainCircuit className="w-3 h-3 text-cyan-400" />
           <span>Nến AI Kronos</span>
+        </button>
+
+        <button
+          onClick={() => onToggle('volumeProfile')}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+            settings.volumeProfile
+              ? 'bg-amber-500/20 text-amber-200 border-amber-400/60 shadow-sm shadow-amber-500/15'
+              : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+          }`}
+          title="Hiển thị Volume Profile (VPVR) với POC, VAH 70% & VAL 70% trực tiếp trên trục giá"
+        >
+          <BarChart2 className="w-3 h-3 text-amber-400" />
+          <span>VPVR (POC/VA)</span>
+        </button>
+
+        <button
+          onClick={() => onToggle('vwap')}
+          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+            settings.vwap
+              ? 'bg-teal-500/20 text-teal-200 border-teal-400/60'
+              : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+          }`}
+          title="Đường giá bình quân gia quyền khối lượng định chế (Institutional VWAP)"
+        >
+          <span>VWAP</span>
         </button>
 
         <button

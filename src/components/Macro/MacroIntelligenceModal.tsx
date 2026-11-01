@@ -21,9 +21,10 @@ import {
 import { evaluateSymbolMacroImpact } from '../../services/macro/macroIntelligence';
 import { FedPivotIntelligenceView } from './FedPivotIntelligenceView';
 import { VnGoldFxArbitrageView, IntermarketCorrelationView } from './VnGoldAndCorrelationViews';
-import { Coins, GitCompare } from 'lucide-react';
+import { MarketNewsAndBreadthView } from './MarketNewsAndBreadthView';
+import { Coins, GitCompare, Newspaper } from 'lucide-react';
 
-export type MacroModalTab = 'indicators' | 'fed_pivot' | 'vn_gold_fx' | 'correlation' | 'alerts' | 'calendar';
+export type MacroModalTab = 'indicators' | 'fed_pivot' | 'vn_gold_fx' | 'correlation' | 'news_breadth' | 'alerts' | 'calendar';
 
 interface MacroIntelligenceModalProps {
   snapshot: MacroIntelligenceSnapshot | null;
@@ -231,6 +232,19 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
             >
               <GitCompare className="w-3.5 h-3.5 text-sky-400" />
               <span>Tương Quan Liên TT</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('news_breadth')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition ${
+                activeTab === 'news_breadth'
+                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/45'
+                  : 'text-slate-300 hover:text-white bg-[#101829] border border-slate-800'
+              }`}
+            >
+              <Newspaper className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Tin Nóng & Độ Rộng TT</span>
             </button>
 
             <button
@@ -500,6 +514,16 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
                   currentSymbol={currentSymbol}
                   symbols={symbols}
                   onJumpToSymbol={handleJumpToAsset}
+                />
+              )}
+
+              {/* TAB 1.8: REAL-TIME FINANCIAL NEWS & VN30 MARKET BREADTH */}
+              {activeTab === 'news_breadth' && (
+                <MarketNewsAndBreadthView
+                  symbols={symbols}
+                  currentSymbol={currentSymbol}
+                  onSelectSymbol={onSelectSymbol}
+                  onClose={onClose}
                 />
               )}
 

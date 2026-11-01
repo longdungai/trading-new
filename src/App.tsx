@@ -77,6 +77,9 @@ import { BacktestModal } from './components/Backtest/BacktestModal';
 import { AccumulationRadarModal } from './components/Market/AccumulationRadarModal';
 import { MacroIntelligenceModal, MacroModalTab } from './components/Macro/MacroIntelligenceModal';
 import { AlertCenterModal } from './components/Alerts/AlertCenterModal';
+import { MtfAndVpvrCard } from './components/AIInsight/MtfAndVpvrCard';
+import { MarketReplayBar } from './components/Chart/MarketReplayBar';
+import { CommandPaletteModal } from './components/Common/CommandPaletteModal';
 import { syncAllPaperTradesWithMarket } from './services/paperTrading/userPaperTrading';
 import {
   loadSmartAlertRules,
@@ -124,6 +127,15 @@ export const App: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'chart' | 'ai' | 'market' | 'risk'>('chart');
   const [showLeftDock, setShowLeftDock] = useState<boolean>(true);
   const [isZenMode, setIsZenMode] = useState<boolean>(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [compareSymbol, setCompareSymbol] = useState<string | null>(null);
+  const [compareCandles, setCompareCandles] = useState<Candle[]>([]);
+
+  // On-Chart Historical Bar Replay State (Zero Look-Ahead Bias)
+  const [isReplayMode, setIsReplayMode] = useState<boolean>(false);
+  const [replayCutIndex, setReplayCutIndex] = useState<number>(100);
+  const [isReplayPlaying, setIsReplayPlaying] = useState<boolean>(false);
+  const [replaySpeedMs, setReplaySpeedMs] = useState<number>(420);
   const [isXlScreen, setIsXlScreen] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : true
   );
@@ -610,18 +622,100 @@ export const App: React.FC = () => {
     };
   }, [currentSymbol.symbol, timeframe, loadData]);
 
-  // Derived Analytics & Calculations
+  // Intermarket Comparison Overlay Candle Sync
+  useEffect(() => {
+    let active = true;
+    if (!compareSymbol || compareSymbol === currentSymbol.symbol) {
+      setCompareCandles([]);
+      return;
+    }
+    const targetSym = symbolsRef.current.find(s => s.symbol === compareSymbol);
+    if (!targetSym) {
+      setCompareCandles([]);
+      return;
+    }
+    void fetchMarketData(targetSym, timeframe).then(data => {
+      if (active && Array.isArray(data)) {
+        setCompareCandles(data);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [compareSymbol, currentSymbol.symbol, timeframe]);
+
+  // Bar Replay Playback Timer & Safe Bounds
+  useEffect(() => {
+    if (!isReplayMode) {
+      setIsReplayPlaying(false);
+      return;
+    }
+    setReplayCutIndex(prev =>
+      candles.length > 0 ? Math.min(candles.length - 1, Math.max(25, prev)) : 0
+    );
+  }, [isReplayMode, candles.length]);
+
+  useEffect(() => {
+    if (!isReplayMode || !isReplayPlaying) return;
+    const timer = setInterval(() => {
+      setReplayCutIndex(prev => {
+        if (prev >= candles.length - 1) {
+          setIsReplayPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, replaySpeedMs);
+    return () => clearInterval(timer);
+  }, [isReplayMode, isReplayPlaying, replaySpeedMs, candles.length]);
+
+  const handleToggleReplayMode = useCallback(() => {
+    setIsReplayMode(prev => {
+      const next = !prev;
+      if (next && candles.length > 35) {
+        setReplayCutIndex(Math.max(30, Math.floor(candles.length * 0.6)));
+      }
+      setIsReplayPlaying(false);
+      return next;
+    });
+  }, [candles.length]);
+
+  const effectiveCandles = useMemo(() => {
+    if (!isReplayMode || candles.length === 0) return candles;
+    return candles.slice(0, Math.min(candles.length, Math.max(20, replayCutIndex + 1)));
+  }, [isReplayMode, candles, replayCutIndex]);
+
+  const effectiveCompareCandles = useMemo(() => {
+    if (!compareCandles.length) return [];
+    if (!isReplayMode || effectiveCandles.length === 0) return compareCandles;
+    const cutoffTime = effectiveCandles[effectiveCandles.length - 1].time;
+    return compareCandles.filter(c => c.time <= cutoffTime);
+  }, [compareCandles, isReplayMode, effectiveCandles]);
+
+  const effectiveMtfMap = useMemo(() => {
+    if (!isReplayMode || effectiveCandles.length === 0) return mtfCandlesMap;
+    const cutoffTime = effectiveCandles[effectiveCandles.length - 1].time;
+    const sliced: Partial<Record<Timeframe, Candle[]>> = {};
+    for (const [tfKey, arr] of Object.entries(mtfCandlesMap)) {
+      if (arr) {
+        sliced[tfKey as Timeframe] = arr.filter(c => c.time <= cutoffTime);
+      }
+    }
+    return sliced;
+  }, [isReplayMode, effectiveCandles, mtfCandlesMap]);
+
+  // Derived Analytics & Calculations (Strictly Bound to effectiveCandles for Zero Look-Ahead Replay)
   const srLevels: SupportResistanceLevel[] = useMemo(() => {
-    return calculateSupportResistance(candles);
-  }, [candles]);
+    return calculateSupportResistance(effectiveCandles);
+  }, [effectiveCandles]);
 
   const fibLevels: FibonacciLevel[] = useMemo(() => {
-    return calculateFibonacciLevels(candles);
-  }, [candles]);
+    return calculateFibonacciLevels(effectiveCandles);
+  }, [effectiveCandles]);
 
   const orderBlocks: OrderBlock[] = useMemo(() => {
-    return detectOrderBlocks(candles);
-  }, [candles]);
+    return detectOrderBlocks(effectiveCandles);
+  }, [effectiveCandles]);
 
   // Attempt non-blocking connection to Kronos PyTorch Server if configured
   useEffect(() => {
@@ -715,52 +809,53 @@ export const App: React.FC = () => {
   const aiPrediction: AIPrediction | null = useMemo(() => {
     return generateAIPrediction(
       currentSymbol.symbol,
-      candles,
+      effectiveCandles,
       kronosConfig.predLen,
       kronosConfig,
-      kronosCloudOutput,
+      isReplayMode ? null : kronosCloudOutput,
       timeframe,
-      mtfCandlesMap,
+      effectiveMtfMap,
       macroSnapshot,
       currentSymbol
     );
   }, [
     currentSymbol,
-    candles,
+    effectiveCandles,
     kronosConfig,
+    isReplayMode,
     kronosCloudOutput,
     timeframe,
-    mtfCandlesMap,
+    effectiveMtfMap,
     macroSnapshot,
   ]);
 
   const strategyHub: StrategyAnalysisHub = useMemo(() => {
     return generateStrategyHub(
       currentSymbol.symbol,
-      candles,
+      effectiveCandles,
       timeframe,
       macroSnapshot,
       currentSymbol
     );
-  }, [currentSymbol, candles, timeframe, macroSnapshot]);
+  }, [currentSymbol, effectiveCandles, timeframe, macroSnapshot]);
 
   const currentAccumulation = useMemo(() => {
-    return analyzeAccumulationZone(currentSymbol, candles);
-  }, [currentSymbol, candles]);
+    return analyzeAccumulationZone(currentSymbol, effectiveCandles);
+  }, [currentSymbol, effectiveCandles]);
 
   const tradeSetup: TradeSetup | null = useMemo(() => {
     return generateTradeSetup(
       currentSymbol.symbol,
-      candles,
+      effectiveCandles,
       timeframe,
       macroSnapshot,
       currentSymbol
     );
-  }, [currentSymbol, candles, timeframe, macroSnapshot]);
+  }, [currentSymbol, effectiveCandles, timeframe, macroSnapshot]);
 
   // Auto-record & reconcile Kronos P50 checkpoints strictly against REAL closed candles & live quotes
   useEffect(() => {
-    if (!aiPrediction || candles.length < 30) return;
+    if (isReplayMode || !aiPrediction || candles.length < 30) return;
     const lastCandleTime = candles[candles.length - 1]?.time || Math.floor(Date.now() / 1000);
     const recorded = recordKronosForecastCheckpoint(aiPrediction, timeframe, lastCandleTime, false);
     const reconciled = reconcileForecastAuditLog(currentSymbol.symbol, timeframe, candles, symbols);
@@ -891,6 +986,7 @@ export const App: React.FC = () => {
           setPresetAlertPrice(null);
           setIsAlertModalOpen(true);
         }}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(prev => !prev)}
         unreadAlertCount={unreadAlertCount}
         activeAlertRuleCount={activeAlertRuleCount}
         onRefreshData={() => {
@@ -939,6 +1035,10 @@ export const App: React.FC = () => {
           }}
           isZenMode={isZenMode}
           onToggleZenMode={() => setIsZenMode(prev => !prev)}
+          isReplayMode={isReplayMode}
+          onToggleReplayMode={handleToggleReplayMode}
+          compareSymbol={compareSymbol}
+          onChangeCompareSymbol={setCompareSymbol}
         />
       )}
 
@@ -978,6 +1078,7 @@ export const App: React.FC = () => {
                 symbol={currentSymbol.symbol}
                 quoteAsset={currentSymbol.quoteAsset}
                 marketSymbol={currentSymbol}
+                candles={effectiveCandles}
               />
             </aside>
           )}
@@ -1094,7 +1195,7 @@ export const App: React.FC = () => {
             {/* Lightweight Candles & Kronos Ghost Projections */}
             <div className="flex-1 relative min-h-0 overflow-hidden">
               <TradingChart
-                candles={candles}
+                candles={effectiveCandles}
                 timeframe={timeframe}
                 settings={settings}
                 srLevels={srLevels}
@@ -1103,6 +1204,10 @@ export const App: React.FC = () => {
                 aiPrediction={aiPrediction}
                 symbolName={currentSymbol.symbol}
                 symbolFullName={currentSymbol.name}
+                compareSymbolName={
+                  compareSymbol && compareSymbol !== currentSymbol.symbol ? compareSymbol : null
+                }
+                compareCandles={effectiveCompareCandles}
                 onQuickCreatePriceAlert={(price) => {
                   setPresetAlertPrice(price);
                   setIsAlertModalOpen(true);
@@ -1110,8 +1215,35 @@ export const App: React.FC = () => {
               />
             </div>
 
+            {/* On-Chart Zero-Lookahead Bar Replay Transport & Practice Pad */}
+            {isReplayMode && (
+              <MarketReplayBar
+                totalCandles={candles.length}
+                cutIndex={replayCutIndex}
+                currentCandle={effectiveCandles[effectiveCandles.length - 1]}
+                isPlaying={isReplayPlaying}
+                speedMs={replaySpeedMs}
+                quoteAsset={currentSymbol.quoteAsset}
+                isVND={isVND}
+                onChangeCutIndex={idx => {
+                  setIsReplayPlaying(false);
+                  setReplayCutIndex(idx);
+                }}
+                onTogglePlay={() => setIsReplayPlaying(prev => !prev)}
+                onStepForward={() => {
+                  setIsReplayPlaying(false);
+                  setReplayCutIndex(prev => Math.min(candles.length - 1, prev + 1));
+                }}
+                onChangeSpeed={setReplaySpeedMs}
+                onExitReplay={() => {
+                  setIsReplayPlaying(false);
+                  setIsReplayMode(false);
+                }}
+              />
+            )}
+
             {/* Sub-panels (RSI & MACD) */}
-            <IndicatorPanels candles={candles} settings={settings} />
+            <IndicatorPanels candles={effectiveCandles} settings={settings} />
           </main>
 
           {/* RIGHT COMMAND CENTER (Desktop Sidebar OR Full Mobile View when tab selected) */}
@@ -1183,6 +1315,18 @@ export const App: React.FC = () => {
                       onPinAuditCheckpoint={handlePinAuditCheckpoint}
                       onClearAuditLog={() => setAuditEntries(clearForecastAuditLog())}
                       onOpenMacroModal={() => setIsMacroModalOpen(true)}
+                    />
+                    <MtfAndVpvrCard
+                      symbol={currentSymbol.symbol}
+                      quoteAsset={currentSymbol.quoteAsset}
+                      activeTimeframe={timeframe}
+                      candles={effectiveCandles}
+                      mtfCandlesMap={effectiveMtfMap}
+                      vpvrEnabled={settings.volumeProfile}
+                      vwapEnabled={settings.vwap}
+                      onToggleVpvr={() => handleToggleIndicator('volumeProfile')}
+                      onToggleVwap={() => handleToggleIndicator('vwap')}
+                      onSelectTimeframe={setTimeframe}
                     />
                     <TradeSetupCard
                       strategyHub={strategyHub}
@@ -1376,6 +1520,36 @@ export const App: React.FC = () => {
           onRefresh={() => void refreshMacroSnapshot(true)}
           onSelectSymbol={handleSelectSymbol}
           onClose={() => setIsMacroModalOpen(false)}
+        />
+      )}
+
+      {/* Pro Command Palette (Ctrl+K / Cmd+K) */}
+      {isCommandPaletteOpen && (
+        <CommandPaletteModal
+          symbols={symbols}
+          currentSymbol={currentSymbol}
+          timeframe={timeframe}
+          onSelectSymbolAndTimeframe={(sym, tf) => {
+            handleSelectSymbol(sym);
+            if (tf) setTimeframe(tf);
+            setActiveView('chart');
+          }}
+          onChangeTimeframe={setTimeframe}
+          onOpenMacroTab={tab => {
+            setMacroModalTab(tab);
+            setIsMacroModalOpen(true);
+          }}
+          onOpenBacktest={() => setIsBacktestOpen(true)}
+          onOpenAlerts={() => {
+            setPresetAlertPrice(null);
+            setIsAlertModalOpen(true);
+          }}
+          onOpenRadar={() => setIsRadarOpen(true)}
+          onToggleReplay={handleToggleReplayMode}
+          onToggleVpvr={() => handleToggleIndicator('volumeProfile')}
+          onToggleVwap={() => handleToggleIndicator('vwap')}
+          onSetCompareSymbol={setCompareSymbol}
+          onClose={() => setIsCommandPaletteOpen(false)}
         />
       )}
     </div>

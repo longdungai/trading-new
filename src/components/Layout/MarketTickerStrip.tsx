@@ -3,7 +3,7 @@ import { AIPrediction, MacroIntelligenceSnapshot, MarketSymbol } from '../../typ
 import { MacroModalTab } from '../Macro/MacroIntelligenceModal';
 import { computeVnGoldFxArbitrage } from '../../services/macro/vnGoldFxArbitrage';
 import { formatPercent, formatPrice } from '../../utils/formatters';
-import { Activity, AlertTriangle, Coins, Cpu, Globe2, Landmark, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, Coins, Cpu, Globe2, Landmark, Newspaper, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface MarketTickerStripProps {
   symbols: MarketSymbol[];
@@ -180,6 +180,16 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
               </span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => onOpenMacroModal('news_breadth')}
+            className="hidden md:flex px-2 py-0.5 rounded-md border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-mono items-center gap-1 shrink-0 text-emerald-200 transition"
+            title="Mở Trạm Tin Nóng Tài Chính Thời Gian Thực & Độ Rộng Nội Tại VN30"
+          >
+            <Newspaper className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span className="font-sans font-bold">Tin nóng & Độ rộng</span>
+          </button>
         </div>
       )}
 

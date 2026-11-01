@@ -26,6 +26,7 @@ interface HeaderProps {
   onOpenHeatmap: () => void;
   onOpenRadar?: () => void;
   onOpenAlerts?: () => void;
+  onOpenCommandPalette?: () => void;
   unreadAlertCount?: number;
   activeAlertRuleCount?: number;
   onRefreshData: () => void;
@@ -44,6 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBacktest,
   onOpenRadar,
   onOpenAlerts,
+  onOpenCommandPalette,
   unreadAlertCount = 0,
   activeAlertRuleCount = 0,
   onRefreshData,
@@ -66,19 +68,23 @@ export const Header: React.FC<HeaderProps> = ({
 
   const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1D', '1W', '1M'];
 
-  // Global keyboard shortcut: Ctrl+K / Cmd+K to open Symbol Search, Escape to close
+  // Global keyboard shortcut: Ctrl+K / Cmd+K to open Pro Command Palette (or Symbol Search), Escape to close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setSearchOpen(prev => !prev);
+        if (onOpenCommandPalette) {
+          onOpenCommandPalette();
+        } else {
+          setSearchOpen(prev => !prev);
+        }
       } else if (e.key === 'Escape' && searchOpen) {
         setSearchOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [searchOpen]);
+  }, [searchOpen, onOpenCommandPalette]);
 
   const filteredSymbols = symbols.filter(s => {
     const matchesType =
@@ -183,7 +189,16 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
 
-            <div className="hidden lg:flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#090d16] border border-slate-800 text-[9px] font-mono text-slate-400">
+            <div
+              onClick={e => {
+                if (onOpenCommandPalette) {
+                  e.stopPropagation();
+                  onOpenCommandPalette();
+                }
+              }}
+              title="Mở bảng Lệnh Nhanh Command Palette (Ctrl + K)"
+              className="hidden lg:flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#090d16] hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-400/50 text-[9px] font-mono text-cyan-300 transition"
+            >
               <Command className="w-2.5 h-2.5" />
               <span>K</span>
             </div>

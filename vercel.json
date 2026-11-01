@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron-macro-watch",
+      "schedule": "0 1 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

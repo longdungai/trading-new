@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createChart,
   IChartApi,
@@ -21,6 +21,10 @@ import {
   calculateEMA,
   calculateSuperTrend,
 } from '../../services/indicators';
+import {
+  calculateRollingVWAP,
+  calculateVisibleVolumeProfile,
+} from '../../services/analysis/volumeProfileMtf';
 import { ChartDrawingOverlay } from './ChartDrawingOverlay';
 
 interface TradingChartProps {
@@ -33,6 +37,8 @@ interface TradingChartProps {
   aiPrediction: AIPrediction | null;
   symbolName?: string;
   symbolFullName?: string;
+  compareSymbolName?: string | null;
+  compareCandles?: Candle[];
   onQuickCreatePriceAlert?: (price: number) => void;
 }
 
@@ -45,6 +51,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   aiPrediction,
   symbolName = '',
   symbolFullName = '',
+  compareSymbolName = null,
+  compareCandles = [],
   onQuickCreatePriceAlert,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +66,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const ema20SeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const ema50SeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const ema200SeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const vwapSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const compareSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const bbUpperRef = useRef<ISeriesApi<'Line'> | null>(null);
   const bbMiddleRef = useRef<ISeriesApi<'Line'> | null>(null);
   const bbLowerRef = useRef<ISeriesApi<'Line'> | null>(null);
@@ -72,13 +82,21 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const mcUpperRef = useRef<ISeriesApi<'Line'> | null>(null);
   const mcLowerRef = useRef<ISeriesApi<'Line'> | null>(null);
 
-  // Price Lines References (S/R, Fibonacci)
+  // Price Lines References (S/R, Fibonacci, VPVR POC/VAH/VAL)
   const priceLinesRef = useRef<IPriceLine[]>([]);
+
+  // VPVR coordinate tick for 60fps zoom/pan sync
+  const [vpvrCoordTick, setVpvrCoordTick] = useState(0);
 
   // Track hover state and previous symbol/timeframe to preserve pan/zoom on real-time ticks
   const isHoveringRef = useRef<boolean>(false);
   const prevTimeframeRef = useRef<Timeframe>(timeframe);
   const prevSymbolRef = useRef<string>(symbolName);
+
+  const vpvrProfile = useMemo(() => {
+    if (!settings.volumeProfile || candles.length < 5) return null;
+    return calculateVisibleVolumeProfile(candles, 24, 0.7);
+  }, [settings.volumeProfile, candles]);
 
   // 1. Initialize Chart
   useEffect(() => {
@@ -115,6 +133,10 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           style: LineStyle.Dashed,
           labelBackgroundColor: '#0f172a',
         },
+      },
+      leftPriceScale: {
+        visible: false,
+        borderColor: 'rgba(30, 41, 59, 0.85)',
       },
       rightPriceScale: {
         borderColor: 'rgba(30, 41, 59, 0.85)',
@@ -162,6 +184,21 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     ema20SeriesRef.current = chart.addLineSeries({ color: '#06b6d4', lineWidth: 2, title: 'EMA 20' });
     ema50SeriesRef.current = chart.addLineSeries({ color: '#f59e0b', lineWidth: 2, title: 'EMA 50' });
     ema200SeriesRef.current = chart.addLineSeries({ color: '#a855f7', lineWidth: 2, title: 'EMA 200' });
+    vwapSeriesRef.current = chart.addLineSeries({
+      color: '#2dd4bf',
+      lineWidth: 2,
+      lineStyle: LineStyle.Solid,
+      title: 'VWAP',
+    });
+
+    // Secondary Intermarket Compare Series (% Change Indexed on Left Scale)
+    compareSeriesRef.current = chart.addLineSeries({
+      color: '#f472b6',
+      lineWidth: 2,
+      lineStyle: LineStyle.Solid,
+      priceScaleId: 'left',
+      title: 'Compare',
+    });
 
     bbUpperRef.current = chart.addLineSeries({ color: 'rgba(59, 130, 246, 0.7)', lineWidth: 1, lineStyle: LineStyle.Dotted });
     bbMiddleRef.current = chart.addLineSeries({ color: 'rgba(96, 165, 250, 0.8)', lineWidth: 1 });
@@ -195,7 +232,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     mcUpperRef.current = chart.addLineSeries({ color: 'rgba(168, 85, 247, 0.65)', lineWidth: 1, lineStyle: LineStyle.Dotted, title: 'Kronos 95%' });
     mcLowerRef.current = chart.addLineSeries({ color: 'rgba(168, 85, 247, 0.65)', lineWidth: 1, lineStyle: LineStyle.Dotted });
 
-    // 60fps Crosshair OHLC Readout (Historical + Kronos Ghost Candles, zero React re-renders)
     const fmt = (n: number) =>
       n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : n >= 1 ? n.toFixed(2) : n.toFixed(4);
 
@@ -214,7 +250,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       ohlcHudRef.current.textContent = `${isGhost ? '[AI KRONOS] ' : ''}O ${fmt(bar.open)}   H ${fmt(bar.high)}   L ${fmt(bar.low)}   C ${fmt(bar.close)}  (${sign}${chg.toFixed(2)}%)`;
     });
 
-    // Resize Observer with smooth handling
+    const bumpVpvr = () => {
+      requestAnimationFrame(() => setVpvrCoordTick(t => (t + 1) % 100000));
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(bumpVpvr);
+
     const handleResize = () => {
       if (!container || !chartRef.current) return;
       const rect = container.getBoundingClientRect();
@@ -223,6 +263,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           width: rect.width,
           height: rect.height,
         });
+        bumpVpvr();
       }
     };
 
@@ -242,7 +283,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     };
   }, []);
 
-  // 2. Smoothly Update Data & Indicators (No recreation of series = 60fps ultra smooth)
+  // 2. Smoothly Update Data & Indicators
   useEffect(() => {
     if (!chartRef.current || !candleSeriesRef.current || !volumeSeriesRef.current) return;
     if (!candles || candles.length === 0) return;
@@ -251,7 +292,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     const candleSeries = candleSeriesRef.current;
     const volumeSeries = volumeSeriesRef.current;
 
-    // 1. Update Candlestick Data
     const formattedCandles = candles.map(c => ({
       time: c.time as any,
       open: c.open,
@@ -261,7 +301,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }));
     candleSeries.setData(formattedCandles);
 
-    // 2. Update Volume Data (Historical + Kronos 6D Predicted Future Volume)
     const lastCandle = candles[candles.length - 1];
     latestCandleRef.current = lastCandle || null;
     if (lastCandle && ohlcHudRef.current && !isHoveringRef.current) {
@@ -271,6 +310,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       ohlcHudRef.current.dataset.trend = chg >= 0 ? 'up' : 'down';
       ohlcHudRef.current.textContent = `O ${fmt(lastCandle.open)}   H ${fmt(lastCandle.high)}   L ${fmt(lastCandle.low)}   C ${fmt(lastCandle.close)}  (${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%)`;
     }
+
     const formattedVolume: { time: any; value: number; color: string }[] = candles.map(c => ({
       time: c.time as any,
       value: c.volume,
@@ -301,8 +341,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
                 ? 'rgba(34, 211, 238, 0.78)'
                 : 'rgba(251, 146, 60, 0.78)'
               : isUp
-              ? 'rgba(6, 182, 212, 0.42)'
-              : 'rgba(249, 115, 22, 0.42)',
+                ? 'rgba(6, 182, 212, 0.42)'
+                : 'rgba(249, 115, 22, 0.42)',
           });
           prevVolTime = pc.time;
         }
@@ -312,7 +352,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
     const closes = candles.map(c => c.close);
 
-    // 3. Update EMA Series
+    // 3. Update EMA & Institutional VWAP Series
     if (settings.ema20 && ema20SeriesRef.current) {
       const ema20 = calculateEMA(closes, 20);
       const emaData = candles.map((c, i) => ({ time: c.time as any, value: ema20[i] })).filter(d => d.value !== null);
@@ -335,6 +375,36 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       ema200SeriesRef.current.setData(emaData as any);
     } else if (ema200SeriesRef.current) {
       ema200SeriesRef.current.setData([]);
+    }
+
+    if (settings.vwap && vwapSeriesRef.current) {
+      const vwapPts = calculateRollingVWAP(candles);
+      vwapSeriesRef.current.setData(vwapPts.map(p => ({ time: p.time as any, value: p.vwap })));
+    } else if (vwapSeriesRef.current) {
+      vwapSeriesRef.current.setData([]);
+    }
+
+    // 3b. Intermarket Comparison Series (Left Scale)
+    if (compareSeriesRef.current) {
+      if (compareSymbolName && compareCandles && compareCandles.length > 2) {
+        chart.applyOptions({
+          leftPriceScale: { visible: true, borderColor: 'rgba(244, 114, 182, 0.35)' },
+        });
+        compareSeriesRef.current.applyOptions({
+          title: `${compareSymbolName}`,
+        });
+        compareSeriesRef.current.setData(
+          compareCandles.map(cc => ({
+            time: cc.time as any,
+            value: cc.close,
+          }))
+        );
+      } else {
+        chart.applyOptions({
+          leftPriceScale: { visible: false },
+        });
+        compareSeriesRef.current.setData([]);
+      }
     }
 
     // 4. Update Bollinger Bands
@@ -365,11 +435,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       supertrendSeriesRef.current.setData([]);
     }
 
-    // 6. Clear and Update Support & Resistance Lines
+    // 6. Clear and Update Support & Resistance + Fibonacci + VPVR Key Lines
     for (const pl of priceLinesRef.current) {
       try {
         candleSeries.removePriceLine(pl);
-      } catch (e) {}
+      } catch {}
     }
     priceLinesRef.current = [];
 
@@ -388,7 +458,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     }
 
-    // 7. Update Auto Fibonacci
     if (settings.autoFibonacci) {
       for (const fib of fibLevels) {
         const pl = candleSeries.createPriceLine({
@@ -403,7 +472,36 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     }
 
-    // 8. Update Kronos Ghost Candlesticks, Walk-Forward Back-Projection & AI Forecast Paths
+    if (settings.volumeProfile && vpvrProfile) {
+      priceLinesRef.current.push(
+        candleSeries.createPriceLine({
+          price: vpvrProfile.pocPrice,
+          color: '#f59e0b',
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          axisLabelVisible: true,
+          title: 'POC (Đỉnh KL)',
+        }),
+        candleSeries.createPriceLine({
+          price: vpvrProfile.vahPrice,
+          color: '#38bdf8',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'VAH 70%',
+        }),
+        candleSeries.createPriceLine({
+          price: vpvrProfile.valPrice,
+          color: '#818cf8',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: 'VAL 70%',
+        })
+      );
+    }
+
+    // 8. Update Kronos Ghost Candlesticks, Walk-Forward & AI Forecast Paths
     if (
       settings.kronosGhostCandles &&
       aiPrediction &&
@@ -431,7 +529,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       kronosCandleSeriesRef.current.setData([]);
     }
 
-    // 8b. Update Kronos Historical Walk-Forward Verification Line
     if (
       settings.kronosWalkForward &&
       aiPrediction?.walkForward?.backtestPath &&
@@ -479,7 +576,6 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       if (aiBearishRef.current) aiBearishRef.current.setData([]);
     }
 
-    // 9. Update Monte Carlo Bounds
     if (settings.monteCarloPaths && aiPrediction && aiPrediction.upperConfidenceBound.length > 0 && lastCandle) {
       if (mcUpperRef.current && mcLowerRef.current) {
         mcUpperRef.current.setData([
@@ -496,15 +592,28 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       if (mcLowerRef.current) mcLowerRef.current.setData([]);
     }
 
-    // 10. Auto-Fit TimeScale Smoothly When Symbol or Timeframe Changes (Preserves Pan/Zoom on Live Ticks)
     if (prevTimeframeRef.current !== timeframe || prevSymbolRef.current !== symbolName) {
       prevTimeframeRef.current = timeframe;
       prevSymbolRef.current = symbolName;
       requestAnimationFrame(() => {
         chart.timeScale().fitContent();
+        setVpvrCoordTick(t => t + 1);
       });
+    } else {
+      requestAnimationFrame(() => setVpvrCoordTick(t => t + 1));
     }
-  }, [candles, timeframe, symbolName, settings, srLevels, fibLevels, aiPrediction]);
+  }, [
+    candles,
+    timeframe,
+    symbolName,
+    settings,
+    srLevels,
+    fibLevels,
+    aiPrediction,
+    vpvrProfile,
+    compareSymbolName,
+    compareCandles,
+  ]);
 
   const wf = aiPrediction?.walkForward;
   const vp = aiPrediction?.volumeProfile;
@@ -525,7 +634,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         </div>
       )}
 
-      {/* Top-Left Live OHLCV + KronosChart HUD Legend (Non-intrusive pointer-events-none) */}
+      {/* Top-Left Live OHLCV + KronosChart HUD Legend */}
       <div className="absolute top-2 left-2.5 z-10 pointer-events-none flex flex-col gap-1 max-w-[86%]">
         <div className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded-md bg-[#080d18]/80 backdrop-blur-sm border border-slate-800/80 text-[10px] font-mono tabular-nums text-slate-300 shadow">
           {symbolName && (
@@ -537,6 +646,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             ref={ohlcHudRef}
             className="text-slate-300 data-[trend=up]:text-emerald-400 data-[trend=down]:text-rose-400 data-[trend=ghost]:text-cyan-300 font-medium"
           />
+          {compareSymbolName && (
+            <span className="px-1.5 py-0.2 rounded bg-pink-500/20 border border-pink-400/40 text-pink-300 font-bold">
+              vs {compareSymbolName} (Trục Trái)
+            </span>
+          )}
         </div>
 
         {(settings.kronosWalkForward || settings.kronosGhostCandles) && aiPrediction && (
@@ -560,6 +674,50 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           </div>
         )}
       </div>
+
+      {/* Right-Docked Visible Range Volume Profile (VPVR) Histogram Overlay */}
+      {settings.volumeProfile && vpvrProfile && candleSeriesRef.current && (
+        <svg
+          data-tick={vpvrCoordTick}
+          className="absolute top-0 right-[62px] w-[135px] h-full pointer-events-none z-[4]"
+        >
+          {vpvrProfile.rows.map(row => {
+            const yTop = candleSeriesRef.current?.priceToCoordinate(row.priceHigh);
+            const yBot = candleSeriesRef.current?.priceToCoordinate(row.priceLow);
+            if (yTop === null || yTop === undefined || yBot === null || yBot === undefined) {
+              return null;
+            }
+            const top = Math.min(yTop, yBot);
+            const height = Math.max(2, Math.abs(yBot - yTop) - 1);
+            const totalW = (row.volumePctOfMax / 100) * 130;
+            const buyW =
+              row.totalVolume > 0 ? (row.buyVolume / row.totalVolume) * totalW : totalW * 0.5;
+            const sellW = Math.max(0, totalW - buyW);
+            const xStart = 135 - totalW;
+
+            return (
+              <g key={row.binIndex} opacity={row.isPoc ? 0.88 : row.inValueArea ? 0.62 : 0.28}>
+                <rect
+                  x={xStart}
+                  y={top}
+                  width={sellW}
+                  height={height}
+                  fill={row.isPoc ? '#f59e0b' : '#f43f5e'}
+                  rx={1.5}
+                />
+                <rect
+                  x={xStart + sellW}
+                  y={top}
+                  width={buyW}
+                  height={height}
+                  fill={row.isPoc ? '#fbbf24' : '#10b981'}
+                  rx={1.5}
+                />
+              </g>
+            );
+          })}
+        </svg>
+      )}
 
       <ChartDrawingOverlay
         chartRef={chartRef}

@@ -2,28 +2,28 @@
 <html lang="vi" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M3 3v18h18v-2H5V3H3zm4 14h2v-4H7v4zm4 0h2V7h-2v10zm4 0h2v-7h-2v7zm4 0h2V4h-2v13z'/></svg>" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M3 3v18h18v-2H5V3H3zm4 14h2v-4H7v4zm4 0h2V7h-2v10zm4 0h2v-7h-2v7zm4 0h2V4h-2v13z'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     
     <!-- PWA & Mobile Web App Meta Tags -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#080b11" />
+    <meta name="theme-color" content="#06090f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Trading New" />
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192' fill='%233b82f6'><rect width='192' height='192' rx='36' fill='%230f172a'/><path d='M30 30v132h132v-16H46V30H30zm28 100h16V86H58v44zm32 0h16V46H90v84zm32 0h16v-54h-16v54zm32 0h16V30h-16v100z' fill='%2338bdf8'/></svg>" />
+    <meta name="apple-mobile-web-app-title" content="Trading New Pro" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192' fill='%2306b6d4'><rect width='192' height='192' rx='36' fill='%2306090f'/><path d='M30 30v132h132v-16H46V30H30zm28 100h16V86H58v44zm32 0h16V46H90v84zm32 0h16v-54h-16v54zm32 0h16V30h-16v100z' fill='%2322d3ee'/></svg>" />
 
-    <title>Trading New | Nền Tảng Phân Tích & Dự Báo Thị Trường Chuyên Nghiệp</title>
+    <title>Trading New Pro | Kronos AI Financial Terminal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-[#080b11] text-gray-100 antialiased overflow-hidden select-none">
+  <body class="bg-[#06090f] text-slate-100 antialiased overflow-hidden select-none">
     <div id="root">
-      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #080b11; color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
-        <div style="width: 48px; height: 48px; border: 3px solid rgba(59, 130, 246, 0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-        <div style="margin-top: 16px; font-weight: 700; font-size: 14px; letter-spacing: 0.05em; color: #e2e8f0;">TRADING NEW</div>
-        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Đang tải hệ thống phân tích & tín hiệu AI...</div>
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 35%, #0e1a2f 0%, #06090f 70%); color: #94a3b8; font-family: 'JetBrains Mono', monospace;">
+        <div style="width: 44px; height: 44px; border: 2.5px solid rgba(6, 182, 212, 0.2); border-top-color: #22d3ee; border-radius: 50%; animation: spin 0.75s linear infinite;"></div>
+        <div style="margin-top: 16px; font-weight: 800; font-size: 14px; letter-spacing: 0.08em; color: #f8fafc;">TRADING <span style="color: #22d3ee;">NEW</span> PRO</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 5px;">Đang khởi tạo Kronos Foundation Model & dữ liệu thời gian thực...</div>
       </div>
       <style>
         @keyframes spin {
@@ -41,7 +41,6 @@
               if (installingWorker) {
                 installingWorker.onstatechange = () => {
                   if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    // Auto reload if new service worker is installed
                     window.location.reload();
                   }
                 };

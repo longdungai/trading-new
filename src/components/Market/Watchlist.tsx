@@ -170,58 +170,53 @@ export const Watchlist: React.FC<WatchlistProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0d121c] border-b border-[#1b2230] select-none">
+    <div className="flex flex-col h-full bg-[#080c15] border-b border-slate-800/80 select-none">
       {/* Header Controls */}
-      <div className="p-3 border-b border-[#1b2230] space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Layers className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-white font-mono">
-              Danh Mục Theo Dõi ({symbols.length})
-            </span>
-            <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 font-bold px-1 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              LIVE
+      <div className="p-2.5 border-b border-slate-800/80 space-y-2">
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Layers className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white font-mono truncate">
+              Danh Mục ({symbols.length})
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
             {/* Radar Gom Hang Trigger */}
             <button
               onClick={() => setIsRadarOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold shadow-md shadow-amber-500/10 transition"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/35 text-[10px] font-bold transition"
               title="Quét & Xếp hạng vùng giá gom hàng tốt nhất"
             >
-              <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-              <span>Radar Gom</span>
-            </button>
-
-            {/* Manage/Edit toggle for mobile & desktop */}
-            <button
-              onClick={() => setIsManageMode(!isManageMode)}
-              className={`p-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 ${
-                isManageMode
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
-                  : 'bg-[#141b27] hover:bg-[#1f293b] text-gray-300 border border-[#232f44]'
-              }`}
-              title={isManageMode ? 'Hoàn tất quản lý' : 'Chỉnh sửa / Xóa mã'}
-            >
-              {isManageMode ? <Check className="w-3.5 h-3.5" /> : <SlidersHorizontal className="w-3.5 h-3.5" />}
-              <span className="text-[11px]">{isManageMode ? 'Xong' : 'Sửa'}</span>
+              <Target className="w-3 h-3 text-amber-400 animate-pulse" />
+              <span>Radar</span>
             </button>
 
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition"
+              className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition"
               title="Thêm mã mới (có gợi ý 300+ mã)"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ Thêm</span>
+              <Plus className="w-3 h-3" />
+              <span>Thêm</span>
+            </button>
+
+            {/* Manage/Edit toggle */}
+            <button
+              onClick={() => setIsManageMode(!isManageMode)}
+              className={`p-1 rounded-lg text-xs font-semibold transition flex items-center ${
+                isManageMode
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-[#111927] hover:bg-[#192438] text-slate-300 border border-slate-800'
+              }`}
+              title={isManageMode ? 'Hoàn tất quản lý' : 'Chỉnh sửa / Xóa mã'}
+            >
+              {isManageMode ? <Check className="w-3.5 h-3.5" /> : <SlidersHorizontal className="w-3.5 h-3.5" />}
             </button>
 
             <button
               onClick={onResetDefaults}
-              className="p-1.5 rounded-lg bg-[#141b27] hover:bg-[#1f293b] text-gray-400 hover:text-white border border-[#232f44] transition"
+              className="p-1 rounded-lg bg-[#111927] hover:bg-[#192438] text-slate-400 hover:text-white border border-slate-800 transition"
               title="Khôi phục danh sách mặc định"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -231,13 +226,13 @@ export const Watchlist: React.FC<WatchlistProps> = ({
 
         {/* Search inside Watchlist */}
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
           <input
             type="text"
-            placeholder="Tìm Vàng, Dầu, Coin, VN30..."
+            placeholder="Lọc nhanh mã, tên tài sản..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-[#141b27] border border-[#232f44] rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+            className="w-full bg-[#101725] border border-slate-800 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
           />
         </div>
 
@@ -305,57 +300,61 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                     onSelectSymbol(s);
                   }
                 }}
-                className={`group p-3 flex items-center justify-between cursor-pointer transition relative ${
-                  isSelected ? 'bg-blue-600/15 border-l-4 border-blue-500' : 'hover:bg-[#121824]'
+                className={`group px-2.5 py-2 flex items-center justify-between cursor-pointer transition relative ${
+                  isSelected
+                    ? 'bg-cyan-500/12 border-l-[3px] border-cyan-400'
+                    : 'hover:bg-[#101827] border-l-[3px] border-transparent'
                 }`}
               >
                 {/* Left Part: Star + Name + Gom Badge */}
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleFavorite(s.symbol);
                     }}
-                    className="p-1 text-gray-500 hover:text-amber-400 transition shrink-0"
+                    className="p-0.5 text-slate-500 hover:text-amber-400 transition shrink-0"
                     title={isFav ? 'Bỏ yêu thích' : 'Thêm yêu thích'}
                   >
-                    <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
+                    <Star className={`w-3.5 h-3.5 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
                   </button>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-mono font-bold text-xs sm:text-sm text-white">{s.symbol}</span>
-                      <span className={`text-[9px] px-1 rounded uppercase font-semibold ${
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className={`font-mono font-bold text-xs ${isSelected ? 'text-cyan-300' : 'text-white'}`}>
+                        {s.symbol}
+                      </span>
+                      <span className={`text-[8px] px-1 rounded uppercase font-semibold ${
                         isCommodity
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          ? 'bg-amber-500/20 text-amber-300'
                           : s.type === 'crypto'
-                          ? 'bg-blue-500/15 text-blue-400'
+                          ? 'bg-cyan-500/15 text-cyan-400'
                           : s.type === 'vn30'
-                          ? 'bg-red-500/15 text-red-400 border border-red-500/30'
-                          : 'bg-purple-500/15 text-purple-400'
+                          ? 'bg-rose-500/15 text-rose-400'
+                          : 'bg-indigo-500/15 text-indigo-400'
                       }`}>
-                        {isCommodity ? 'HÀNG HÓA' : s.type === 'vn30' ? 'VN30' : s.type}
+                        {isCommodity ? 'HH' : s.type === 'vn30' ? 'VN30' : s.type}
                       </span>
 
                       {/* Gom Badge */}
                       {acc && acc.score >= 78 ? (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded font-black bg-amber-500/25 text-amber-300 border border-amber-500/40 animate-pulse">
-                          🔥 Gom Tốt ({acc.score}đ)
+                        <span className="text-[8px] px-1 py-0.2 rounded font-extrabold bg-amber-500/25 text-amber-300 border border-amber-500/35">
+                          🔥 Gom
                         </span>
                       ) : acc && acc.score >= 64 ? (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          💎 Tích Lũy
+                        <span className="text-[8px] px-1 py-0.2 rounded font-bold bg-emerald-500/15 text-emerald-300">
+                          💎 DCA
                         </span>
                       ) : null}
                     </div>
-                    <div className="text-[10px] text-gray-400 truncate max-w-[120px] sm:max-w-[150px]">{s.name}</div>
+                    <div className="text-[10px] text-slate-400 truncate max-w-[115px] sm:max-w-[135px]">{s.name}</div>
                   </div>
                 </div>
 
                 {/* Right Part: Price & Action Buttons */}
-                <div className="flex items-center gap-2">
-                  <div className="text-right font-mono">
-                    <div className="text-xs sm:text-sm font-bold text-gray-100 flex items-center justify-end gap-1">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="text-right font-mono tabular-nums">
+                    <div className="text-xs font-bold text-slate-100 flex items-center justify-end">
                       {isVND ? `${formatPrice(s.price)}k` : `$${formatPrice(s.price)}`}
                     </div>
                     <div className={`text-[10px] font-semibold flex items-center justify-end gap-0.5 ${

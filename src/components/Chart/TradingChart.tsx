@@ -30,6 +30,8 @@ interface TradingChartProps {
   fibLevels: FibonacciLevel[];
   orderBlocks?: OrderBlock[];
   aiPrediction: AIPrediction | null;
+  symbolName?: string;
+  symbolFullName?: string;
 }
 
 export const TradingChart: React.FC<TradingChartProps> = ({
@@ -39,8 +41,12 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   srLevels,
   fibLevels,
   aiPrediction,
+  symbolName = '',
+  symbolFullName = '',
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const ohlcHudRef = useRef<HTMLDivElement>(null);
+  const latestCandleRef = useRef<Candle | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
@@ -81,39 +87,39 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       width,
       height,
       layout: {
-        background: { type: ColorType.Solid, color: '#090d15' },
+        background: { type: ColorType.Solid, color: '#060a12' },
         textColor: '#94a3b8',
         fontSize: 11,
         fontFamily: "'JetBrains Mono', 'Inter', monospace",
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.04)' },
+        vertLines: { color: 'rgba(148, 163, 184, 0.045)' },
+        horzLines: { color: 'rgba(148, 163, 184, 0.045)' },
       },
       crosshair: {
         mode: 1,
         vertLine: {
-          color: '#3b82f6',
+          color: '#22d3ee',
           width: 1,
           style: LineStyle.Dashed,
-          labelBackgroundColor: '#1e293b',
+          labelBackgroundColor: '#0f172a',
         },
         horzLine: {
-          color: '#3b82f6',
+          color: '#22d3ee',
           width: 1,
           style: LineStyle.Dashed,
-          labelBackgroundColor: '#1e293b',
+          labelBackgroundColor: '#0f172a',
         },
       },
       rightPriceScale: {
-        borderColor: '#1e293b',
+        borderColor: 'rgba(30, 41, 59, 0.85)',
         scaleMargins: {
-          top: 0.1,
+          top: 0.12,
           bottom: 0.2,
         },
       },
       timeScale: {
-        borderColor: '#1e293b',
+        borderColor: 'rgba(30, 41, 59, 0.85)',
         timeVisible: true,
         secondsVisible: false,
       },
@@ -184,6 +190,24 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     mcUpperRef.current = chart.addLineSeries({ color: 'rgba(168, 85, 247, 0.65)', lineWidth: 1, lineStyle: LineStyle.Dotted, title: 'Kronos 95%' });
     mcLowerRef.current = chart.addLineSeries({ color: 'rgba(168, 85, 247, 0.65)', lineWidth: 1, lineStyle: LineStyle.Dotted });
 
+    // 60fps Crosshair OHLC Readout (Historical + Kronos Ghost Candles, zero React re-renders)
+    const fmt = (n: number) =>
+      n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : n >= 1 ? n.toFixed(2) : n.toFixed(4);
+
+    chart.subscribeCrosshairMove(param => {
+      if (!ohlcHudRef.current) return;
+      const realBar = candleSeriesRef.current ? (param.seriesData.get(candleSeriesRef.current) as any) : null;
+      const ghostBar = kronosCandleSeriesRef.current ? (param.seriesData.get(kronosCandleSeriesRef.current) as any) : null;
+      const bar = realBar || ghostBar || latestCandleRef.current;
+      if (!bar || typeof bar.open !== 'number') return;
+
+      const isGhost = !realBar && Boolean(ghostBar);
+      const chg = bar.open > 0 ? ((bar.close - bar.open) / bar.open) * 100 : 0;
+      const sign = chg >= 0 ? '+' : '';
+      ohlcHudRef.current.dataset.trend = isGhost ? 'ghost' : chg >= 0 ? 'up' : 'down';
+      ohlcHudRef.current.textContent = `${isGhost ? '[AI KRONOS] ' : ''}O ${fmt(bar.open)}   H ${fmt(bar.high)}   L ${fmt(bar.low)}   C ${fmt(bar.close)}  (${sign}${chg.toFixed(2)}%)`;
+    });
+
     // Resize Observer with smooth handling
     const handleResize = () => {
       if (!container || !chartRef.current) return;
@@ -233,6 +257,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
     // 2. Update Volume Data (Historical + Kronos 6D Predicted Future Volume)
     const lastCandle = candles[candles.length - 1];
+    latestCandleRef.current = lastCandle || null;
+    if (lastCandle && ohlcHudRef.current) {
+      const chg = lastCandle.open > 0 ? ((lastCandle.close - lastCandle.open) / lastCandle.open) * 100 : 0;
+      const fmt = (n: number) =>
+        n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : n >= 1 ? n.toFixed(2) : n.toFixed(4);
+      ohlcHudRef.current.dataset.trend = chg >= 0 ? 'up' : 'down';
+      ohlcHudRef.current.textContent = `O ${fmt(lastCandle.open)}   H ${fmt(lastCandle.high)}   L ${fmt(lastCandle.low)}   C ${fmt(lastCandle.close)}  (${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%)`;
+    }
     const formattedVolume: { time: any; value: number; color: string }[] = candles.map(c => ({
       time: c.time as any,
       value: c.volume,
@@ -471,30 +503,58 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const vp = aiPrediction?.volumeProfile;
 
   return (
-    <div className="w-full h-full relative bg-[#090d15]">
-      {/* Kronos Live Chart HUD Legend (Non-intrusive pointer-events-none) */}
-      {(settings.kronosWalkForward || settings.kronosGhostCandles) && aiPrediction && (
-        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none flex flex-wrap items-center gap-1.5 max-w-[85%]">
-          {settings.kronosWalkForward && wf && (
-            <div className="px-2 py-0.5 rounded-md bg-[#0c121e]/85 backdrop-blur-sm border border-amber-500/40 text-[10px] font-mono flex items-center gap-1.5 shadow">
-              <span className="w-2 h-0.5 bg-amber-400 inline-block" />
-              <span className="text-amber-300 font-bold">Kiểm định {wf.holdoutBars} nến:</span>
-              <span className="text-emerald-300 font-bold">{wf.directionalAccuracy}% đúng hướng</span>
-              <span className="text-gray-400">• MAPE {wf.mapePercent}%</span>
-            </div>
-          )}
-
-          {settings.kronosGhostCandles && vp?.surgeDetected && (
-            <div className="px-2 py-0.5 rounded-md bg-cyan-950/85 backdrop-blur-sm border border-cyan-400/50 text-[10px] font-mono flex items-center gap-1 text-cyan-200 shadow">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-              <span className="font-bold">6D Vol Surge:</span>
-              <span>Đột biến thanh khoản tại nến +{vp.peakBarOffset}</span>
+    <div className="w-full h-full relative bg-[#060a12] overflow-hidden">
+      {/* Subtle Institutional Symbol & Timeframe Watermark */}
+      {symbolName && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-0 opacity-[0.035]">
+          <div className="text-4xl sm:text-6xl lg:text-7xl font-black font-mono tracking-widest text-white uppercase">
+            {symbolName} • {timeframe}
+          </div>
+          {symbolFullName && (
+            <div className="text-xs sm:text-base font-semibold tracking-[0.2em] text-cyan-200 uppercase mt-1">
+              {symbolFullName} • KRONOS AI
             </div>
           )}
         </div>
       )}
 
-      <div ref={chartContainerRef} className="w-full h-full min-h-[300px]" />
+      {/* Top-Left Live OHLCV + KronosChart HUD Legend (Non-intrusive pointer-events-none) */}
+      <div className="absolute top-2 left-2.5 z-10 pointer-events-none flex flex-col gap-1 max-w-[86%]">
+        <div className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded-md bg-[#080d18]/80 backdrop-blur-sm border border-slate-800/80 text-[10px] font-mono tabular-nums text-slate-300 shadow">
+          {symbolName && (
+            <span className="font-bold text-white">
+              {symbolName} <span className="text-cyan-400">({timeframe})</span>
+            </span>
+          )}
+          <span
+            ref={ohlcHudRef}
+            className="text-slate-300 data-[trend=up]:text-emerald-400 data-[trend=down]:text-rose-400 data-[trend=ghost]:text-cyan-300 font-medium"
+          />
+        </div>
+
+        {(settings.kronosWalkForward || settings.kronosGhostCandles) && aiPrediction && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {settings.kronosWalkForward && wf && (
+              <div className="px-2 py-0.5 rounded-md bg-[#0b111d]/85 backdrop-blur-sm border border-amber-500/35 text-[10px] font-mono flex items-center gap-1.5 shadow">
+                <span className="w-2 h-0.5 bg-amber-400 inline-block" />
+                <span className="text-amber-300 font-bold">Kiểm định {wf.holdoutBars} nến:</span>
+                <span className="text-emerald-300 font-bold">{wf.directionalAccuracy}% đúng hướng</span>
+                <span className="text-slate-400">• MAPE {wf.mapePercent}%</span>
+              </div>
+            )}
+
+            {settings.kronosGhostCandles && vp?.surgeDetected && (
+              <div className="px-2 py-0.5 rounded-md bg-cyan-950/85 backdrop-blur-sm border border-cyan-400/50 text-[10px] font-mono flex items-center gap-1 text-cyan-200 shadow">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                <span className="font-bold">6D Vol Surge:</span>
+                <span>Đột biến thanh khoản tại nến +{vp.peakBarOffset}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div ref={chartContainerRef} className="w-full h-full min-h-[300px] relative z-[1]" />
     </div>
   );
 };

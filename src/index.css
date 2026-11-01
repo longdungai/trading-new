@@ -13,13 +13,20 @@
 body {
   margin: 0;
   padding: 0;
-  background-color: #080b11;
-  color: #f3f4f6;
+  background-color: #06090f;
+  color: #f1f5f9;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   user-select: none;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* Keep numeric columns rock-steady during 2s live ticks */
+.font-mono,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -29,58 +36,65 @@ body {
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-/* Custom Scrollbar */
+/* Precision Institutional Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0d121d;
+  background: rgba(9, 13, 22, 0.6);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f293d;
-  border-radius: 4px;
+  background: rgba(51, 65, 85, 0.65);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: rgba(56, 189, 248, 0.55);
 }
 
-/* Glassmorphism utility */
+/* Terminal Surface Utilities */
+.terminal-surface {
+  background: linear-gradient(180deg, rgba(15, 22, 36, 0.92) 0%, rgba(10, 15, 25, 0.96) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04), 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+}
+
 .glass-panel {
-  background: rgba(18, 24, 38, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(14, 20, 32, 0.78);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
 }
 
 .glass-panel-glow {
-  background: rgba(18, 24, 38, 0.85);
+  background: rgba(14, 21, 35, 0.88);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  box-shadow: 0 0 24px rgba(6, 182, 212, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
-/* Custom animations */
+/* Custom Subtle Signal Animations */
 @keyframes pulse-glow-green {
-  0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.5); }
+  0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.22); }
+  50% { box-shadow: 0 0 18px rgba(16, 185, 129, 0.48); }
 }
 
 @keyframes pulse-glow-red {
-  0%, 100% { box-shadow: 0 0 8px rgba(244, 63, 94, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(244, 63, 94, 0.5); }
+  0%, 100% { box-shadow: 0 0 8px rgba(244, 63, 94, 0.22); }
+  50% { box-shadow: 0 0 18px rgba(244, 63, 94, 0.48); }
 }
 
 .glow-green {
-  animation: pulse-glow-green 2s infinite;
+  animation: pulse-glow-green 2.2s infinite;
 }
 
 .glow-red {
-  animation: pulse-glow-red 2s infinite;
+  animation: pulse-glow-red 2.2s infinite;
 }

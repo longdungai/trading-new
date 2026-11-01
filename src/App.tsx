@@ -43,6 +43,7 @@ import { formatPrice, formatPercent, formatVolume } from './utils/formatters';
 
 // Components
 import { Header } from './components/Layout/Header';
+import { MarketTickerStrip } from './components/Layout/MarketTickerStrip';
 import { IndicatorToolbar } from './components/Chart/IndicatorToolbar';
 import { TradingChart } from './components/Chart/TradingChart';
 import { IndicatorPanels } from './components/Chart/IndicatorPanels';
@@ -76,6 +77,17 @@ export const App: React.FC = () => {
   const [isGomBannerDismissed, setIsGomBannerDismissed] = useState<boolean>(false);
   const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'market' | 'risk'>('ai');
   const [mobileTab, setMobileTab] = useState<'chart' | 'ai' | 'market' | 'risk'>('chart');
+  const [showLeftDock, setShowLeftDock] = useState<boolean>(true);
+  const [isZenMode, setIsZenMode] = useState<boolean>(false);
+  const [isXlScreen, setIsXlScreen] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1280 : true
+  );
+
+  useEffect(() => {
+    const onResize = () => setIsXlScreen(window.innerWidth >= 1280);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // References for live ticker background polling
   const currentSymbolRef = useRef<MarketSymbol>(currentSymbol);
@@ -435,9 +447,13 @@ export const App: React.FC = () => {
     ['FPT', 'HPG', 'VIC', 'VHM', 'SJC', 'MWG', 'MSN', 'SSI', 'VCB'].includes(currentSymbol?.symbol || '')
   );
 
+  const isLeftDockActive = isXlScreen && showLeftDock && !isZenMode;
+  const effectiveRightTab =
+    isLeftDockActive && rightPanelTab === 'market' ? 'ai' : rightPanelTab;
+
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#080b11] text-gray-100 overflow-hidden select-none font-sans">
-      {/* Top Header */}
+    <div className="flex flex-col h-screen w-screen bg-[#06090f] text-slate-100 overflow-hidden select-none font-sans">
+      {/* 1. Institutional Top Header */}
       <Header
         currentSymbol={currentSymbol}
         symbols={symbols}
@@ -454,17 +470,39 @@ export const App: React.FC = () => {
         isLiveLoading={isLiveLoading}
         activeView={activeView}
         setActiveView={setActiveView}
+        signalAction={strategyHub?.bestStrategy?.action}
       />
 
-      {/* Indicator Toolbar (Rendered on chart view) */}
+      {/* 2. Macro Benchmark & Market Breadth Ribbon */}
+      <MarketTickerStrip
+        symbols={symbols}
+        currentSymbol={currentSymbol}
+        favorites={favorites}
+        aiPrediction={aiPrediction}
+        onSelectSymbol={handleSelectSymbol}
+      />
+
+      {/* 3. Indicator & Workspace Control Toolbar (Rendered on chart view) */}
       {activeView === 'chart' && (
         <IndicatorToolbar
           settings={settings}
           onToggle={handleToggleIndicator}
+          showLeftDock={showLeftDock}
+          onToggleLeftDock={() => {
+            setShowLeftDock(prev => {
+              const next = !prev;
+              if (next && rightPanelTab === 'market') {
+                setRightPanelTab('ai');
+              }
+              return next;
+            });
+          }}
+          isZenMode={isZenMode}
+          onToggleZenMode={() => setIsZenMode(prev => !prev)}
         />
       )}
 
-      {/* Main Workstation Body: Chart View and Heatmap View toggled without unmounting */}
+      {/* 4. Main Pro Workstation Body */}
       <div className="flex-1 flex overflow-hidden relative pb-14 md:pb-0">
         {/* Heatmap View */}
         <div className={`flex-1 flex flex-col ${activeView === 'heatmap' ? 'flex' : 'hidden'}`}>
@@ -476,35 +514,80 @@ export const App: React.FC = () => {
           />
         </div>
 
-        {/* Main Trading Chart & Workstation Panels */}
+        {/* Main 3-Column Trading Workstation */}
         <div className={`flex-1 flex overflow-hidden ${activeView === 'chart' ? 'flex' : 'hidden'}`}>
-          {/* Main Chart Area (Visible on Desktop OR when MobileTab === 'chart') */}
-          <div className={`flex-1 flex-col min-w-0 bg-[#090d15] relative overflow-hidden h-full ${
-            mobileTab === 'chart' ? 'flex' : 'hidden md:flex'
-          }`}>
+          {/* LEFT DOCK (Desktop >= 1280px): Live Watchlist + Direct OrderBook */}
+          {isLeftDockActive && (
+            <aside className="hidden xl:flex flex-col w-[275px] 2xl:w-[300px] bg-[#080c15] border-r border-slate-800/80 overflow-hidden shrink-0">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <Watchlist
+                  symbols={symbols}
+                  currentSymbol={currentSymbol}
+                  favorites={favorites}
+                  onSelectSymbol={handleSelectSymbol}
+                  onAddSymbol={handleAddSymbol}
+                  onEditSymbol={handleEditSymbol}
+                  onDeleteSymbol={handleDeleteSymbol}
+                  onToggleFavorite={handleToggleFavorite}
+                  onResetDefaults={handleResetDefaults}
+                />
+              </div>
+              <OrderBook
+                orderBook={orderBook}
+                currentPrice={currentSymbol.price}
+                symbol={currentSymbol.symbol}
+                quoteAsset={currentSymbol.quoteAsset}
+              />
+            </aside>
+          )}
+
+          {/* CENTER HERO COLUMN: Interactive Kronos AI Chart & Sub-Panels */}
+          <main
+            className={`flex-1 flex-col min-w-0 bg-[#060a12] relative overflow-hidden h-full ${
+              mobileTab === 'chart' ? 'flex' : 'hidden md:flex'
+            }`}
+          >
             {/* Real-time Accumulation Buy Zone Alert Banner */}
             {currentAccumulation?.isHot && !isGomBannerDismissed && currentAccumulation.entryZone && (
-              <div className="bg-gradient-to-r from-amber-950/70 via-[#182333] to-amber-950/70 border-b border-amber-500/40 px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0">
+              <div className="bg-gradient-to-r from-amber-950/75 via-[#131d2e] to-amber-950/75 border-b border-amber-500/35 px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
                   <span className="font-black text-amber-300 uppercase font-mono tracking-wide shrink-0 flex items-center gap-1">
                     <Target className="w-3.5 h-3.5 text-amber-400" />
-                    CẢNH BÁO VÙNG GOM:
+                    VÙNG GOM ĐẸP:
                   </span>
-                  <span className="text-gray-200 truncate">
-                    <strong className="text-white font-mono">{currentSymbol?.symbol}</strong> đang ở vùng giá gom tích sản đẹp ({currentAccumulation.score}/100đ) • Vùng mua gom: <span className="text-emerald-400 font-mono font-bold">{isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[0])} - {isVND ? '' : '$'}{formatPrice(currentAccumulation.entryZone[1])}{isVND ? 'k' : ''}</span> • Mục tiêu: <span className="text-amber-300 font-mono font-bold">+{currentSymbol?.price ? ((currentAccumulation.targetTakeProfit - currentSymbol.price) / currentSymbol.price * 100).toFixed(0) : 0}%</span>
+                  <span className="text-slate-200 truncate">
+                    <strong className="text-white font-mono">{currentSymbol?.symbol}</strong> ({currentAccumulation.score}/100đ) • Vùng gom:{' '}
+                    <span className="text-emerald-400 font-mono font-bold">
+                      {isVND ? '' : '$'}
+                      {formatPrice(currentAccumulation.entryZone[0])} - {isVND ? '' : '$'}
+                      {formatPrice(currentAccumulation.entryZone[1])}
+                      {isVND ? 'k' : ''}
+                    </span>{' '}
+                    • Đích:{' '}
+                    <span className="text-amber-300 font-mono font-bold">
+                      +
+                      {currentSymbol?.price
+                        ? (
+                            ((currentAccumulation.targetTakeProfit - currentSymbol.price) /
+                              currentSymbol.price) *
+                            100
+                          ).toFixed(0)
+                        : 0}
+                      %
+                    </span>
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
                   <button
                     onClick={() => setIsRadarOpen(true)}
-                    className="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black transition flex items-center gap-1 shadow-md shadow-amber-500/20"
+                    className="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black transition flex items-center gap-1 shadow-sm shadow-amber-500/20"
                   >
-                    <span>Quét Toàn Thị Trường</span>
+                    <span>Quét Toàn TT</span>
                   </button>
                   <button
                     onClick={() => setIsGomBannerDismissed(true)}
-                    className="text-gray-400 hover:text-white p-0.5"
+                    className="text-slate-400 hover:text-white p-0.5"
                     title="Đóng thông báo"
                   >
                     <X className="w-4 h-4" />
@@ -513,7 +596,7 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {/* Lightweight Candles & Indicators Chart */}
+            {/* Lightweight Candles & Kronos Ghost Projections */}
             <div className="flex-1 relative min-h-0 overflow-hidden">
               <TradingChart
                 candles={candles}
@@ -523,195 +606,222 @@ export const App: React.FC = () => {
                 fibLevels={fibLevels}
                 orderBlocks={orderBlocks}
                 aiPrediction={aiPrediction}
+                symbolName={currentSymbol.symbol}
+                symbolFullName={currentSymbol.name}
               />
             </div>
 
             {/* Sub-panels (RSI & MACD) */}
-            <IndicatorPanels
-              candles={candles}
-              settings={settings}
-            />
-          </div>
+            <IndicatorPanels candles={candles} settings={settings} />
+          </main>
 
-          {/* Right Sidebar on Desktop (OR full view on mobile when tab is selected) */}
-          <div className={`flex-col bg-[#0d121c] border-l border-[#1b2230] overflow-hidden ${
-            mobileTab !== 'chart' ? 'flex flex-1 w-full' : 'hidden md:flex w-80 lg:w-96'
-          }`}>
-            {/* Panel Tabs (Desktop) */}
-            <div className="hidden md:flex border-b border-[#1b2230] bg-[#0f1522] text-xs font-semibold">
-              <button
-                onClick={() => setRightPanelTab('ai')}
-                className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition ${
-                  rightPanelTab === 'ai'
-                    ? 'bg-[#141b27] text-blue-400 border-b-2 border-blue-500'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>AI & Tín Hiệu</span>
-              </button>
+          {/* RIGHT COMMAND CENTER (Desktop Sidebar OR Full Mobile View when tab selected) */}
+          {(!isZenMode || mobileTab !== 'chart') && (
+            <aside
+              className={`flex-col bg-[#080d16] border-l border-slate-800/80 overflow-hidden shrink-0 ${
+                mobileTab !== 'chart'
+                  ? 'flex flex-1 w-full'
+                  : 'hidden md:flex w-80 lg:w-[355px] 2xl:w-[385px]'
+              }`}
+            >
+              {/* Segmented Panel Tabs (Desktop) */}
+              <div className="hidden md:flex p-1.5 gap-1 border-b border-slate-800/80 bg-[#070b13] text-xs font-semibold shrink-0">
+                <button
+                  onClick={() => setRightPanelTab('ai')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                    effectiveRightTab === 'ai'
+                      ? 'bg-gradient-to-b from-cyan-500/20 to-blue-600/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>AI Kronos & Lệnh</span>
+                </button>
 
-              <button
-                onClick={() => setRightPanelTab('risk')}
-                className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition ${
-                  rightPanelTab === 'risk'
-                    ? 'bg-[#141b27] text-indigo-400 border-b-2 border-indigo-500'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Shield className="w-3.5 h-3.5" />
-                <span>Quản Lý Vốn</span>
-              </button>
+                <button
+                  onClick={() => setRightPanelTab('risk')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                    effectiveRightTab === 'risk'
+                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Vốn & VaR</span>
+                </button>
 
-              <button
-                onClick={() => setRightPanelTab('market')}
-                className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 transition ${
-                  rightPanelTab === 'market'
-                    ? 'bg-[#141b27] text-emerald-400 border-b-2 border-emerald-500'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Thị Trường ({symbols.length})</span>
-              </button>
-            </div>
+                {!isLeftDockActive && (
+                  <button
+                    onClick={() => setRightPanelTab('market')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                      effectiveRightTab === 'market'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Danh Mục ({symbols.length})</span>
+                  </button>
+                )}
+              </div>
 
-            {/* Tab Contents */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              {((rightPanelTab === 'ai' && mobileTab === 'chart') || mobileTab === 'ai') && (
-                <>
-                  <AIPredictionCard
-                    prediction={aiPrediction}
-                    quoteAsset={currentSymbol.quoteAsset}
-                    kronosConfig={kronosConfig}
-                    onUpdateKronosConfig={handleUpdateKronosConfig}
-                    showGhostCandles={settings.kronosGhostCandles}
-                    onToggleGhostCandles={() => handleToggleIndicator('kronosGhostCandles')}
-                    showWalkForward={settings.kronosWalkForward}
-                    onToggleWalkForward={() => handleToggleIndicator('kronosWalkForward')}
-                    activeTimeframe={timeframe}
-                    onSelectTimeframe={setTimeframe}
-                  />
-                  <TradeSetupCard
-                    strategyHub={strategyHub}
-                    setup={tradeSetup}
-                    quoteAsset={currentSymbol.quoteAsset}
-                    symbol={currentSymbol.symbol}
-                  />
-                  <SentimentMeter sentiment={marketSentiment} />
-                </>
-              )}
+              {/* Tab Contents */}
+              <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-3">
+                {((effectiveRightTab === 'ai' && mobileTab === 'chart') || mobileTab === 'ai') && (
+                  <>
+                    <AIPredictionCard
+                      prediction={aiPrediction}
+                      quoteAsset={currentSymbol.quoteAsset}
+                      kronosConfig={kronosConfig}
+                      onUpdateKronosConfig={handleUpdateKronosConfig}
+                      showGhostCandles={settings.kronosGhostCandles}
+                      onToggleGhostCandles={() => handleToggleIndicator('kronosGhostCandles')}
+                      showWalkForward={settings.kronosWalkForward}
+                      onToggleWalkForward={() => handleToggleIndicator('kronosWalkForward')}
+                      activeTimeframe={timeframe}
+                      onSelectTimeframe={setTimeframe}
+                    />
+                    <TradeSetupCard
+                      strategyHub={strategyHub}
+                      setup={tradeSetup}
+                      quoteAsset={currentSymbol.quoteAsset}
+                      symbol={currentSymbol.symbol}
+                    />
+                    <SentimentMeter sentiment={marketSentiment} />
+                  </>
+                )}
 
-              {((rightPanelTab === 'risk' && mobileTab === 'chart') || mobileTab === 'risk') && (
-                <>
-                  <RiskCalculator
-                    currentPrice={currentSymbol.price}
-                    stopLossPrice={strategyHub?.bestStrategy?.stopLoss || tradeSetup?.stopLoss || currentSymbol.price * 0.95}
-                    quoteAsset={currentSymbol.quoteAsset}
-                    aiPrediction={aiPrediction}
-                    strategyHub={strategyHub}
-                  />
-                  <TradeSetupCard
-                    strategyHub={strategyHub}
-                    setup={tradeSetup}
-                    quoteAsset={currentSymbol.quoteAsset}
-                    symbol={currentSymbol.symbol}
-                  />
-                </>
-              )}
+                {((effectiveRightTab === 'risk' && mobileTab === 'chart') || mobileTab === 'risk') && (
+                  <>
+                    <RiskCalculator
+                      currentPrice={currentSymbol.price}
+                      stopLossPrice={
+                        strategyHub?.bestStrategy?.stopLoss ||
+                        tradeSetup?.stopLoss ||
+                        currentSymbol.price * 0.95
+                      }
+                      quoteAsset={currentSymbol.quoteAsset}
+                      aiPrediction={aiPrediction}
+                      strategyHub={strategyHub}
+                    />
+                    <TradeSetupCard
+                      strategyHub={strategyHub}
+                      setup={tradeSetup}
+                      quoteAsset={currentSymbol.quoteAsset}
+                      symbol={currentSymbol.symbol}
+                    />
+                  </>
+                )}
 
-              {((rightPanelTab === 'market' && mobileTab === 'chart') || mobileTab === 'market') && (
-                <div className="flex flex-col h-full -m-3">
-                  <div className="flex-1 overflow-hidden">
-                    <Watchlist
-                      symbols={symbols}
-                      currentSymbol={currentSymbol}
-                      favorites={favorites}
-                      onSelectSymbol={handleSelectSymbol}
-                      onAddSymbol={handleAddSymbol}
-                      onEditSymbol={handleEditSymbol}
-                      onDeleteSymbol={handleDeleteSymbol}
-                      onToggleFavorite={handleToggleFavorite}
-                      onResetDefaults={handleResetDefaults}
+                {((!isLeftDockActive && effectiveRightTab === 'market' && mobileTab === 'chart') ||
+                  mobileTab === 'market') && (
+                  <div className="flex flex-col h-full -m-2.5 sm:-m-3">
+                    <div className="flex-1 overflow-hidden">
+                      <Watchlist
+                        symbols={symbols}
+                        currentSymbol={currentSymbol}
+                        favorites={favorites}
+                        onSelectSymbol={handleSelectSymbol}
+                        onAddSymbol={handleAddSymbol}
+                        onEditSymbol={handleEditSymbol}
+                        onDeleteSymbol={handleDeleteSymbol}
+                        onToggleFavorite={handleToggleFavorite}
+                        onResetDefaults={handleResetDefaults}
+                      />
+                    </div>
+                    <OrderBook
+                      orderBook={orderBook}
+                      currentPrice={currentSymbol.price}
+                      symbol={currentSymbol.symbol}
+                      quoteAsset={currentSymbol.quoteAsset}
                     />
                   </div>
-                  <OrderBook
-                    orderBook={orderBook}
-                    currentPrice={currentSymbol.price}
-                    symbol={currentSymbol.symbol}
-                    quoteAsset={currentSymbol.quoteAsset}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+                )}
+              </div>
+            </aside>
+          )}
         </div>
       </div>
 
       {/* ================= MOBILE BOTTOM NAVIGATION BAR (< 768px) ================= */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-[#0a0e17] border-t border-[#1f293d] flex items-center justify-around z-40 px-1 backdrop-blur-xl">
-        <button
-          onClick={() => {
-            setActiveView('chart');
-            setMobileTab('chart');
-          }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition ${
-            activeView === 'chart' && mobileTab === 'chart' ? 'text-blue-400' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <LineChart className="w-4 h-4" />
-          <span className="text-[10px] font-medium mt-0.5">Biểu Đồ</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveView('chart');
-            setMobileTab('ai');
-          }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition ${
-            activeView === 'chart' && mobileTab === 'ai' ? 'text-blue-400' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span className="text-[10px] font-medium mt-0.5">Tín Hiệu AI</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveView('chart');
-            setMobileTab('market');
-          }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition ${
-            activeView === 'chart' && mobileTab === 'market' ? 'text-emerald-400' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span className="text-[10px] font-medium mt-0.5">Thị Trường</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveView('chart');
-            setMobileTab('risk');
-          }}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition ${
-            activeView === 'chart' && mobileTab === 'risk' ? 'text-indigo-400' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <Shield className="w-4 h-4" />
-          <span className="text-[10px] font-medium mt-0.5">Vốn & Rủi Ro</span>
-        </button>
-
-        <button
-          onClick={() => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap')}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition ${
-            activeView === 'heatmap' ? 'text-amber-400' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <Flame className="w-4 h-4" />
-          <span className="text-[10px] font-medium mt-0.5">Nhiệt</span>
-        </button>
-      </div>
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-[#070b13]/95 border-t border-slate-800/90 flex items-center justify-around z-40 px-1 backdrop-blur-xl">
+        {[
+          {
+            id: 'chart',
+            label: 'Biểu Đồ',
+            icon: LineChart,
+            active: activeView === 'chart' && mobileTab === 'chart',
+            color: 'text-cyan-400',
+            bar: 'bg-cyan-400',
+            onClick: () => {
+              setActiveView('chart');
+              setMobileTab('chart');
+            },
+          },
+          {
+            id: 'ai',
+            label: 'AI Kronos',
+            icon: Sparkles,
+            active: activeView === 'chart' && mobileTab === 'ai',
+            color: 'text-blue-400',
+            bar: 'bg-blue-400',
+            onClick: () => {
+              setActiveView('chart');
+              setMobileTab('ai');
+            },
+          },
+          {
+            id: 'market',
+            label: 'Thị Trường',
+            icon: Layers,
+            active: activeView === 'chart' && mobileTab === 'market',
+            color: 'text-emerald-400',
+            bar: 'bg-emerald-400',
+            onClick: () => {
+              setActiveView('chart');
+              setMobileTab('market');
+            },
+          },
+          {
+            id: 'risk',
+            label: 'Vốn & VaR',
+            icon: Shield,
+            active: activeView === 'chart' && mobileTab === 'risk',
+            color: 'text-indigo-400',
+            bar: 'bg-indigo-400',
+            onClick: () => {
+              setActiveView('chart');
+              setMobileTab('risk');
+            },
+          },
+          {
+            id: 'heatmap',
+            label: 'Nhiệt AI',
+            icon: Flame,
+            active: activeView === 'heatmap',
+            color: 'text-amber-400',
+            bar: 'bg-amber-400',
+            onClick: () => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap'),
+          },
+        ].map(item => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={item.onClick}
+              className={`relative flex flex-col items-center justify-center flex-1 h-full transition ${
+                item.active ? item.color : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {item.active && (
+                <span className={`absolute top-0 w-7 h-0.5 rounded-b-full ${item.bar}`} />
+              )}
+              <Icon className="w-4 h-4" />
+              <span className="text-[10px] font-semibold mt-0.5">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* Backtest Strategy Modal */}
       {isBacktestOpen && (

@@ -1,4 +1,8 @@
 import {
+  FedPivotFactorCheck,
+  FedPivotStance,
+  FedPivotWatchSnapshot,
+  FedRateCurvePoint,
   MacroAlertItem,
   MacroCalendarEvent,
   MacroIndicatorItem,
@@ -11,6 +15,28 @@ import { isVietnamMarketSymbol } from '../../utils/marketHours';
 
 const YAHOO_BASES = ['/api/yahoo', 'https://query1.finance.yahoo.com'];
 const FAPI_BASES = ['/api/fapi', 'https://fapi.binance.com'];
+const NYFED_EFFR_URL = 'https://markets.newyorkfed.org/api/rates/unsecured/effr/last/1.json';
+const CME_MONTH_CODES = ['F', 'G', 'H', 'J', 'K', 'M', 'N', 'Q', 'U', 'V', 'X', 'Z'];
+
+// Official Federal Reserve FOMC Rate Decision Calendar (2:00 PM ET on Day 2 -> 18:00 UTC EDT / 19:00 UTC EST)
+const OFFICIAL_FOMC_DECISIONS: Array<{ iso: string; label: string; hasDotPlot: boolean }> = [
+  { iso: '2026-01-28T19:00:00Z', label: 'T1/2026', hasDotPlot: false },
+  { iso: '2026-03-18T18:00:00Z', label: 'T3/2026', hasDotPlot: true },
+  { iso: '2026-04-29T18:00:00Z', label: 'T4/2026', hasDotPlot: false },
+  { iso: '2026-06-17T18:00:00Z', label: 'T6/2026', hasDotPlot: true },
+  { iso: '2026-07-29T18:00:00Z', label: 'T7/2026', hasDotPlot: false },
+  { iso: '2026-09-16T18:00:00Z', label: 'T9/2026', hasDotPlot: true },
+  { iso: '2026-10-28T18:00:00Z', label: 'T10/2026', hasDotPlot: false },
+  { iso: '2026-12-09T19:00:00Z', label: 'T12/2026', hasDotPlot: true },
+  { iso: '2027-01-27T19:00:00Z', label: 'T1/2027', hasDotPlot: false },
+  { iso: '2027-03-17T18:00:00Z', label: 'T3/2027', hasDotPlot: true },
+  { iso: '2027-04-28T18:00:00Z', label: 'T4/2027', hasDotPlot: false },
+  { iso: '2027-06-09T18:00:00Z', label: 'T6/2027', hasDotPlot: true },
+  { iso: '2027-07-28T18:00:00Z', label: 'T7/2027', hasDotPlot: false },
+  { iso: '2027-09-15T18:00:00Z', label: 'T9/2027', hasDotPlot: true },
+  { iso: '2027-10-27T18:00:00Z', label: 'T10/2027', hasDotPlot: false },
+  { iso: '2027-12-08T19:00:00Z', label: 'T12/2027', hasDotPlot: true },
+];
 
 const VN_OIL_BENEFICIARIES = new Set(['GAS', 'PVD', 'PVS', 'BSR', 'PLX', 'OIL']);
 const VN_OIL_COST_SENSITIVE = new Set(['VJC', 'HVN', 'MWG', 'MSN', 'SAB', 'VNM']);
@@ -64,8 +90,58 @@ function parseSparkEntry(entry: any): ParsedSparkMetric | null {
   return { last, changePct };
 }
 
-async function fetchYahooMacroSpark(): Promise<Record<string, ParsedSparkMetric>> {
-  const symbols = ['DX-Y.NYB', 'VND=X', '^TNX', '^IRX', '^VIX', 'BZ=F', '^GSPC', '^IXIC'];
+function getForwardZqContract(now: Date, monthsAhead: number): string {
+  const totalMonths = now.getUTCFullYear() * 12 + now.getUTCMonth() + monthsAhead;
+  const year = Math.floor(totalMonths / 12);
+  const monthIdx = totalMonths % 12;
+  const yy = String(year % 100).padStart(2, '0');
+  return `ZQ${CME_MONTH_CODES[monthIdx]}${yy}.CBT`;
+}
+
+interface NyFedEffrData {
+  effectiveRate: number;
+  targetRangeLow: number;
+  targetRangeHigh: number;
+  effectiveDate: string;
+}
+
+async function fetchOfficialNyFedEffr(): Promise<NyFedEffrData | null> {
+  try {
+    const res = await fetch(NYFED_EFFR_URL, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const row = json?.refRates?.[0];
+    if (!row || typeof row.percentRate !== 'number') return null;
+    return {
+      effectiveRate: parseFloat(row.percentRate.toFixed(2)),
+      targetRangeLow:
+        typeof row.targetRateFrom === 'number'
+          ? parseFloat(row.targetRateFrom.toFixed(2))
+          : parseFloat((Math.floor(row.percentRate * 4) / 4).toFixed(2)),
+      targetRangeHigh:
+        typeof row.targetRateTo === 'number'
+          ? parseFloat(row.targetRateTo.toFixed(2))
+          : parseFloat((Math.floor(row.percentRate * 4) / 4 + 0.25).toFixed(2)),
+      effectiveDate: typeof row.effectiveDate === 'string' ? row.effectiveDate : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchYahooMacroSpark(extraSymbols: string[] = []): Promise<Record<string, ParsedSparkMetric>> {
+  const symbols = [
+    'DX-Y.NYB',
+    'VND=X',
+    '^TNX',
+    '^IRX',
+    '^VIX',
+    'BZ=F',
+    '^GSPC',
+    '^IXIC',
+    'ZQ=F',
+    ...extraSymbols,
+  ];
   const query = `/v8/finance/spark?symbols=${encodeURIComponent(symbols.join(','))}&range=5d&interval=1d`;
 
   for (const base of YAHOO_BASES) {
@@ -209,9 +285,34 @@ export function buildUpcomingMacroCalendar(now: Date = new Date()): MacroCalenda
     }
   }
 
+  // 4. Lịch Họp Quyết Định Lãi Suất Chính Thức FOMC (Federal Reserve + Biểu đồ Dot Plot)
+  for (const fomc of OFFICIAL_FOMC_DECISIONS) {
+    const dt = new Date(fomc.iso);
+    if (dt.getTime() >= nowMs - 3600_000 * 4) {
+      const diffHours = Math.max(0, Math.round((dt.getTime() - nowMs) / 3600_000));
+      if (diffHours <= 24 * 75) {
+        events.push({
+          id: `fomc-${fomc.label}`,
+          title: fomc.hasDotPlot
+            ? `Họp FOMC Công Bố Lãi Suất Fed & Dot Plot (${fomc.label})`
+            : `Họp FOMC Công Bố Quyết Định Lãi Suất Fed (${fomc.label})`,
+          market: 'GLOBAL',
+          dateISO: dt.toISOString(),
+          dateLabel: `${formatVNDate(dt)} (GMT+7)`,
+          daysRemaining: Math.floor(diffHours / 24),
+          hoursRemaining: diffHours,
+          impactLevel: 'HIGH',
+          guidance: fomc.hasDotPlot
+            ? 'Kỳ họp FOMC đặc biệt kèm Biểu đồ Chấm (SEP Dot Plot) dự phóng lộ trình lãi suất của các thống đốc Fed & họp báo Chủ tịch Fed lúc 02:30 sáng GMT+7.'
+            : 'Công bố quyết định lãi suất điều hành Fed Funds Rate & thông điệp chính sách tiền tệ (Hawkish / Dovish Pivot).',
+        });
+      }
+    }
+  }
+
   return events
     .sort((a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime())
-    .slice(0, 5);
+    .slice(0, 6);
 }
 
 export async function fetchMacroIntelligenceSnapshot(
@@ -227,9 +328,15 @@ export async function fetchMacroIntelligenceSnapshot(
 
   macroFetchInFlight = (async () => {
     try {
-      const [spark, btcFunding] = await Promise.all([
-        fetchYahooMacroSpark(),
+      const nowDate = new Date();
+      const zq1mSym = getForwardZqContract(nowDate, 1);
+      const zq3mSym = getForwardZqContract(nowDate, 3);
+      const zq6mSym = getForwardZqContract(nowDate, 6);
+
+      const [spark, btcFunding, nyFedEffr] = await Promise.all([
+        fetchYahooMacroSpark([zq1mSym, zq3mSym, zq6mSym]),
         fetchRealBinanceBtcFunding(),
+        fetchOfficialNyFedEffr(),
       ]);
 
       const indicators: MacroIndicatorItem[] = [];
@@ -244,6 +351,10 @@ export async function fetchMacroIntelligenceSnapshot(
       const brent = spark['BZ=F'];
       const sp500 = spark['^GSPC'];
       const nasdaq = spark['^IXIC'];
+      const zqFront = spark['ZQ=F'];
+      const zq1m = spark[zq1mSym];
+      const zq3m = spark[zq3mSym];
+      const zq6m = spark[zq6mSym];
 
       // 1. DXY
       if (dxy) {
@@ -487,7 +598,7 @@ export async function fetchMacroIntelligenceSnapshot(
       }
 
       // Upcoming Official Calendar Events + Immediate Expiry Alert
-      const upcomingEvents = buildUpcomingMacroCalendar(new Date());
+      const upcomingEvents = buildUpcomingMacroCalendar(nowDate);
       const imminentVN30Expiry = upcomingEvents.find(
         ev => ev.id.startsWith('vn30f1m-') && ev.hoursRemaining <= 48
       );
@@ -500,6 +611,289 @@ export async function fetchMacroIntelligenceSnapshot(
           affectedAssets: ['VNINDEX', 'VN30', 'VIC', 'VCB', 'FPT', 'HPG'],
           metricBadge: `Còn ${imminentVN30Expiry.hoursRemaining}h`,
         });
+      }
+
+      // ================= 8. LIVE FED PIVOT WATCH ENGINE (NY FED EFFR + CBOT ZQ FUTURES + 5 PILLARS) =================
+      let fedPivot: FedPivotWatchSnapshot | undefined;
+      const frontImplied =
+        zqFront && zqFront.last > 50 && zqFront.last <= 102
+          ? parseFloat((100 - zqFront.last).toFixed(2))
+          : null;
+      const effectiveRate = nyFedEffr?.effectiveRate ?? frontImplied ?? (us3m ? parseFloat(us3m.last.toFixed(2)) : null);
+
+      if (effectiveRate !== null) {
+        const targetRangeLow =
+          nyFedEffr?.targetRangeLow ?? parseFloat((Math.floor(effectiveRate * 4) / 4).toFixed(2));
+        const targetRangeHigh =
+          nyFedEffr?.targetRangeHigh ?? parseFloat((targetRangeLow + 0.25).toFixed(2));
+        const effectiveDate = nyFedEffr?.effectiveDate || nowDate.toISOString().slice(0, 10);
+
+        const implied1mRate =
+          zq1m && zq1m.last > 50
+            ? parseFloat((100 - zq1m.last).toFixed(2))
+            : frontImplied ?? effectiveRate;
+        const implied3mRate =
+          zq3m && zq3m.last > 50
+            ? parseFloat((100 - zq3m.last).toFixed(2))
+            : us3m
+            ? parseFloat(us3m.last.toFixed(2))
+            : implied1mRate;
+        const implied6mRate =
+          zq6m && zq6m.last > 50
+            ? parseFloat((100 - zq6m.last).toFixed(2))
+            : implied3mRate;
+
+        const delta1mBps = Math.round((implied1mRate - effectiveRate) * 100);
+        const delta3mBps = Math.round((implied3mRate - effectiveRate) * 100);
+        const delta6mBps = Math.round((implied6mRate - effectiveRate) * 100);
+        const pricedMoves6m = parseFloat((delta6mBps / 25).toFixed(2));
+
+        // CME FedWatch style 25bps linear probability interpolation over 3M window
+        let cutProb3mPct = 0;
+        let hikeProb3mPct = 0;
+        if (delta3mBps <= -3) {
+          cutProb3mPct = Math.min(100, Math.round((Math.abs(delta3mBps) / 25) * 100));
+        } else if (delta3mBps >= 3) {
+          hikeProb3mPct = Math.min(100, Math.round((delta3mBps / 25) * 100));
+        }
+        const holdProb3mPct = Math.max(0, 100 - cutProb3mPct - hikeProb3mPct);
+
+        const rateCurve: FedRateCurvePoint[] = [
+          {
+            horizonLabel: 'Hiện tại (EFFR)',
+            contractSymbol: nyFedEffr ? 'NY FED' : 'ZQ=F',
+            impliedRate: effectiveRate,
+            deltaBps: 0,
+          },
+          {
+            horizonLabel: 'Kỳ hạn +1T',
+            contractSymbol: zq1m ? zq1mSym.replace('.CBT', '') : 'ZQ+1M',
+            impliedRate: implied1mRate,
+            deltaBps: delta1mBps,
+          },
+          {
+            horizonLabel: 'Kỳ hạn +3T',
+            contractSymbol: zq3m ? zq3mSym.replace('.CBT', '') : 'US3M',
+            impliedRate: implied3mRate,
+            deltaBps: delta3mBps,
+          },
+          {
+            horizonLabel: 'Kỳ hạn +6T',
+            contractSymbol: zq6m ? zq6mSym.replace('.CBT', '') : 'ZQ+6M',
+            impliedRate: implied6mRate,
+            deltaBps: delta6mBps,
+          },
+        ];
+
+        // Evaluate 5 Fed Pivot Activation Conditions
+        const checklist: FedPivotFactorCheck[] = [];
+
+        // Condition 1: Forward Fed Funds Futures & US3M vs EFFR
+        const c1Pass = delta3mBps <= -15 || delta6mBps <= -25;
+        const c1Block = delta3mBps >= 12 || delta6mBps >= 18;
+        checklist.push({
+          id: 'zq_futures',
+          label: '1. Hợp đồng Tương lai Lãi suất Fed (ZQ 3T/6T & US3M)',
+          metricValue: `3T: ${implied3mRate.toFixed(2)}% (${delta3mBps >= 0 ? '+' : ''}${delta3mBps} bps) • 6T: ${implied6mRate.toFixed(2)}% (${delta6mBps >= 0 ? '+' : ''}${delta6mBps} bps)`,
+          thresholdRule: 'Đạt Pivot khi ZQ 3T/6T định giá ≤ −25 bps (≥ 1 đợt hạ)',
+          state: c1Pass ? 'PASSED' : c1Block ? 'BLOCKED' : 'WATCH',
+          detail: c1Pass
+            ? 'Thị trường tiền tệ CBOT đang đặt cược Fed cắt giảm lãi suất trong chu kỳ tới.'
+            : c1Block
+            ? `Phái sinh lãi suất đang định giá rủi ro Fed giữ cao hoặc TĂNG thêm (${delta6mBps >= 0 ? '+' : ''}${delta6mBps} bps trong 6T) thay vì hạ lãi suất.`
+            : 'Thị trường định giá Fed giữ nguyên lãi suất điều hành trong ngắn hạn.',
+        });
+
+        // Condition 2: US10Y & Yield Curve 10Y-3M
+        const c2Pass = Boolean(us10y && (us10y.last <= 4.2 || (us10y.changePct <= -1.5 && us10y.last < 4.5)));
+        const c2Block = Boolean(us10y && us10y.last >= 4.65);
+        checklist.push({
+          id: 'us10y_curve',
+          label: '2. Lợi suất Mỹ 10Y & Độ dốc Đường cong (10Y − 3M)',
+          metricValue: us10y
+            ? `US10Y ${us10y.last.toFixed(2)}% • Spread ${yieldCurveSpread >= 0 ? '+' : ''}${yieldCurveSpread.toFixed(2)}%`
+            : 'Đang đồng bộ',
+          thresholdRule: 'Đạt khi US10Y hạ nhiệt ≤ 4.20% & lợi suất ngắn hạn giảm dẫn dắt',
+          state: c2Pass ? 'PASSED' : c2Block ? 'BLOCKED' : 'WATCH',
+          detail: c2Pass
+            ? 'Chi phí vốn dài hạn hạ nhiệt, mở dư địa định giá lại cho cổ phiếu & tài sản rủi ro.'
+            : c2Block
+            ? `US10Y neo cao tại ${us10y?.last.toFixed(2)}% phản ánh kỳ vọng lãi suất thắt chặt kéo dài (Higher-for-Longer).`
+            : 'Lợi suất trái phiếu dài hạn đang dao động vùng trung tính.',
+        });
+
+        // Condition 3: US Dollar Index (DXY)
+        const c3Pass = Boolean(dxy && (dxy.last <= 100.8 || dxy.changePct <= -0.5));
+        const c3Block = Boolean(dxy && (dxy.last >= 104.2 || dxy.changePct >= 0.6));
+        checklist.push({
+          id: 'dxy_fx',
+          label: '3. Sức mạnh Đồng Đô la Mỹ (DXY)',
+          metricValue: dxy
+            ? `${dxy.last.toFixed(2)} (${dxy.changePct >= 0 ? '+' : ''}${dxy.changePct}%)`
+            : 'Đang đồng bộ',
+          thresholdRule: 'Đạt khi DXY suy yếu ≤ 100.8 (giải phóng áp lực tỷ giá mới nổi)',
+          state: c3Pass ? 'PASSED' : c3Block ? 'BLOCKED' : 'WATCH',
+          detail: c3Pass
+            ? 'Đồng USD hạ nhiệt ủng hộ dòng vốn chảy vào Vàng, Bitcoin và giảm áp lực tỷ giá.'
+            : c3Block
+            ? 'Đồng USD mạnh lên đang hút dòng vốn phòng thủ về tài sản định giá bằng USD.'
+            : 'DXY đi ngang quanh vùng cân bằng, chưa xác nhận sóng suy yếu mạnh.',
+        });
+
+        // Condition 4: Brent Crude Oil (Cost-Push Inflation Filter)
+        const c4Pass = Boolean(brent && brent.last <= 86);
+        const c4Block = Boolean(brent && brent.last >= 95);
+        checklist.push({
+          id: 'brent_inflation',
+          label: '4. Lạm phát Năng lượng (Giá Dầu Brent)',
+          metricValue: brent
+            ? `$${brent.last.toFixed(2)} (${brent.changePct >= 0 ? '+' : ''}${brent.changePct}%)`
+            : 'Đang đồng bộ',
+          thresholdRule: 'Đạt khi Brent ≤ $86/thùng (không gây sốc CPI chi phí đẩy)',
+          state: c4Pass ? 'PASSED' : c4Block ? 'BLOCKED' : 'WATCH',
+          detail: c4Pass
+            ? 'Giá năng lượng hạ nhiệt giúp CPI/PCE ổn định để Fed tự tin nới lỏng tiền tệ.'
+            : c4Block
+            ? `Dầu Brent nóng ở mức $${brent?.last.toFixed(2)} là rào cản lớn khiến Fed khó sớm cắt giảm lãi suất do lo ngại lạm phát quay lại.`
+            : 'Giá dầu ở vùng trung bình, cần theo dõi tác động lên CPI kỳ tới.',
+        });
+
+        // Condition 5: CBOE VIX Systemic Stress Filter
+        const isVixEmergency = Boolean(vix && vix.last >= 28);
+        const c5Pass = Boolean(vix && vix.last < 18.5);
+        const c5Block = Boolean(vix && (vix.last >= 20 || vix.changePct >= 10));
+        checklist.push({
+          id: 'vix_stress',
+          label: '5. Ổn định Thanh khoản & Chỉ số VIX',
+          metricValue: vix
+            ? `${vix.last.toFixed(2)} (${vix.changePct >= 0 ? '+' : ''}${vix.changePct}%)`
+            : 'Đang đồng bộ',
+          thresholdRule: 'Soft-Landing Pivot khi VIX < 18.5 • Emergency Pivot khi VIX ≥ 28',
+          state: c5Pass ? 'PASSED' : c5Block ? 'BLOCKED' : 'WATCH',
+          detail: isVixEmergency
+            ? 'VIX vượt ngưỡng hoảng loạn (≥ 28): Dễ kích hoạt Fed bơm thanh khoản khẩn cấp.'
+            : c5Pass
+            ? 'Biến động hệ thống thấp, thuận lợi cho kịch bản hạ cánh mềm nếu lãi suất giảm.'
+            : 'VIX đang dâng cao phản ánh tâm lý phòng vệ rủi ro ngắn hạn.',
+        });
+
+        const passedConditionsCount = checklist.filter(c => c.state === 'PASSED').length;
+
+        let stance: FedPivotStance = 'ON_HOLD_WATCH';
+        let stanceLabel = 'Giữ Nguyên Lãi Suất • Đang Chờ Tín Hiệu Pivot';
+        let summary = `Lãi suất hiệu dụng Fed (EFFR) hiện ở mức ${effectiveRate.toFixed(2)}% (biên mục tiêu ${targetRangeLow.toFixed(2)}%–${targetRangeHigh.toFixed(2)}%). Hợp đồng tương lai ZQ 3 tháng định giá ${implied3mRate.toFixed(2)}% (${delta3mBps >= 0 ? '+' : ''}${delta3mBps} bps).`;
+
+        if (delta3mBps <= -18 && isVixEmergency) {
+          stance = 'EMERGENCY_EASING';
+          stanceLabel = 'Cảnh Báo Xoay Trục Khẩn Cấp (Emergency Pivot)';
+          summary = `Phái sinh ZQ định giá cắt giảm gấp (${delta3mBps} bps) giữa lúc VIX vọt lên ${vix?.last.toFixed(2)}. Ưu tiên tài sản trú ẩn (Vàng) và chờ hoảng loạn lắng dịu.`;
+        } else if ((delta3mBps <= -18 || delta6mBps <= -30) && passedConditionsCount >= 3) {
+          stance = 'DOVISH_PIVOT';
+          stanceLabel = 'Tín Hiệu Fed Pivot Xuất Hiện (Nới Lỏng / Dovish)';
+          summary = `Hội tụ ${passedConditionsCount}/5 điều kiện: Thị trường định giá Fed hạ lãi suất (${delta6mBps} bps trong 6 tháng) kèm lạm phát/DXY hạ nhiệt — Trợ lực mạnh cho Chứng khoán, Vàng & Crypto.`;
+          regimeScore += 16;
+        } else if (delta6mBps >= 18 || (c2Block && c4Block)) {
+          stance = 'HAWKISH_TIGHTENING';
+          stanceLabel = 'Chưa Có Fed Pivot • Định Giá Diều Hâu (Hawkish)';
+          summary = `Chưa xuất hiện tín hiệu xoay trục hạ lãi suất (${passedConditionsCount}/5 điều kiện đạt). Hợp đồng ZQ 6T đang định giá ${implied6mRate.toFixed(2)}% (${delta6mBps >= 0 ? '+' : ''}${delta6mBps} bps vs EFFR ${effectiveRate.toFixed(2)}%) do áp lực lạm phát năng lượng & lợi suất cao.`;
+          regimeScore -= 8;
+        }
+
+        // Next Official FOMC Meeting Lookup
+        let nextFomc: FedPivotWatchSnapshot['nextFomc'] = null;
+        const upcomingFomcRow = OFFICIAL_FOMC_DECISIONS.find(
+          f => new Date(f.iso).getTime() >= nowDate.getTime() - 3600_000 * 2
+        );
+        if (upcomingFomcRow) {
+          const dt = new Date(upcomingFomcRow.iso);
+          const hrs = Math.max(0, Math.round((dt.getTime() - nowDate.getTime()) / 3600_000));
+          nextFomc = {
+            title: upcomingFomcRow.hasDotPlot
+              ? `Kỳ họp FOMC & Dot Plot (${upcomingFomcRow.label})`
+              : `Kỳ họp FOMC (${upcomingFomcRow.label})`,
+            dateLabel: `${formatVNDate(dt)} (GMT+7)`,
+            daysRemaining: Math.floor(hrs / 24),
+            hoursRemaining: hrs,
+            hasDotPlot: upcomingFomcRow.hasDotPlot,
+          };
+
+          if (hrs <= 72) {
+            alerts.unshift({
+              id: 'alert-fomc-imminent',
+              severity: 'WARNING',
+              title: 'Đếm Ngược Công Bố Lãi Suất Fed (FOMC) Trong 72 Giờ Tới',
+              message: `${nextFomc.title} sẽ công bố lúc ${nextFomc.dateLabel}. Hạn chế sử dụng đòn bẩy cao trước giờ họp báo Chủ tịch Fed.`,
+              affectedAssets: ['XAUUSD', 'BTCUSDT', 'NVDA', 'VNINDEX'],
+              metricBadge: `FOMC còn ${hrs}h`,
+            });
+          }
+        }
+
+        fedPivot = {
+          stance,
+          stanceLabel,
+          summary,
+          effectiveRate,
+          effectiveDate,
+          targetRangeLow,
+          targetRangeHigh,
+          implied3mRate,
+          implied6mRate,
+          delta3mBps,
+          delta6mBps,
+          pricedMoves6m,
+          cutProb3mPct,
+          holdProb3mPct,
+          hikeProb3mPct,
+          passedConditionsCount,
+          totalConditionsCount: checklist.length,
+          rateCurve,
+          checklist,
+          nextFomc,
+          sourceLabel: nyFedEffr
+            ? 'NY Fed Official EFFR + CBOT 30-Day Fed Funds Futures (ZQ)'
+            : 'CBOT 30-Day Fed Funds Futures (ZQ=F)',
+        };
+
+        // Prepend FED_FUNDS indicator card so it appears first in Macro Dashboard
+        indicators.unshift({
+          id: 'FED_FUNDS',
+          label: 'Lãi suất Fed (EFFR) & Kỳ vọng ZQ 6T',
+          shortLabel: 'FED WATCH',
+          value: effectiveRate,
+          displayValue: `${effectiveRate.toFixed(2)}% → ${implied6mRate.toFixed(2)}%`,
+          changePercent: parseFloat((delta6mBps / 100).toFixed(2)),
+          status:
+            stance === 'DOVISH_PIVOT'
+              ? 'FAVORABLE'
+              : stance === 'HAWKISH_TIGHTENING'
+              ? 'STRESS'
+              : stance === 'EMERGENCY_EASING'
+              ? 'ELEVATED'
+              : 'NORMAL',
+          impactSummary: `Mục tiêu FOMC: ${targetRangeLow.toFixed(2)}%–${targetRangeHigh.toFixed(2)}%. Hợp đồng ZQ 6 tháng định giá ${delta6mBps >= 0 ? '+' : ''}${delta6mBps} bps (${pricedMoves6m >= 0 ? '+' : ''}${pricedMoves6m} lần 25bps).`,
+          source: 'NY Fed + CBOT (ZQ)',
+        });
+
+        if (stance === 'DOVISH_PIVOT') {
+          alerts.unshift({
+            id: 'alert-fed-dovish-pivot',
+            severity: 'POSITIVE',
+            title: 'Tín Hiệu Fed Pivot Xuất Hiện — Thị Trường Định Giá Hạ Lãi Suất!',
+            message: summary,
+            affectedAssets: ['XAUUSD', 'BTCUSDT', 'ETHUSDT', 'NVDA', 'VNINDEX', 'SSI'],
+            metricBadge: `ZQ 6T ${delta6mBps} bps`,
+          });
+        } else if (stance === 'HAWKISH_TIGHTENING' && delta6mBps >= 20) {
+          alerts.push({
+            id: 'alert-fed-hawkish-repricing',
+            severity: 'WARNING',
+            title: 'Fed Pivot Watch: Phái Sinh Lãi Suất Định Giá Rủi Ro Thắt Chặt',
+            message: `Hợp đồng tương lai Fed Funds 6 tháng (${zq6mSym.replace('.CBT', '')}) đang định giá lãi suất ngầm định ${implied6mRate.toFixed(2)}% (cao hơn EFFR hiện tại +${delta6mBps} bps ~ +${pricedMoves6m} đợt 25bps). Chưa xuất hiện tín hiệu Fed xoay trục hạ lãi suất.`,
+            affectedAssets: ['NVDA', 'TSLA', 'BTCUSDT', 'XAUUSD', 'VNINDEX'],
+            metricBadge: `ZQ +${delta6mBps} bps`,
+          });
+        }
       }
 
       regimeScore = Math.max(-100, Math.min(100, regimeScore));
@@ -529,6 +923,7 @@ export async function fetchMacroIntelligenceSnapshot(
         regimeScore,
         kellyDamper: parseFloat(kellyDamper.toFixed(2)),
         yieldCurveSpread,
+        fedPivot,
         indicators,
         globalAlerts: alerts,
         upcomingEvents,
@@ -670,6 +1065,30 @@ export function evaluateSymbolMacroImpact(
     }
     if (nasdaq) {
       bullets.push(`Xu hướng chỉ số chung Nasdaq Composite: ${nasdaq.displayValue} (${nasdaq.changePercent >= 0 ? '+' : ''}${nasdaq.changePercent}%).`);
+    }
+  }
+
+  // Cross-asset Fed Pivot Watch conditioning
+  if (snapshot.fedPivot) {
+    const fp = snapshot.fedPivot;
+    if (fp.stance === 'DOVISH_PIVOT') {
+      if (!sym.includes('OIL')) {
+        scoreAdjustment += 5;
+        bullets.push(
+          `Trợ lực Fed Pivot: Hợp đồng ZQ định giá hạ lãi suất (${fp.delta6mBps} bps/6T, xác suất cắt 3T ${fp.cutProb3mPct}%) hỗ trợ định giá tài sản.`
+        );
+      }
+    } else if (fp.stance === 'HAWKISH_TIGHTENING' && fp.delta6mBps >= 20) {
+      if (
+        (isVN && VN_RATE_SENSITIVE.has(sym)) ||
+        symbolObj.type === 'crypto' ||
+        (!isVN && symbolObj.type === 'stock')
+      ) {
+        scoreAdjustment -= 4;
+        bullets.push(
+          `Fed Pivot chưa kích hoạt: Hợp đồng ZQ 6T định giá +${fp.delta6mBps} bps (${fp.implied6mRate.toFixed(2)}% vs EFFR ${fp.effectiveRate.toFixed(2)}%), duy trì sức ép chi phí vốn.`
+        );
+      }
     }
   }
 

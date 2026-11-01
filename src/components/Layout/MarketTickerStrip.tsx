@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { AIPrediction, MacroIntelligenceSnapshot, MarketSymbol } from '../../types';
+import { MacroModalTab } from '../Macro/MacroIntelligenceModal';
 import { formatPercent, formatPrice } from '../../utils/formatters';
-import { Activity, AlertTriangle, Cpu, Globe2, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, Cpu, Globe2, Landmark, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface MarketTickerStripProps {
   symbols: MarketSymbol[];
@@ -9,7 +10,7 @@ interface MarketTickerStripProps {
   favorites?: string[];
   aiPrediction?: AIPrediction | null;
   macroSnapshot?: MacroIntelligenceSnapshot | null;
-  onOpenMacroModal?: () => void;
+  onOpenMacroModal?: (initialTab?: MacroModalTab) => void;
   onSelectSymbol: (symbol: MarketSymbol) => void;
 }
 
@@ -74,49 +75,84 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
 
   return (
     <div className="h-7 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
-      {/* Left: Macro Shock Radar Trigger + Market Breadth Pulse */}
+      {/* Left: Macro Shock Radar Trigger + Fed Pivot Watch Pill + Market Breadth Pulse */}
       {onOpenMacroModal && (
-        <button
-          type="button"
-          onClick={onOpenMacroModal}
-          className={`px-2 py-0.5 rounded-md border text-[10px] font-mono flex items-center gap-1.5 shrink-0 transition ${
-            macroSnapshot?.regime === 'RISK_OFF'
-              ? 'bg-rose-500/15 border-rose-500/45 text-rose-200 hover:bg-rose-500/25'
-              : macroSnapshot?.regime === 'CAUTIOUS'
-              ? 'bg-amber-500/15 border-amber-500/45 text-amber-200 hover:bg-amber-500/25'
-              : macroSnapshot?.regime === 'RISK_ON'
-              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25'
-              : 'bg-cyan-500/10 border-cyan-500/35 text-cyan-200 hover:bg-cyan-500/20'
-          }`}
-          title="Mở Radar Vĩ Mô Liên Thị Trường, Cảnh Báo Nóng & Lịch Đáo Hạn VN30F1M"
-        >
-          <Globe2 className="w-3 h-3 text-cyan-400 shrink-0" />
-          <span className="font-sans font-bold">
-            Vĩ mô
-            <span className="hidden xl:inline">
-              :{' '}
-              {macroSnapshot?.regime === 'RISK_OFF'
-                ? 'Phòng thủ'
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => onOpenMacroModal('indicators')}
+            className={`px-2 py-0.5 rounded-md border text-[10px] font-mono flex items-center gap-1.5 shrink-0 transition ${
+              macroSnapshot?.regime === 'RISK_OFF'
+                ? 'bg-rose-500/15 border-rose-500/45 text-rose-200 hover:bg-rose-500/25'
                 : macroSnapshot?.regime === 'CAUTIOUS'
-                ? 'Thận trọng'
+                ? 'bg-amber-500/15 border-amber-500/45 text-amber-200 hover:bg-amber-500/25'
                 : macroSnapshot?.regime === 'RISK_ON'
-                ? 'Risk-On'
-                : 'Trung lập'}
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25'
+                : 'bg-cyan-500/10 border-cyan-500/35 text-cyan-200 hover:bg-cyan-500/20'
+            }`}
+            title="Mở Radar Vĩ Mô Liên Thị Trường, Cảnh Báo Nóng & Lịch Đáo Hạn VN30F1M"
+          >
+            <Globe2 className="w-3 h-3 text-cyan-400 shrink-0" />
+            <span className="font-sans font-bold">
+              Vĩ mô
+              <span className="hidden xl:inline">
+                :{' '}
+                {macroSnapshot?.regime === 'RISK_OFF'
+                  ? 'Phòng thủ'
+                  : macroSnapshot?.regime === 'CAUTIOUS'
+                  ? 'Thận trọng'
+                  : macroSnapshot?.regime === 'RISK_ON'
+                  ? 'Risk-On'
+                  : 'Trung lập'}
+              </span>
             </span>
-          </span>
-          {macroSnapshot && macroSnapshot.globalAlerts.length > 0 && (
-            <span
-              className={`px-1 rounded text-[9px] font-bold flex items-center gap-0.5 ${
-                macroSnapshot.globalAlerts.some(a => a.severity === 'CRITICAL')
-                  ? 'bg-rose-500 text-white animate-pulse'
-                  : 'bg-amber-500 text-black'
+            {macroSnapshot && macroSnapshot.globalAlerts.length > 0 && (
+              <span
+                className={`px-1 rounded text-[9px] font-bold flex items-center gap-0.5 ${
+                  macroSnapshot.globalAlerts.some(a => a.severity === 'CRITICAL')
+                    ? 'bg-rose-500 text-white animate-pulse'
+                    : 'bg-amber-500 text-black'
+                }`}
+              >
+                <AlertTriangle className="w-2.5 h-2.5" />
+                {macroSnapshot.globalAlerts.length}
+              </span>
+            )}
+          </button>
+
+          {macroSnapshot?.fedPivot && (
+            <button
+              type="button"
+              onClick={() => onOpenMacroModal('fed_pivot')}
+              className={`hidden sm:flex px-2 py-0.5 rounded-md border text-[10px] font-mono items-center gap-1 shrink-0 transition ${
+                macroSnapshot.fedPivot.stance === 'DOVISH_PIVOT'
+                  ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/30 animate-pulse'
+                  : macroSnapshot.fedPivot.stance === 'HAWKISH_TIGHTENING'
+                  ? 'bg-[#121928] border-rose-500/40 text-slate-200 hover:border-rose-400'
+                  : 'bg-[#121928] border-slate-700/80 text-slate-200 hover:border-cyan-400/50'
               }`}
+              title="Mở Đồng Hồ Fed Pivot Watch (NY Fed EFFR + CME/CBOT Fed Funds Futures ZQ + Lịch FOMC)"
             >
-              <AlertTriangle className="w-2.5 h-2.5" />
-              {macroSnapshot.globalAlerts.length}
-            </span>
+              <Landmark className="w-3 h-3 text-emerald-400 shrink-0" />
+              <span className="font-bold text-cyan-300">
+                Fed {macroSnapshot.fedPivot.effectiveRate.toFixed(2)}%
+              </span>
+              <span
+                className={`text-[9px] font-bold ${
+                  macroSnapshot.fedPivot.stance === 'DOVISH_PIVOT'
+                    ? 'text-emerald-400'
+                    : macroSnapshot.fedPivot.delta6mBps > 0
+                    ? 'text-rose-400'
+                    : 'text-slate-400'
+                }`}
+              >
+                {macroSnapshot.fedPivot.stance === 'DOVISH_PIVOT'
+                  ? '• PIVOT!'
+                  : `(${macroSnapshot.fedPivot.delta6mBps >= 0 ? '+' : ''}${macroSnapshot.fedPivot.delta6mBps}bps)`}
+              </span>
+            </button>
           )}
-        </button>
+        </div>
       )}
 
       <div className="hidden lg:flex items-center gap-2 pr-2.5 border-r border-slate-800/80 shrink-0 text-[10px] font-mono">

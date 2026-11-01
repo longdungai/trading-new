@@ -73,7 +73,7 @@ import { SentimentMeter } from './components/Market/SentimentMeter';
 import { MarketHeatmap } from './components/Market/MarketHeatmap';
 import { BacktestModal } from './components/Backtest/BacktestModal';
 import { AccumulationRadarModal } from './components/Market/AccumulationRadarModal';
-import { MacroIntelligenceModal } from './components/Macro/MacroIntelligenceModal';
+import { MacroIntelligenceModal, MacroModalTab } from './components/Macro/MacroIntelligenceModal';
 import { AlertTriangle, Sparkles, Layers, Shield, LineChart, Flame, Globe2, Target, X } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -93,6 +93,7 @@ export const App: React.FC = () => {
   const [isBacktestOpen, setIsBacktestOpen] = useState<boolean>(false);
   const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
   const [isMacroModalOpen, setIsMacroModalOpen] = useState<boolean>(false);
+  const [macroModalTab, setMacroModalTab] = useState<MacroModalTab>('indicators');
   const [isMacroRefreshing, setIsMacroRefreshing] = useState<boolean>(false);
   const [macroSnapshot, setMacroSnapshot] = useState<MacroIntelligenceSnapshot | null>(null);
   const [isMacroBannerDismissed, setIsMacroBannerDismissed] = useState<boolean>(false);
@@ -732,7 +733,10 @@ export const App: React.FC = () => {
         favorites={favorites}
         aiPrediction={aiPrediction}
         macroSnapshot={macroSnapshot}
-        onOpenMacroModal={() => setIsMacroModalOpen(true)}
+        onOpenMacroModal={(tab = 'indicators') => {
+          setMacroModalTab(tab);
+          setIsMacroModalOpen(true);
+        }}
         onSelectSymbol={handleSelectSymbol}
       />
 
@@ -1163,6 +1167,7 @@ export const App: React.FC = () => {
           snapshot={macroSnapshot}
           currentSymbol={currentSymbol}
           symbols={symbols}
+          initialTab={macroModalTab}
           isRefreshing={isMacroRefreshing}
           onRefresh={() => void refreshMacroSnapshot(true)}
           onSelectSymbol={handleSelectSymbol}

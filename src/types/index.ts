@@ -301,7 +301,17 @@ export type MacroRegime = 'RISK_ON' | 'NEUTRAL' | 'CAUTIOUS' | 'RISK_OFF';
 export type MacroAlertSeverity = 'CRITICAL' | 'WARNING' | 'POSITIVE' | 'INFO';
 
 export interface MacroIndicatorItem {
-  id: 'DXY' | 'USDVND' | 'US10Y' | 'US3M' | 'VIX' | 'BRENT' | 'SP500' | 'NASDAQ' | 'BTC_FUNDING';
+  id:
+    | 'FED_FUNDS'
+    | 'DXY'
+    | 'USDVND'
+    | 'US10Y'
+    | 'US3M'
+    | 'VIX'
+    | 'BRENT'
+    | 'SP500'
+    | 'NASDAQ'
+    | 'BTC_FUNDING';
   label: string;
   shortLabel: string;
   value: number;
@@ -310,6 +320,58 @@ export interface MacroIndicatorItem {
   status: 'NORMAL' | 'ELEVATED' | 'STRESS' | 'FAVORABLE';
   impactSummary: string;
   source: string;
+}
+
+export type FedPivotStance =
+  | 'DOVISH_PIVOT'
+  | 'EMERGENCY_EASING'
+  | 'ON_HOLD_WATCH'
+  | 'HAWKISH_TIGHTENING';
+
+export interface FedPivotFactorCheck {
+  id: string;
+  label: string;
+  metricValue: string;
+  thresholdRule: string;
+  state: 'PASSED' | 'WATCH' | 'BLOCKED';
+  detail: string;
+}
+
+export interface FedRateCurvePoint {
+  horizonLabel: string;
+  contractSymbol: string;
+  impliedRate: number;
+  deltaBps: number;
+}
+
+export interface FedPivotWatchSnapshot {
+  stance: FedPivotStance;
+  stanceLabel: string;
+  summary: string;
+  effectiveRate: number; // Official NY Fed EFFR (or ZQ front-month implied)
+  effectiveDate: string;
+  targetRangeLow: number;
+  targetRangeHigh: number;
+  implied3mRate: number;
+  implied6mRate: number;
+  delta3mBps: number; // Implied 3M - EFFR in basis points
+  delta6mBps: number; // Implied 6M - EFFR in basis points
+  pricedMoves6m: number; // Number of 25bps moves (+hike / -cut)
+  cutProb3mPct: number; // 0..100
+  holdProb3mPct: number; // 0..100
+  hikeProb3mPct: number; // 0..100
+  passedConditionsCount: number;
+  totalConditionsCount: number;
+  rateCurve: FedRateCurvePoint[];
+  checklist: FedPivotFactorCheck[];
+  nextFomc: {
+    title: string;
+    dateLabel: string;
+    daysRemaining: number;
+    hoursRemaining: number;
+    hasDotPlot: boolean;
+  } | null;
+  sourceLabel: string;
 }
 
 export interface MacroAlertItem {
@@ -340,6 +402,7 @@ export interface MacroIntelligenceSnapshot {
   regimeScore: number; // -100 .. +100
   kellyDamper: number; // 0.45 .. 1.05 multiplier on Half-Kelly sizing
   yieldCurveSpread: number; // US10Y - US3M percentage points
+  fedPivot?: FedPivotWatchSnapshot;
   indicators: MacroIndicatorItem[];
   globalAlerts: MacroAlertItem[];
   upcomingEvents: MacroCalendarEvent[];

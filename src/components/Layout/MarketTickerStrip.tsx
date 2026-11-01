@@ -22,6 +22,7 @@ const BENCHMARK_KEYS = [
   'SOLUSDT',
   'OIL_WTI',
   'VNINDEX',
+  'VN30F1M',
   'FPT',
   'HPG',
   'NVDA',
@@ -183,8 +184,18 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
 
           <button
             type="button"
+            onClick={() => onOpenMacroModal('vn_market')}
+            className="hidden sm:flex px-2 py-0.5 rounded-md border border-rose-500/40 bg-rose-500/12 hover:bg-rose-500/25 text-[10px] font-mono items-center gap-1 shrink-0 text-rose-200 transition whitespace-nowrap"
+            title="Mở Chuyên Trang TTCK Việt Nam: Phái sinh VN30F1M Basis, Khối Ngoại Thời Gian Thực & Sóng 10 Ngành"
+          >
+            <span className="shrink-0">🇻🇳</span>
+            <span className="font-sans font-bold">TTCK VN</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => onOpenMacroModal('news_breadth')}
-            className="hidden md:flex px-2 py-0.5 rounded-md border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-mono items-center gap-1 shrink-0 text-emerald-200 transition"
+            className="hidden xl:flex px-2 py-0.5 rounded-md border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-mono items-center gap-1 shrink-0 text-emerald-200 transition whitespace-nowrap"
             title="Mở Trạm Tin Nóng Tài Chính Thời Gian Thực & Độ Rộng Nội Tại VN30"
           >
             <Newspaper className="w-3 h-3 text-emerald-400 shrink-0" />
@@ -212,6 +223,8 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
           const isActive = sym.symbol === currentSymbol.symbol;
           const isUp = sym.change24h >= 0;
           const isVND = sym.quoteAsset === 'VND';
+          const isVnIdxOrDeriv =
+            sym.symbol === 'VNINDEX' || sym.symbol === 'VN30' || /^VN30F\d/i.test(sym.symbol);
           const shortLabel =
             sym.symbol === 'XAUUSD'
               ? 'VÀNG'
@@ -233,7 +246,9 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
                 {shortLabel}
               </span>
               <span className="text-slate-400 hidden sm:inline">
-                {isVND ? `${formatPrice(sym.price)}k` : `$${formatPrice(sym.price)}`}
+                {isVND
+                  ? `${formatPrice(sym.price)}${isVnIdxOrDeriv ? 'đ' : 'k'}`
+                  : `$${formatPrice(sym.price)}`}
               </span>
               <span
                 className={`font-semibold flex items-center ${

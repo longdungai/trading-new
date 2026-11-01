@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Calculator,
   Shield,
@@ -7,15 +7,22 @@ import {
   AlertTriangle,
   Sparkles,
   Globe2,
+  Building2,
 } from 'lucide-react';
 import { AIPrediction, MacroIntelligenceSnapshot, StrategyAnalysisHub } from '../../types';
 import { calculatePositionSize } from '../../services/ai/signalGenerator';
 import { formatPrice } from '../../utils/formatters';
+import {
+  computeVnPositionSizing,
+  isVnDerivativeSymbol,
+  isVnStockOrIndexSymbol,
+} from '../../services/vnMarket/vnStockMicrostructure';
 
 interface RiskCalculatorProps {
   currentPrice: number;
   stopLossPrice: number;
   quoteAsset?: string;
+  symbol?: string;
   aiPrediction?: AIPrediction | null;
   strategyHub?: StrategyAnalysisHub | null;
   macroSnapshot?: MacroIntelligenceSnapshot | null;
@@ -25,23 +32,47 @@ export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
   currentPrice,
   stopLossPrice,
   quoteAsset = 'USD',
+  symbol = '',
   aiPrediction,
   strategyHub,
   macroSnapshot,
 }) => {
-  const [capital, setCapital] = useState<number>(5000);
-  const [riskPercent, setRiskPercent] = useState<number>(1.5);
-  const [leverage, setLeverage] = useState<number>(5);
+  const isVND = quoteAsset === 'VND' || (symbol ? isVnStockOrIndexSymbol(symbol) : false);
+  const isVnIdx = symbol === 'VNINDEX' || symbol === 'VN30';
+  const isVnDeriv = symbol ? isVnDerivativeSymbol(symbol) : false;
 
-  const isVND = quoteAsset === 'VND';
+  const [capital, setCapital] = useState<number>(() => (isVND ? 100000 : 5000));
+  const [riskPercent, setRiskPercent] = useState<number>(1.5);
+  const [leverage, setLeverage] = useState<number>(() => (isVND ? 1 : 5));
+
+  useEffect(() => {
+    if (isVND) {
+      setCapital((prev) => (prev === 5000 ? 100000 : prev));
+      setLeverage((prev) => (prev > 3 ? 1 : prev));
+    } else {
+      setCapital((prev) => (prev === 100000 ? 5000 : prev));
+    }
+  }, [isVND]);
+
   const prefix = isVND ? '' : '$';
-  const suffix = isVND ? 'k VNĐ' : '';
+  const suffix = isVND ? (isVnIdx || isVnDeriv ? ' điểm' : 'k VNĐ') : '';
 
   const entry = currentPrice || 100;
   const sl = stopLossPrice || entry * 0.95;
   const isShortSetup = sl > entry;
 
   const result = calculatePositionSize(capital, riskPercent, entry, sl, leverage);
+
+  const vnSizing = useMemo(() => {
+    if (!isVND || !symbol || isVnIdx) return null;
+    return computeVnPositionSizing({
+      symbol,
+      capitalInput: capital,
+      riskPercent,
+      entryPrice: entry,
+      stopLossPrice: sl,
+    });
+  }, [isVND, symbol, isVnIdx, capital, riskPercent, entry, sl]);
 
   // Kronos Quantile VaR 95% (P05 / P95) & Entropy-Adjusted Half-Kelly Sizing
   const kronosRiskMetrics = useMemo(() => {
@@ -297,7 +328,7 @@ export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
           </div>
         </div>
 
-        <div className="col-span-2 pt-1.5 border-t border-gray-800 flex justify-between items-center">
+        <div className="col-span-2 pt-1.5 border-t border-gray-800 flex justify-between items-center gap-2 flex-wrap">
           <span className="text-gray-400 text-[11px] font-sans">Tổng Quy Mô Vị Thế:</span>
           <span className="font-bold text-white">
             {prefix}
@@ -306,6 +337,57 @@ export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Vietnam Institutional Board-Lot (100 Shares) & VN30F1M Derivative Margin Sizing */}
+      {vnSizing && (
+        <div className="p-2.5 rounded-xl bg-rose-950/20 border border-rose-500/35 space-y-2 text-[11px] min-w-0">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[10px] font-bold uppercase text-rose-200 flex items-center gap-1.5 min-w-0">
+              <Building2 className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span className="truncate">
+                Khối Lượng Chuẩn Sàn {vnSizing.isDerivative ? 'Phái Sinh HNX' : vnSizing.board}
+              </span>
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-200 text-[9.5px] font-mono font-bold shrink-0 whitespace-nowrap">
+              {vnSizing.isDerivative
+                ? `${vnSizing.recommendedSharesOrContracts} Hợp đồng (HĐ)`
+                : `${vnSizing.recommendedLots} lô = ${vnSizing.recommendedSharesOrContracts.toLocaleString('en-US')} CP`}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5 font-mono">
+            <div className="p-1.5 rounded-lg bg-[#0d1422] border border-slate-800/90 min-w-0">
+              <div className="text-[9px] text-slate-400 font-sans truncate">
+                {vnSizing.isDerivative ? 'Ký quỹ VSD (~17%)' : 'Giải ngân lô chẵn'}
+              </div>
+              <div className="text-xs font-bold text-cyan-300 truncate">
+                {vnSizing.marginRequiredMillionVnd.toFixed(2)} Tr VNĐ
+              </div>
+              <div className="text-[8.5px] text-slate-500 truncate">
+                Entry tròn bước: {formatPrice(vnSizing.roundedEntry)}
+                {vnSizing.isDerivative ? ' đ' : 'k'}
+              </div>
+            </div>
+
+            <div className="p-1.5 rounded-lg bg-[#0d1422] border border-slate-800/90 min-w-0">
+              <div className="text-[9px] text-slate-400 font-sans truncate">
+                Rủi ro ròng (+Phí/Thuế)
+              </div>
+              <div className="text-xs font-bold text-rose-300 truncate">
+                -{vnSizing.maxRiskMillionVnd.toFixed(2)} Tr VNĐ
+              </div>
+              <div className="text-[8.5px] text-slate-500 truncate">
+                Phí & Thuế ~{vnSizing.estimatedFeeAndTaxThousandVnd}k • SL {formatPrice(vnSizing.roundedStopLoss)}
+                {vnSizing.isDerivative ? ' đ' : 'k'}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[9.5px] text-slate-300 leading-relaxed break-words">
+            {vnSizing.settlementRuleNote}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

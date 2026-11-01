@@ -34,6 +34,14 @@
       "destination": "https://services.entrade.com.vn/:path*"
     },
     {
+      "source": "/api/vndirect/:path*",
+      "destination": "https://api-finfo.vndirect.com.vn/:path*"
+    },
+    {
+      "source": "/api/simplize/:path*",
+      "destination": "https://api2.simplize.vn/:path*"
+    },
+    {
       "source": "/api/fred/:path*",
       "destination": "https://fred.stlouisfed.org/:path*"
     },

@@ -1,6 +1,16 @@
 import { Candle, MarketSymbol } from '../../types';
 import { calculateRSI } from '../indicators';
 import { calculateSupportResistance } from '../analysis/supportResistance';
+import {
+  getVnStockSectorInfo,
+  isVnDerivativeSymbol,
+  isVnStockOrIndexSymbol,
+  roundToVnTickSize,
+} from '../vnMarket/vnStockMicrostructure';
+import {
+  getCachedVnForeignFlow,
+  getCachedVnFundamentals,
+} from '../vnMarket/vnStockInsightsClient';
 
 export interface AccumulationAnalysis {
   symbol: string;
@@ -18,6 +28,12 @@ export interface AccumulationAnalysis {
   isHot: boolean;
   kronosForecastPct: number;
   kronosBullProb: number;
+  vnSectorName?: string | null;
+  peRatio?: number | null;
+  pbRatio?: number | null;
+  roePct?: number | null;
+  foreignNetBillion?: number | null;
+  foreignStreakDays?: number;
 }
 
 /**
@@ -130,13 +146,62 @@ export function analyzeAccumulationZone(
     }
   }
 
-  // 3. Category quality bonus (VN30, Bluechips, Gold, Top Crypto)
-  if (symbolObj.type === 'vn30' || symbolObj.symbol === 'VNINDEX') {
+  const isVN = isVnStockOrIndexSymbol(symbolObj);
+  const vnSectorInfo = isVN ? getVnStockSectorInfo(symbolObj.symbol) : null;
+  const vnFund = isVN ? getCachedVnFundamentals(symbolObj.symbol) : undefined;
+  const vnForeign = isVN ? getCachedVnForeignFlow(symbolObj.symbol) : undefined;
+
+  // 3. Category quality & Vietnam Fundamental / Foreign Flow bonus
+  if (isVnDerivativeSymbol(symbolObj.symbol)) {
+    reasons.push('HĐTL Phái sinh VN30F1M (T+0) — Chỉ giao dịch ngắn hạn, không giữ tích sản dài hạn');
+    score -= 8;
+  } else if (symbolObj.type === 'vn30' || symbolObj.symbol === 'VNINDEX') {
     score += 10;
-    reasons.push(`Thuộc rổ VN30 Bluechip - Nền tảng cơ bản vững mạnh`);
-  } else if (symbolObj.symbol.includes('XAU') || symbolObj.symbol.includes('GOLD') || symbolObj.symbol.includes('BTC') || symbolObj.symbol.includes('ETH')) {
+    reasons.push('Thuộc rổ VN30 Bluechip — Nền tảng cơ bản vững mạnh');
+  } else if (isVN && vnSectorInfo) {
+    score += 5;
+  } else if (
+    symbolObj.symbol.includes('XAU') ||
+    symbolObj.symbol.includes('GOLD') ||
+    symbolObj.symbol.includes('BTC') ||
+    symbolObj.symbol.includes('ETH')
+  ) {
     score += 10;
-    reasons.push(`Tài sản phòng hộ / Top đầu thị trường - Thích hợp tích sản dài hạn`);
+    reasons.push('Tài sản phòng hộ / Top đầu thị trường — Thích hợp tích sản dài hạn');
+  }
+
+  if (vnFund) {
+    if (vnFund.roePct !== null && vnFund.roePct >= 15) {
+      score += 7;
+      reasons.push(
+        `Nền tảng tài chính tốt: ROE ${vnFund.roePct.toFixed(1)}%${
+          vnFund.peRatio && vnFund.peRatio > 0 ? ` • P/E ${vnFund.peRatio.toFixed(1)}x` : ''
+        }`
+      );
+    } else if (vnFund.peRatio !== null && vnFund.peRatio > 0 && vnFund.peRatio <= 14) {
+      score += 6;
+      reasons.push(
+        `Định giá P/E hấp dẫn (${vnFund.peRatio.toFixed(1)}x)${
+          vnFund.pbRatio ? ` • P/B ${vnFund.pbRatio.toFixed(2)}x` : ''
+        }`
+      );
+    } else if (vnFund.pbRatio !== null && vnFund.pbRatio > 0 && vnFund.pbRatio <= 1.5) {
+      score += 5;
+      reasons.push(`Chiết khấu tài sản P/B thấp (${vnFund.pbRatio.toFixed(2)}x)`);
+    }
+  }
+
+  if (vnForeign) {
+    if (vnForeign.consecutiveNetBuyDays >= 2 || vnForeign.latestNetBillionVnd >= 10) {
+      score += 6;
+      reasons.push(
+        `Khối ngoại mua ròng ${vnForeign.latestNetBillionVnd >= 0 ? '+' : ''}${vnForeign.latestNetBillionVnd} tỷ${
+          vnForeign.consecutiveNetBuyDays >= 2 ? ` (${vnForeign.consecutiveNetBuyDays} phiên)` : ''
+        }`
+      );
+    } else if (vnForeign.consecutiveNetSellDays >= 4 && vnForeign.latestNetBillionVnd <= -30) {
+      score -= 5;
+    }
   }
 
   // Cap score between 10 and 98
@@ -166,10 +231,14 @@ export function analyzeAccumulationZone(
   if (calculatedSupport < currentPrice * 0.93) {
     calculatedSupport = currentPrice * 0.96;
   }
-  const entryLow = Math.min(calculatedSupport, currentPrice * 0.98);
-  const entryHigh = currentPrice; // Mép trên vùng gom tối đa bằng giá hiện tại (không mua đuổi giá cao hơn)
-  
-  const tpTarget = currentPrice * (score >= 78 ? 1.25 : 1.15);
+  const rawEntryLow = Math.min(calculatedSupport, currentPrice * 0.98);
+  const rawEntryHigh = currentPrice; // Mép trên vùng gom tối đa bằng giá hiện tại (không mua đuổi giá cao hơn)
+  const rawTpTarget = currentPrice * (score >= 78 ? 1.25 : 1.15);
+
+  const entryLow = isVN ? roundToVnTickSize(rawEntryLow, symbolObj.symbol) : parseFloat(rawEntryLow.toFixed(2));
+  const entryHigh = isVN ? roundToVnTickSize(rawEntryHigh, symbolObj.symbol) : parseFloat(rawEntryHigh.toFixed(2));
+  const tpTarget = isVN ? roundToVnTickSize(rawTpTarget, symbolObj.symbol) : parseFloat(rawTpTarget.toFixed(2));
+
   const discountPct = high24h > 0 ? ((high24h - currentPrice) / high24h) * 100 : Math.abs(change24h);
 
   // Compute Kronos Batch K-Line Projection metric (24-bar forward expectation)
@@ -187,13 +256,19 @@ export function analyzeAccumulationZone(
     status,
     statusLabel,
     discountPercent: parseFloat(discountPct.toFixed(1)),
-    entryZone: [parseFloat(entryLow.toFixed(2)), parseFloat(entryHigh.toFixed(2))],
-    targetTakeProfit: parseFloat(tpTarget.toFixed(2)),
+    entryZone: [entryLow, entryHigh],
+    targetTakeProfit: tpTarget,
     riskReward: parseFloat((score >= 78 ? 3.5 : 2.5).toFixed(1)),
     reasons: reasons.slice(0, 3),
     isHot: score >= 78,
     kronosForecastPct,
     kronosBullProb,
+    vnSectorName: vnSectorInfo?.shortName ?? null,
+    peRatio: vnFund?.peRatio ?? null,
+    pbRatio: vnFund?.pbRatio ?? null,
+    roePct: vnFund?.roePct ?? null,
+    foreignNetBillion: vnForeign?.latestNetBillionVnd ?? null,
+    foreignStreakDays: vnForeign?.consecutiveNetBuyDays ?? 0,
   };
 }
 

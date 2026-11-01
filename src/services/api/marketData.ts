@@ -1,6 +1,7 @@
 import { Candle, MarketSentiment, MarketSymbol, Timeframe } from '../../types';
 import { fetchBinanceKlines, fetchBinance24hTickersForSymbols } from './binance';
 import { getMarketSessionInfo } from '../../utils/marketHours';
+import { getVnExchangeBoard, isVnDerivativeSymbol } from '../vnMarket/vnStockMicrostructure';
 
 export const DEFAULT_SYMBOLS: MarketSymbol[] = [
   // ===================== HÀNG HÓA: VÀNG & DẦU MỎ (COMMODITIES) =====================
@@ -228,6 +229,19 @@ export const DEFAULT_SYMBOLS: MarketSymbol[] = [
     low24h: 1878.10,
     volume24h: 14800000000000,
     category: 'Chỉ số VN30 Bluechip',
+  },
+  {
+    symbol: 'VN30F1M',
+    name: 'HĐTL Chỉ số VN30 Kỳ hạn 1 Tháng (Phái sinh)',
+    type: 'vn30',
+    baseAsset: 'VN30F1M',
+    quoteAsset: 'VND',
+    price: 1888.50,
+    change24h: 0.28,
+    high24h: 1896.00,
+    low24h: 1881.20,
+    volume24h: 34500000000000,
+    category: 'Phái sinh HNX - HĐTL Chỉ số VN30',
   },
   {
     symbol: 'VIC',
@@ -788,6 +802,410 @@ export const DEFAULT_SYMBOLS: MarketSymbol[] = [
     volume24h: 410000000000,
     category: 'Lọc Hóa Dầu',
   },
+  // --- 10 Nhóm Ngành Dẫn Sóng Việt Nam (HOSE • HNX • UPCOM) ---
+  {
+    symbol: 'LPB',
+    name: 'Ngân hàng TMCP Lộc Phát Việt Nam (LPBank)',
+    type: 'stock',
+    baseAsset: 'LPB',
+    quoteAsset: 'VND',
+    price: 33.20,
+    change24h: 0.91,
+    high24h: 33.80,
+    low24h: 32.80,
+    volume24h: 420000000000,
+    category: 'Ngân hàng',
+  },
+  {
+    symbol: 'SHS',
+    name: 'CTCP Chứng khoán Sài Gòn - Hà Nội (HNX)',
+    type: 'stock',
+    baseAsset: 'SHS',
+    quoteAsset: 'VND',
+    price: 15.60,
+    change24h: 0.65,
+    high24h: 15.90,
+    low24h: 15.30,
+    volume24h: 340000000000,
+    category: 'Chứng khoán (HNX)',
+  },
+  {
+    symbol: 'MBS',
+    name: 'CTCP Chứng khoán MB (HNX)',
+    type: 'stock',
+    baseAsset: 'MBS',
+    quoteAsset: 'VND',
+    price: 28.40,
+    change24h: 1.07,
+    high24h: 28.90,
+    low24h: 27.90,
+    volume24h: 265000000000,
+    category: 'Chứng khoán (HNX)',
+  },
+  {
+    symbol: 'FTS',
+    name: 'CTCP Chứng khoán FPT',
+    type: 'stock',
+    baseAsset: 'FTS',
+    quoteAsset: 'VND',
+    price: 42.60,
+    change24h: 1.19,
+    high24h: 43.30,
+    low24h: 41.90,
+    volume24h: 245000000000,
+    category: 'Chứng khoán',
+  },
+  {
+    symbol: 'VIX',
+    name: 'CTCP Chứng khoán VIX',
+    type: 'stock',
+    baseAsset: 'VIX',
+    quoteAsset: 'VND',
+    price: 11.80,
+    change24h: 0.85,
+    high24h: 12.10,
+    low24h: 11.60,
+    volume24h: 510000000000,
+    category: 'Chứng khoán',
+  },
+  {
+    symbol: 'KDH',
+    name: 'CTCP Đầu tư và Kinh doanh Nhà Khang Điền',
+    type: 'stock',
+    baseAsset: 'KDH',
+    quoteAsset: 'VND',
+    price: 34.50,
+    change24h: 0.58,
+    high24h: 35.10,
+    low24h: 34.00,
+    volume24h: 215000000000,
+    category: 'Bất động sản Dân cư',
+  },
+  {
+    symbol: 'NLG',
+    name: 'CTCP Đầu tư Nam Long',
+    type: 'stock',
+    baseAsset: 'NLG',
+    quoteAsset: 'VND',
+    price: 38.90,
+    change24h: 0.78,
+    high24h: 39.50,
+    low24h: 38.30,
+    volume24h: 198000000000,
+    category: 'Bất động sản Dân cư',
+  },
+  {
+    symbol: 'CEO',
+    name: 'CTCP Tập đoàn C.E.O (HNX)',
+    type: 'stock',
+    baseAsset: 'CEO',
+    quoteAsset: 'VND',
+    price: 14.90,
+    change24h: -0.67,
+    high24h: 15.30,
+    low24h: 14.60,
+    volume24h: 210000000000,
+    category: 'Bất động sản (HNX)',
+  },
+  {
+    symbol: 'KBC',
+    name: 'Tổng Công ty Phát triển Đô thị Kinh Bắc',
+    type: 'stock',
+    baseAsset: 'KBC',
+    quoteAsset: 'VND',
+    price: 29.40,
+    change24h: 1.03,
+    high24h: 29.95,
+    low24h: 28.90,
+    volume24h: 385000000000,
+    category: 'BĐS Khu Công Nghiệp',
+  },
+  {
+    symbol: 'IDC',
+    name: 'Tổng Công ty IDICO (HNX)',
+    type: 'stock',
+    baseAsset: 'IDC',
+    quoteAsset: 'VND',
+    price: 56.80,
+    change24h: 0.89,
+    high24h: 57.60,
+    low24h: 56.00,
+    volume24h: 240000000000,
+    category: 'BĐS Khu Công Nghiệp (HNX)',
+  },
+  {
+    symbol: 'SZC',
+    name: 'CTCP Sonadezi Châu Đức',
+    type: 'stock',
+    baseAsset: 'SZC',
+    quoteAsset: 'VND',
+    price: 41.20,
+    change24h: 1.23,
+    high24h: 41.90,
+    low24h: 40.50,
+    volume24h: 175000000000,
+    category: 'BĐS Khu Công Nghiệp',
+  },
+  {
+    symbol: 'VGC',
+    name: 'Tổng Công ty Viglacera',
+    type: 'stock',
+    baseAsset: 'VGC',
+    quoteAsset: 'VND',
+    price: 46.50,
+    change24h: 0.65,
+    high24h: 47.20,
+    low24h: 45.90,
+    volume24h: 165000000000,
+    category: 'BĐS KCN & Vật liệu',
+  },
+  {
+    symbol: 'HSG',
+    name: 'CTCP Tập đoàn Hoa Sen',
+    type: 'stock',
+    baseAsset: 'HSG',
+    quoteAsset: 'VND',
+    price: 19.85,
+    change24h: 0.76,
+    high24h: 20.20,
+    low24h: 19.50,
+    volume24h: 365000000000,
+    category: 'Thép & Tôn mạ',
+  },
+  {
+    symbol: 'NKG',
+    name: 'CTCP Thép Nam Kim',
+    type: 'stock',
+    baseAsset: 'NKG',
+    quoteAsset: 'VND',
+    price: 20.60,
+    change24h: 0.98,
+    high24h: 21.00,
+    low24h: 20.20,
+    volume24h: 295000000000,
+    category: 'Thép & Xuất khẩu',
+  },
+  {
+    symbol: 'HHV',
+    name: 'CTCP Đầu tư Hạ tầng Giao thông Đèo Cả',
+    type: 'stock',
+    baseAsset: 'HHV',
+    quoteAsset: 'VND',
+    price: 12.65,
+    change24h: 0.80,
+    high24h: 12.90,
+    low24h: 12.45,
+    volume24h: 185000000000,
+    category: 'Đầu tư công & Hạ tầng',
+  },
+  {
+    symbol: 'VCG',
+    name: 'Tổng CTCP Xuất nhập khẩu & Xây dựng VN (Vinaconex)',
+    type: 'stock',
+    baseAsset: 'VCG',
+    quoteAsset: 'VND',
+    price: 19.40,
+    change24h: 0.52,
+    high24h: 19.80,
+    low24h: 19.10,
+    volume24h: 210000000000,
+    category: 'Đầu tư công & Xây dựng',
+  },
+  {
+    symbol: 'CTD',
+    name: 'CTCP Xây dựng Coteccons',
+    type: 'stock',
+    baseAsset: 'CTD',
+    quoteAsset: 'VND',
+    price: 68.50,
+    change24h: 1.33,
+    high24h: 69.60,
+    low24h: 67.40,
+    volume24h: 230000000000,
+    category: 'Xây dựng & Hạ tầng',
+  },
+  {
+    symbol: 'LCG',
+    name: 'CTCP Lizen',
+    type: 'stock',
+    baseAsset: 'LCG',
+    quoteAsset: 'VND',
+    price: 11.40,
+    change24h: 0.44,
+    high24h: 11.65,
+    low24h: 11.20,
+    volume24h: 135000000000,
+    category: 'Đầu tư công',
+  },
+  {
+    symbol: 'PVT',
+    name: 'Tổng CTCP Vận tải Dầu khí (PVTrans)',
+    type: 'stock',
+    baseAsset: 'PVT',
+    quoteAsset: 'VND',
+    price: 27.90,
+    change24h: 0.72,
+    high24h: 28.40,
+    low24h: 27.50,
+    volume24h: 195000000000,
+    category: 'Vận tải Dầu khí',
+  },
+  {
+    symbol: 'REE',
+    name: 'CTCP Cơ Điện Lạnh',
+    type: 'stock',
+    baseAsset: 'REE',
+    quoteAsset: 'VND',
+    price: 65.80,
+    change24h: 0.61,
+    high24h: 66.70,
+    low24h: 65.00,
+    volume24h: 165000000000,
+    category: 'Điện & Hạ tầng Nước',
+  },
+  {
+    symbol: 'PC1',
+    name: 'CTCP Tập đoàn PC1',
+    type: 'stock',
+    baseAsset: 'PC1',
+    quoteAsset: 'VND',
+    price: 28.20,
+    change24h: 0.71,
+    high24h: 28.70,
+    low24h: 27.80,
+    volume24h: 175000000000,
+    category: 'Xây lắp Điện & Khoáng sản',
+  },
+  {
+    symbol: 'FRT',
+    name: 'CTCP Bán lẻ Kỹ thuật số FPT (Long Châu)',
+    type: 'stock',
+    baseAsset: 'FRT',
+    quoteAsset: 'VND',
+    price: 178.50,
+    change24h: 1.42,
+    high24h: 181.00,
+    low24h: 175.80,
+    volume24h: 260000000000,
+    category: 'Bán lẻ Dược phẩm & ICT',
+  },
+  {
+    symbol: 'DGW',
+    name: 'CTCP Thế Giới Số (Digiworld)',
+    type: 'stock',
+    baseAsset: 'DGW',
+    quoteAsset: 'VND',
+    price: 44.60,
+    change24h: 0.90,
+    high24h: 45.30,
+    low24h: 43.90,
+    volume24h: 185000000000,
+    category: 'Phân phối ICT & Tiêu dùng',
+  },
+  {
+    symbol: 'DCM',
+    name: 'CTCP Phân bón Dầu khí Cà Mau',
+    type: 'stock',
+    baseAsset: 'DCM',
+    quoteAsset: 'VND',
+    price: 37.40,
+    change24h: 0.81,
+    high24h: 38.00,
+    low24h: 36.90,
+    volume24h: 215000000000,
+    category: 'Phân bón & Hóa chất',
+  },
+  {
+    symbol: 'DPM',
+    name: 'Tổng CTCP Phân bón và Hóa chất Dầu khí (Đạm Phú Mỹ)',
+    type: 'stock',
+    baseAsset: 'DPM',
+    quoteAsset: 'VND',
+    price: 35.60,
+    change24h: 0.56,
+    high24h: 36.20,
+    low24h: 35.10,
+    volume24h: 195000000000,
+    category: 'Phân bón & Hóa chất',
+  },
+  {
+    symbol: 'GMD',
+    name: 'CTCP Gemadept',
+    type: 'stock',
+    baseAsset: 'GMD',
+    quoteAsset: 'VND',
+    price: 64.90,
+    change24h: 1.09,
+    high24h: 65.80,
+    low24h: 64.00,
+    volume24h: 255000000000,
+    category: 'Cảng biển & Logistics',
+  },
+  {
+    symbol: 'HAH',
+    name: 'CTCP Vận tải và Xếp dỡ Hải An',
+    type: 'stock',
+    baseAsset: 'HAH',
+    quoteAsset: 'VND',
+    price: 43.20,
+    change24h: 1.17,
+    high24h: 43.90,
+    low24h: 42.50,
+    volume24h: 225000000000,
+    category: 'Vận tải biển Container',
+  },
+  {
+    symbol: 'VHC',
+    name: 'CTCP Vĩnh Hoàn',
+    type: 'stock',
+    baseAsset: 'VHC',
+    quoteAsset: 'VND',
+    price: 72.40,
+    change24h: 0.84,
+    high24h: 73.50,
+    low24h: 71.50,
+    volume24h: 155000000000,
+    category: 'Thủy sản Xuất khẩu',
+  },
+  {
+    symbol: 'ANV',
+    name: 'CTCP Nam Việt (Navico)',
+    type: 'stock',
+    baseAsset: 'ANV',
+    quoteAsset: 'VND',
+    price: 31.80,
+    change24h: 0.63,
+    high24h: 32.40,
+    low24h: 31.30,
+    volume24h: 145000000000,
+    category: 'Thủy sản Xuất khẩu',
+  },
+  {
+    symbol: 'DBC',
+    name: 'CTCP Tập đoàn Dabaco Việt Nam',
+    type: 'stock',
+    baseAsset: 'DBC',
+    quoteAsset: 'VND',
+    price: 28.90,
+    change24h: 1.05,
+    high24h: 29.50,
+    low24h: 28.40,
+    volume24h: 345000000000,
+    category: 'Nông nghiệp & Thực phẩm',
+  },
+  {
+    symbol: 'TNG',
+    name: 'CTCP Đầu tư và Thương mại TNG (HNX)',
+    type: 'stock',
+    baseAsset: 'TNG',
+    quoteAsset: 'VND',
+    price: 25.40,
+    change24h: 0.79,
+    high24h: 25.90,
+    low24h: 25.00,
+    volume24h: 165000000000,
+    category: 'Dệt may Xuất khẩu (HNX)',
+  },
 
   // ===================== US TECH STOCKS =====================
   {
@@ -839,7 +1257,7 @@ export function isVietnamSymbol(
   item: Pick<MarketSymbol, 'symbol' | 'type' | 'quoteAsset'>
 ): boolean {
   const sym = item.symbol.toUpperCase();
-  if (sym === 'VNINDEX' || sym === 'VN30') return true;
+  if (sym === 'VNINDEX' || sym === 'VN30' || isVnDerivativeSymbol(sym)) return true;
   if (US_EQUITY_SYMBOLS.has(sym)) return false;
   return item.quoteAsset === 'VND' || item.type === 'vn30';
 }
@@ -855,6 +1273,7 @@ export function mapToYahooSymbol(symbol: string, type: string, quoteAsset?: stri
   const isVNStock =
     clean !== 'VNINDEX' &&
     clean !== 'VN30' &&
+    !isVnDerivativeSymbol(clean) &&
     !US_EQUITY_SYMBOLS.has(clean) &&
     (type === 'vn30' || quoteAsset === 'VND');
 
@@ -867,18 +1286,25 @@ export function mapToYahooSymbol(symbol: string, type: string, quoteAsset?: stri
 const ENTRADE_BASES = ['/api/entrade', 'https://services.entrade.com.vn'];
 const YAHOO_BASES = ['/api/yahoo', 'https://query1.finance.yahoo.com'];
 
-// Fetch Real Historical Candlesticks from DNSE Entrade for VNINDEX, VN30, and HNX/UPCOM VN Stocks
+// Fetch Real Historical Candlesticks from DNSE Entrade for VNINDEX, VN30, VN30F1M Derivatives, and HNX/UPCOM VN Stocks
 export async function fetchEntradeKlines(
   symbol: string,
   timeframe: Timeframe = '1h',
   isIndex: boolean = false
 ): Promise<Candle[]> {
   const cleanSym = symbol.replace(/\.VN$/i, '').toUpperCase();
+  const isDeriv = isVnDerivativeSymbol(cleanSym);
   const now = Math.floor(Date.now() / 1000);
   let resolution = '1H';
   let lookbackSec = 86400 * 45;
 
-  if (timeframe === '1m' || timeframe === '5m' || timeframe === '15m') {
+  if (timeframe === '1m') {
+    resolution = isDeriv ? '1' : '15';
+    lookbackSec = isDeriv ? 86400 * 5 : 86400 * 14;
+  } else if (timeframe === '5m') {
+    resolution = isDeriv ? '5' : '15';
+    lookbackSec = isDeriv ? 86400 * 10 : 86400 * 14;
+  } else if (timeframe === '15m') {
     resolution = '15';
     lookbackSec = 86400 * 14;
   } else if (timeframe === '1h' || timeframe === '4h') {
@@ -892,7 +1318,11 @@ export async function fetchEntradeKlines(
     lookbackSec = 86400 * 730;
   }
 
-  const endpointKind = isIndex || cleanSym === 'VNINDEX' || cleanSym === 'VN30' ? 'index' : 'stock';
+  const endpointKind = isDeriv
+    ? 'derivative'
+    : isIndex || cleanSym === 'VNINDEX' || cleanSym === 'VN30'
+    ? 'index'
+    : 'stock';
   const query = `/chart-api/v2/ohlcs/${endpointKind}?symbol=${encodeURIComponent(cleanSym)}&resolution=${resolution}&from=${now - lookbackSec}&to=${now}`;
 
   for (const base of ENTRADE_BASES) {
@@ -931,17 +1361,24 @@ export async function fetchEntradeKlines(
   throw new Error(`Failed Entrade klines for ${symbol}`);
 }
 
-// Fetch Real Historical Candlesticks for VN Stocks, Commodities, or US Stocks via Yahoo Finance (+ Entrade fallback)
+// Fetch Real Historical Candlesticks for VN Stocks, Commodities, or US Stocks via Yahoo Finance (+ Entrade primary/fallback)
 export async function fetchStockKlines(
   symbol: string,
   timeframe: Timeframe = '1h',
   isVN: boolean = true
 ): Promise<Candle[]> {
   const cleanUpper = symbol.trim().toUpperCase();
+  const vnBoard = isVN ? getVnExchangeBoard(cleanUpper) : null;
 
-  // VNINDEX & VN30 are served directly by DNSE Entrade
-  if (cleanUpper === 'VNINDEX' || cleanUpper === 'VN30') {
-    return fetchEntradeKlines(cleanUpper, timeframe, true);
+  // VNINDEX, VN30, VN30F1M Derivative, and HNX/UPCOM equities are served directly by DNSE Entrade
+  if (
+    cleanUpper === 'VNINDEX' ||
+    cleanUpper === 'VN30' ||
+    isVnDerivativeSymbol(cleanUpper) ||
+    vnBoard === 'HNX' ||
+    vnBoard === 'UPCOM'
+  ) {
+    return fetchEntradeKlines(cleanUpper, timeframe, vnBoard === 'INDEX');
   }
 
   const yahooSymbol = mapToYahooSymbol(cleanUpper, isVN ? 'vn30' : 'stock', isVN ? 'VND' : 'USD');
@@ -1055,9 +1492,11 @@ async function fetchYahooSparkBatch(yahooSymbols: string[]): Promise<Record<stri
 }
 
 async function fetchSingleEntradeQuote(sym: string, isIndex: boolean): Promise<LiveQuoteUpdate | null> {
+  const cleanSym = sym.trim().toUpperCase();
+  const isDeriv = isVnDerivativeSymbol(cleanSym);
   const now = Math.floor(Date.now() / 1000);
-  const kind = isIndex ? 'index' : 'stock';
-  const query = `/chart-api/v2/ohlcs/${kind}?symbol=${encodeURIComponent(sym)}&resolution=1D&from=${now - 86400 * 14}&to=${now}`;
+  const kind = isDeriv ? 'derivative' : isIndex ? 'index' : 'stock';
+  const query = `/chart-api/v2/ohlcs/${kind}?symbol=${encodeURIComponent(cleanSym)}&resolution=1D&from=${now - 86400 * 14}&to=${now}`;
 
   for (const base of ENTRADE_BASES) {
     try {
@@ -1084,8 +1523,12 @@ async function fetchSingleEntradeQuote(sym: string, isIndex: boolean): Promise<L
       const high = Number(d.h?.[idx]) || lastClose;
       const low = Number(d.l?.[idx]) || lastClose;
       const volRaw = Number(d.v?.[idx]) || 0;
-      // Convert share volume to VND turnover estimate for VN equities so Watchlist volume unit stays consistent
-      const volume24h = isIndex ? volRaw * 25000 : volRaw * lastClose * 1000;
+      // Convert volume to VND turnover: VN30F1M = 100,000 VND/pt/contract; Equities = price(k)*1000
+      const volume24h = isDeriv
+        ? volRaw * lastClose * 100_000
+        : isIndex
+        ? volRaw * 25_000
+        : volRaw * lastClose * 1_000;
 
       return {
         price: parseFloat(lastClose.toFixed(2)),
@@ -1128,8 +1571,17 @@ async function refreshMacroAndStockQuotes(
 
   for (const item of nonBinanceItems) {
     const upper = item.symbol.toUpperCase();
-    if (upper === 'VNINDEX' || upper === 'VN30') {
-      directEntradeItems.push(item);
+    const vnBoard = isVietnamSymbol(item) ? getVnExchangeBoard(upper) : null;
+    if (
+      upper === 'VNINDEX' ||
+      upper === 'VN30' ||
+      isVnDerivativeSymbol(upper) ||
+      vnBoard === 'HNX' ||
+      vnBoard === 'UPCOM'
+    ) {
+      if (upper !== 'SJC') {
+        directEntradeItems.push(item);
+      }
       continue;
     }
     const ySym = mapToYahooSymbol(upper, item.type, item.quoteAsset);

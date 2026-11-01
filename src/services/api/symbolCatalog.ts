@@ -55,6 +55,7 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
   // ========== VIETNAM STOCKS (VN30 & POPULAR MIDCAPS - CHUẨN SSI IBOARD) ==========
   { symbol: 'VNINDEX', name: 'VN-Index (Chỉ số TT Chứng khoán VN)', type: 'index', baseAsset: 'VNINDEX', quoteAsset: 'VND', category: 'Chỉ số Toàn Thị Trường VN', defaultPrice: 1828.05 },
   { symbol: 'VN30', name: 'VN30-Index (Chỉ số Top 30 Cổ phiếu VN)', type: 'vn30', baseAsset: 'VN30', quoteAsset: 'VND', category: 'Chỉ số VN30 Bluechip', defaultPrice: 1885.20 },
+  { symbol: 'VN30F1M', name: 'HĐTL Chỉ số VN30 Kỳ hạn 1 Tháng (Phái sinh HNX)', type: 'vn30', baseAsset: 'VN30F1M', quoteAsset: 'VND', category: 'Phái sinh HNX - HĐTL Chỉ số VN30', defaultPrice: 1888.50 },
   { symbol: 'VIC', name: 'Tập đoàn Vingroup', type: 'vn30', baseAsset: 'VIC', quoteAsset: 'VND', category: 'VN30 - Đa ngành & Xe điện', defaultPrice: 236.00 },
   { symbol: 'VHM', name: 'CTCP Vinhomes', type: 'vn30', baseAsset: 'VHM', quoteAsset: 'VND', category: 'VN30 - Bất động sản Dân cư', defaultPrice: 73.80 },
   { symbol: 'FPT', name: 'CTCP FPT', type: 'vn30', baseAsset: 'FPT', quoteAsset: 'VND', category: 'VN30 - Công nghệ & Viễn thông', defaultPrice: 72.20 },
@@ -100,6 +101,43 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
   { symbol: 'PVD', name: 'Tổng CTCP Khoan và Dịch vụ Khoan Dầu khí', type: 'stock', baseAsset: 'PVD', quoteAsset: 'VND', category: 'Dầu khí', defaultPrice: 25.80 },
   { symbol: 'PVS', name: 'Tổng CTCP Dịch vụ Kỹ thuật Dầu khí Việt Nam', type: 'stock', baseAsset: 'PVS', quoteAsset: 'VND', category: 'Dầu khí & Điện gió', defaultPrice: 38.50 },
   { symbol: 'BSR', name: 'CTCP Lọc Hóa dầu Bình Sơn', type: 'stock', baseAsset: 'BSR', quoteAsset: 'VND', category: 'Lọc Hóa Dầu', defaultPrice: 22.40 },
+  { symbol: 'LPB', name: 'Ngân hàng TMCP Lộc Phát Việt Nam (LPBank)', type: 'stock', baseAsset: 'LPB', quoteAsset: 'VND', category: 'Ngân hàng', defaultPrice: 33.20 },
+  { symbol: 'SHS', name: 'CTCP Chứng khoán Sài Gòn - Hà Nội (HNX)', type: 'stock', baseAsset: 'SHS', quoteAsset: 'VND', category: 'Chứng khoán (HNX)', defaultPrice: 15.60 },
+  { symbol: 'MBS', name: 'CTCP Chứng khoán MB (HNX)', type: 'stock', baseAsset: 'MBS', quoteAsset: 'VND', category: 'Chứng khoán (HNX)', defaultPrice: 28.40 },
+  { symbol: 'FTS', name: 'CTCP Chứng khoán FPT', type: 'stock', baseAsset: 'FTS', quoteAsset: 'VND', category: 'Chứng khoán', defaultPrice: 42.60 },
+  { symbol: 'BSI', name: 'CTCP Chứng khoán BIDV', type: 'stock', baseAsset: 'BSI', quoteAsset: 'VND', category: 'Chứng khoán', defaultPrice: 48.20 },
+  { symbol: 'VIX', name: 'CTCP Chứng khoán VIX', type: 'stock', baseAsset: 'VIX', quoteAsset: 'VND', category: 'Chứng khoán', defaultPrice: 11.80 },
+  { symbol: 'KDH', name: 'CTCP Đầu tư và Kinh doanh Nhà Khang Điền', type: 'stock', baseAsset: 'KDH', quoteAsset: 'VND', category: 'Bất động sản Dân cư', defaultPrice: 34.50 },
+  { symbol: 'NLG', name: 'CTCP Đầu tư Nam Long', type: 'stock', baseAsset: 'NLG', quoteAsset: 'VND', category: 'Bất động sản Dân cư', defaultPrice: 38.90 },
+  { symbol: 'CEO', name: 'CTCP Tập đoàn C.E.O (HNX)', type: 'stock', baseAsset: 'CEO', quoteAsset: 'VND', category: 'Bất động sản (HNX)', defaultPrice: 14.90 },
+  { symbol: 'KBC', name: 'Tổng Công ty Phát triển Đô thị Kinh Bắc', type: 'stock', baseAsset: 'KBC', quoteAsset: 'VND', category: 'BĐS Khu Công Nghiệp', defaultPrice: 29.40 },
+  { symbol: 'IDC', name: 'Tổng Công ty IDICO (HNX)', type: 'stock', baseAsset: 'IDC', quoteAsset: 'VND', category: 'BĐS Khu Công Nghiệp (HNX)', defaultPrice: 56.80 },
+  { symbol: 'SZC', name: 'CTCP Sonadezi Châu Đức', type: 'stock', baseAsset: 'SZC', quoteAsset: 'VND', category: 'BĐS Khu Công Nghiệp', defaultPrice: 41.20 },
+  { symbol: 'VGC', name: 'Tổng Công ty Viglacera', type: 'stock', baseAsset: 'VGC', quoteAsset: 'VND', category: 'BĐS KCN & Vật liệu', defaultPrice: 46.50 },
+  { symbol: 'PHR', name: 'CTCP Cao su Phước Hòa', type: 'stock', baseAsset: 'PHR', quoteAsset: 'VND', category: 'BĐS KCN & Cao su', defaultPrice: 58.40 },
+  { symbol: 'HSG', name: 'CTCP Tập đoàn Hoa Sen', type: 'stock', baseAsset: 'HSG', quoteAsset: 'VND', category: 'Thép & Tôn mạ', defaultPrice: 19.85 },
+  { symbol: 'NKG', name: 'CTCP Thép Nam Kim', type: 'stock', baseAsset: 'NKG', quoteAsset: 'VND', category: 'Thép & Xuất khẩu', defaultPrice: 20.60 },
+  { symbol: 'HHV', name: 'CTCP Đầu tư Hạ tầng Giao thông Đèo Cả', type: 'stock', baseAsset: 'HHV', quoteAsset: 'VND', category: 'Đầu tư công & Hạ tầng', defaultPrice: 12.65 },
+  { symbol: 'VCG', name: 'Tổng CTCP Vinaconex', type: 'stock', baseAsset: 'VCG', quoteAsset: 'VND', category: 'Đầu tư công & Xây dựng', defaultPrice: 19.40 },
+  { symbol: 'CTD', name: 'CTCP Xây dựng Coteccons', type: 'stock', baseAsset: 'CTD', quoteAsset: 'VND', category: 'Xây dựng & Hạ tầng', defaultPrice: 68.50 },
+  { symbol: 'LCG', name: 'CTCP Lizen', type: 'stock', baseAsset: 'LCG', quoteAsset: 'VND', category: 'Đầu tư công', defaultPrice: 11.40 },
+  { symbol: 'FCN', name: 'CTCP FECON', type: 'stock', baseAsset: 'FCN', quoteAsset: 'VND', category: 'Đầu tư công & Nền móng', defaultPrice: 13.80 },
+  { symbol: 'PVT', name: 'Tổng CTCP Vận tải Dầu khí (PVTrans)', type: 'stock', baseAsset: 'PVT', quoteAsset: 'VND', category: 'Vận tải Dầu khí', defaultPrice: 27.90 },
+  { symbol: 'REE', name: 'CTCP Cơ Điện Lạnh', type: 'stock', baseAsset: 'REE', quoteAsset: 'VND', category: 'Điện & Hạ tầng Nước', defaultPrice: 65.80 },
+  { symbol: 'PC1', name: 'CTCP Tập đoàn PC1', type: 'stock', baseAsset: 'PC1', quoteAsset: 'VND', category: 'Xây lắp Điện & Khoáng sản', defaultPrice: 28.20 },
+  { symbol: 'FRT', name: 'CTCP Bán lẻ Kỹ thuật số FPT (Long Châu)', type: 'stock', baseAsset: 'FRT', quoteAsset: 'VND', category: 'Bán lẻ Dược phẩm & ICT', defaultPrice: 178.50 },
+  { symbol: 'DGW', name: 'CTCP Thế Giới Số (Digiworld)', type: 'stock', baseAsset: 'DGW', quoteAsset: 'VND', category: 'Phân phối ICT & Tiêu dùng', defaultPrice: 44.60 },
+  { symbol: 'DCM', name: 'CTCP Phân bón Dầu khí Cà Mau', type: 'stock', baseAsset: 'DCM', quoteAsset: 'VND', category: 'Phân bón & Hóa chất', defaultPrice: 37.40 },
+  { symbol: 'DPM', name: 'Tổng CTCP Phân bón và Hóa chất Dầu khí (Đạm Phú Mỹ)', type: 'stock', baseAsset: 'DPM', quoteAsset: 'VND', category: 'Phân bón & Hóa chất', defaultPrice: 35.60 },
+  { symbol: 'GMD', name: 'CTCP Gemadept', type: 'stock', baseAsset: 'GMD', quoteAsset: 'VND', category: 'Cảng biển & Logistics', defaultPrice: 64.90 },
+  { symbol: 'HAH', name: 'CTCP Vận tải và Xếp dỡ Hải An', type: 'stock', baseAsset: 'HAH', quoteAsset: 'VND', category: 'Vận tải biển Container', defaultPrice: 43.20 },
+  { symbol: 'VHC', name: 'CTCP Vĩnh Hoàn', type: 'stock', baseAsset: 'VHC', quoteAsset: 'VND', category: 'Thủy sản Xuất khẩu', defaultPrice: 72.40 },
+  { symbol: 'ANV', name: 'CTCP Nam Việt (Navico)', type: 'stock', baseAsset: 'ANV', quoteAsset: 'VND', category: 'Thủy sản Xuất khẩu', defaultPrice: 31.80 },
+  { symbol: 'DBC', name: 'CTCP Tập đoàn Dabaco Việt Nam', type: 'stock', baseAsset: 'DBC', quoteAsset: 'VND', category: 'Nông nghiệp & Thực phẩm', defaultPrice: 28.90 },
+  { symbol: 'TNG', name: 'CTCP Đầu tư và Thương mại TNG (HNX)', type: 'stock', baseAsset: 'TNG', quoteAsset: 'VND', category: 'Dệt may Xuất khẩu (HNX)', defaultPrice: 25.40 },
+  { symbol: 'ACV', name: 'Tổng Công ty Cảng Hàng không Việt Nam (UPCOM)', type: 'stock', baseAsset: 'ACV', quoteAsset: 'VND', category: 'Cảng Hàng không (UPCOM)', defaultPrice: 121.00 },
+  { symbol: 'VEA', name: 'Tổng Công ty Máy động lực & Máy nông nghiệp VN (UPCOM)', type: 'stock', baseAsset: 'VEA', quoteAsset: 'VND', category: 'Cổ tức cao (UPCOM)', defaultPrice: 42.50 },
+  { symbol: 'QNS', name: 'CTCP Đường Quảng Ngãi (UPCOM)', type: 'stock', baseAsset: 'QNS', quoteAsset: 'VND', category: 'Thực phẩm & Đường (UPCOM)', defaultPrice: 49.20 },
 
   // ========== US STOCKS ==========
   { symbol: 'NVDA', name: 'NVIDIA Corp', type: 'stock', baseAsset: 'NVDA', quoteAsset: 'USD', category: 'AI Hardware / Tech', defaultPrice: 132.80 },
@@ -116,7 +154,8 @@ export const GLOBAL_SYMBOL_CATALOG: CatalogItem[] = [
 
 // LocalStorage Persistence Keys
 export const STORAGE_KEYS = {
-  SYMBOLS: 'quant_ai_symbols_v7',
+  SYMBOLS: 'quant_ai_symbols_v8',
+  LEGACY_SYMBOLS_V7: 'quant_ai_symbols_v7',
   FAVORITES: 'quant_ai_favorites_v7',
   LAST_SYMBOL: 'quant_ai_last_symbol_v7',
 };
@@ -130,19 +169,41 @@ export function saveSymbolsToStorage(symbols: MarketSymbol[]) {
   }
 }
 
-// Load symbols list from LocalStorage, fallback to DEFAULT_SYMBOLS
+// Load symbols list from LocalStorage, fallback to DEFAULT_SYMBOLS (with seamless v7 custom symbol migration)
 export function loadSymbolsFromStorage(): MarketSymbol[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.SYMBOLS);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const validated = parsed.filter((s): s is MarketSymbol => 
+        const validated = parsed.filter((s): s is MarketSymbol =>
           Boolean(s && typeof s === 'object' && s.symbol && typeof s.symbol === 'string' && typeof s.price === 'number')
         );
         if (validated.length > 0) {
           return validated;
         }
+      }
+    }
+
+    // Migrate any user-created custom symbols from v7 while injecting v8 Vietnam 10-sector + VN30F1M universe
+    const legacyV7 = localStorage.getItem(STORAGE_KEYS.LEGACY_SYMBOLS_V7);
+    if (legacyV7) {
+      const parsedLegacy = JSON.parse(legacyV7);
+      if (Array.isArray(parsedLegacy)) {
+        const defaultSet = new Set(DEFAULT_SYMBOLS.map(d => d.symbol.toUpperCase()));
+        const customExtras = parsedLegacy.filter(
+          (s): s is MarketSymbol =>
+            Boolean(
+              s &&
+                typeof s === 'object' &&
+                typeof s.symbol === 'string' &&
+                typeof s.price === 'number' &&
+                !defaultSet.has(s.symbol.toUpperCase())
+            )
+        );
+        const merged = [...customExtras, ...DEFAULT_SYMBOLS];
+        saveSymbolsToStorage(merged);
+        return merged;
       }
     }
   } catch (e) {

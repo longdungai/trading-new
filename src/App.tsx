@@ -67,8 +67,13 @@ import { IndicatorToolbar } from './components/Chart/IndicatorToolbar';
 import { TradingChart } from './components/Chart/TradingChart';
 import { IndicatorPanels } from './components/Chart/IndicatorPanels';
 import { AIPredictionCard } from './components/AIInsight/AIPredictionCard';
+import { VnStockQuickCard } from './components/AIInsight/VnStockQuickCard';
 import { TradeSetupCard } from './components/AIInsight/TradeSetupCard';
 import { RiskCalculator } from './components/AIInsight/RiskCalculator';
+import {
+  isVnDerivativeSymbol,
+  isVnStockOrIndexSymbol,
+} from './services/vnMarket/vnStockMicrostructure';
 import { Watchlist } from './components/Market/Watchlist';
 import { OrderBook } from './components/Market/OrderBook';
 import { SentimentMeter } from './components/Market/SentimentMeter';
@@ -1158,7 +1163,13 @@ export const App: React.FC = () => {
                       {isVND ? '' : '$'}
                       {formatPrice(currentAccumulation.entryZone[0])} - {isVND ? '' : '$'}
                       {formatPrice(currentAccumulation.entryZone[1])}
-                      {isVND ? 'k' : ''}
+                      {isVND
+                        ? currentSymbol?.symbol === 'VNINDEX' ||
+                          currentSymbol?.symbol === 'VN30' ||
+                          isVnDerivativeSymbol(currentSymbol?.symbol || '')
+                          ? ' đ'
+                          : 'k'
+                        : ''}
                     </span>{' '}
                     • Đích:{' '}
                     <span className="text-amber-300 font-mono font-bold">
@@ -1300,6 +1311,18 @@ export const App: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-3">
                 {((effectiveRightTab === 'ai' && mobileTab === 'chart') || mobileTab === 'ai') && (
                   <>
+                    {isVnStockOrIndexSymbol(currentSymbol) && (
+                      <VnStockQuickCard
+                        currentSymbol={currentSymbol}
+                        symbols={symbols}
+                        candles={effectiveCandles}
+                        onSelectSymbol={handleSelectSymbol}
+                        onOpenVnMacroTab={() => {
+                          setMacroModalTab('vn_market');
+                          setIsMacroModalOpen(true);
+                        }}
+                      />
+                    )}
                     <AIPredictionCard
                       prediction={aiPrediction}
                       quoteAsset={currentSymbol.quoteAsset}
@@ -1348,6 +1371,7 @@ export const App: React.FC = () => {
                         currentSymbol.price * 0.95
                       }
                       quoteAsset={currentSymbol.quoteAsset}
+                      symbol={currentSymbol.symbol}
                       aiPrediction={aiPrediction}
                       strategyHub={strategyHub}
                       macroSnapshot={macroSnapshot}
@@ -1515,6 +1539,7 @@ export const App: React.FC = () => {
           snapshot={macroSnapshot}
           currentSymbol={currentSymbol}
           symbols={symbols}
+          activeCandles={effectiveCandles}
           initialTab={macroModalTab}
           isRefreshing={isMacroRefreshing}
           onRefresh={() => void refreshMacroSnapshot(true)}

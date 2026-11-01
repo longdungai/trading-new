@@ -37,12 +37,16 @@ const US_EQUITY_SET = new Set([
 ]);
 
 const HNX_SET = new Set([
-  'PVS', 'SHS', 'IDC', 'MBS', 'CEO', 'TNG', 'VCS', 'HUT', 'NVB', 'THD', 'PVI', 'BVS', 'LAS',
+  'PVS', 'SHS', 'IDC', 'MBS', 'CEO', 'TNG', 'VCS', 'HUT', 'NVB', 'THD', 'PVI', 'BVS', 'LAS', 'DTD', 'VGS',
 ]);
 
 const UPCOM_SET = new Set([
   'SJC', 'ACV', 'VEA', 'OIL', 'QNS', 'VGI', 'MCH', 'VGT', 'FOX',
 ]);
+
+export function isVnDerivativeTicker(sym: string): boolean {
+  return /^VN30F\d/i.test(sym.trim().toUpperCase());
+}
 
 const VN_FIXED_HOLIDAYS = new Set(['01-01', '04-30', '05-01', '09-02']);
 
@@ -131,7 +135,7 @@ export function isVietnamMarketSymbol(
   item: Pick<MarketSymbol, 'symbol' | 'type' | 'quoteAsset'>
 ): boolean {
   const sym = item.symbol.toUpperCase();
-  if (sym === 'VNINDEX' || sym === 'VN30') return true;
+  if (sym === 'VNINDEX' || sym === 'VN30' || isVnDerivativeTicker(sym)) return true;
   if (US_EQUITY_SET.has(sym)) return false;
   return item.quoteAsset === 'VND' || item.type === 'vn30';
 }
@@ -165,16 +169,21 @@ export function getMarketSessionInfo(
     };
   }
 
-  // 2. CHỨNG KHOÁN VIỆT NAM (HOSE / HNX / UPCOM / VNINDEX / VN30) — MÚI GIỜ GMT+7
+  // 2. CHỨNG KHOÁN & PHÁI SINH VIỆT NAM (HOSE / HNX / UPCOM / HNX-PS VN30F1M) — MÚI GIỜ GMT+7
   if (isVietnamMarketSymbol(symbolObj)) {
-    const isIndex = sym === 'VNINDEX' || sym === 'VN30' || symbolObj.type === 'index';
-    const board: 'HOSE' | 'HNX' | 'UPCOM' = UPCOM_SET.has(sym)
+    const isDeriv = isVnDerivativeTicker(sym);
+    const isIndex = !isDeriv && (sym === 'VNINDEX' || sym === 'VN30' || symbolObj.type === 'index');
+    const board: 'HOSE' | 'HNX' | 'UPCOM' | 'HNX-PS' = isDeriv
+      ? 'HNX-PS'
+      : UPCOM_SET.has(sym)
       ? 'UPCOM'
       : HNX_SET.has(sym)
       ? 'HNX'
       : 'HOSE';
 
-    const exchangeName = isIndex
+    const exchangeName = isDeriv
+      ? 'Sàn Phái sinh HNX (HĐTL Chỉ số VN30)'
+      : isIndex
       ? 'Sở GDCK TP.HCM (Chỉ số HOSE)'
       : board === 'HNX'
       ? 'Sàn HNX (Sở GDCK Hà Nội)'
@@ -182,7 +191,9 @@ export function getMarketSessionInfo(
       ? 'Sàn UPCOM (HNX)'
       : 'Sàn HOSE (Sở GDCK TP.HCM)';
 
-    const priceBandNote = isIndex
+    const priceBandNote = isDeriv
+      ? 'Biên độ trần/sàn: ±7% • Bước giá 0.1 điểm (100k đ/điểm) • Thanh toán T+0'
+      : isIndex
       ? undefined
       : board === 'HNX'
       ? 'Biên độ trần/sàn quy định: ±10% (Sàn HNX)'
@@ -196,7 +207,15 @@ export function getMarketSessionInfo(
     const isWeekend = vn.weekday === 0 || vn.weekday === 6;
 
     const baseRows: TradingScheduleRow[] =
-      board === 'UPCOM'
+      board === 'HNX-PS'
+        ? [
+            { label: 'Mở cửa Phái sinh (ATO)', timeRange: '08:45 – 09:00', isActive: !isWeekend && !isHoliday && mins >= 525 && mins < 540 },
+            { label: 'Khớp lệnh liên tục Sáng', timeRange: '09:00 – 11:30', isActive: !isWeekend && !isHoliday && mins >= 540 && mins < 690 },
+            { label: 'Nghỉ trưa giữa phiên', timeRange: '11:30 – 13:00', isActive: !isWeekend && !isHoliday && mins >= 690 && mins < 780 },
+            { label: 'Khớp lệnh liên tục Chiều', timeRange: '13:00 – 14:30', isActive: !isWeekend && !isHoliday && mins >= 780 && mins < 870 },
+            { label: 'Đóng cửa Phái sinh (ATC)', timeRange: '14:30 – 14:45', isActive: !isWeekend && !isHoliday && mins >= 870 && mins < 885 },
+          ]
+        : board === 'UPCOM'
         ? [
             { label: 'Phiên Sáng (Liên tục)', timeRange: '09:00 – 11:30', isActive: !isWeekend && !isHoliday && mins >= 540 && mins < 690 },
             { label: 'Nghỉ trưa giữa phiên', timeRange: '11:30 – 13:00', isActive: !isWeekend && !isHoliday && mins >= 690 && mins < 780 },
@@ -218,11 +237,16 @@ export function getMarketSessionInfo(
           ];
 
     const scheduleSummary =
-      board === 'UPCOM'
+      board === 'HNX-PS'
+        ? 'Thứ 2 – Thứ 6 (GMT+7): Sáng 08:45–11:30 (ATO 08:45–09:00, mở sớm 15p) • Nghỉ trưa 11:30–13:00 • Chiều 13:00–14:45 (ATC 14:30–14:45)'
+        : board === 'UPCOM'
         ? 'Thứ 2 – Thứ 6 (GMT+7): Sáng 09:00–11:30 • Nghỉ trưa 11:30–13:00 • Chiều 13:00–15:00'
         : board === 'HNX'
         ? 'Thứ 2 – Thứ 6 (GMT+7): Sáng 09:00–11:30 • Nghỉ trưa 11:30–13:00 • Chiều 13:00–14:45 (ATC 14:30–14:45, PLO 14:45–15:00)'
         : 'Thứ 2 – Thứ 6 (GMT+7): Sáng 09:00–11:30 (ATO 09:00–09:15) • Nghỉ trưa 11:30–13:00 • Chiều 13:00–14:45 (ATC 14:30–14:45)';
+
+    const openMins = board === 'HNX-PS' ? 525 : 540;
+    const openClockStr = board === 'HNX-PS' ? '08:45' : '09:00';
 
     if (isHoliday) {
       const next = computeMinsUntilNextVNMorning(vn);
@@ -238,7 +262,7 @@ export function getMarketSessionInfo(
         statusHeadline: `Thị trường Chứng khoán Việt Nam đóng cửa nghỉ Lễ (${mmdd})`,
         scheduleSummary,
         scheduleRows: baseRows,
-        nextSessionLabel: `Mở cửa lại lúc 09:00 ${next.dayName}`,
+        nextSessionLabel: `Mở cửa lại lúc ${openClockStr} ${next.dayName}`,
         priceBandNote,
         currentExchangeTime: vnClock,
       };
@@ -258,14 +282,14 @@ export function getMarketSessionInfo(
         statusHeadline: `Nghỉ cuối tuần (${VN_WEEKDAY_LABELS[vn.weekday]}) — Không phát sinh lệnh khớp mới`,
         scheduleSummary,
         scheduleRows: baseRows,
-        nextSessionLabel: `Phiên mở cửa kế tiếp: 09:00 Thứ Hai (còn ${formatDurationMinutes(next.minsUntil)})`,
+        nextSessionLabel: `Phiên mở cửa kế tiếp: ${openClockStr} Thứ Hai (còn ${formatDurationMinutes(next.minsUntil)})`,
         priceBandNote,
         currentExchangeTime: vnClock,
       };
     }
 
     // Weekday (Thứ 2 - Thứ 6)
-    if (mins < 540) {
+    if (mins < openMins) {
       return {
         exchangeName,
         shortExchange: board,
@@ -273,12 +297,31 @@ export function getMarketSessionInfo(
         is24x7: false,
         hasRealOrderBook: false,
         state: 'PRE_OPEN',
-        badgeText: `${board} CHƯA MỞ CỬA (Mở 09:00)`,
-        shortBadge: 'Chờ 09:00',
+        badgeText: `${board} CHƯA MỞ CỬA (Mở ${openClockStr})`,
+        shortBadge: `Chờ ${openClockStr}`,
         statusHeadline: 'Chưa tới giờ giao dịch — Đang hiển thị giá chốt phiên liền trước',
         scheduleSummary,
         scheduleRows: baseRows,
-        nextSessionLabel: `Bắt đầu phiên sáng lúc 09:00 hôm nay (còn ${formatDurationMinutes(540 - mins)})`,
+        nextSessionLabel: `Bắt đầu phiên sáng lúc ${openClockStr} hôm nay (còn ${formatDurationMinutes(openMins - mins)})`,
+        priceBandNote,
+        currentExchangeTime: vnClock,
+      };
+    }
+
+    if (mins >= 525 && mins < 540 && board === 'HNX-PS') {
+      return {
+        exchangeName,
+        shortExchange: board,
+        isOpen: true,
+        is24x7: false,
+        hasRealOrderBook: false,
+        state: 'OPEN',
+        badgeText: 'HNX-PS • ATO (08:45–09:00)',
+        shortBadge: 'ATO PS',
+        statusHeadline: 'Phiên ATO Phái sinh VN30F1M mở sớm 15 phút trước cơ sở (08:45 – 09:00)',
+        scheduleSummary,
+        scheduleRows: baseRows,
+        nextSessionLabel: 'Chuyển sang khớp lệnh liên tục lúc 09:00',
         priceBandNote,
         currentExchangeTime: vnClock,
       };

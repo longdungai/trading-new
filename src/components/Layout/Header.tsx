@@ -15,6 +15,7 @@ import {
 import { MarketSymbol, SignalAction, Timeframe } from '../../types';
 import { formatPercent, formatPrice, formatVolume } from '../../utils/formatters';
 import { getMarketSessionInfo } from '../../utils/marketHours';
+import { isVnDerivativeSymbol } from '../../services/vnMarket/vnStockMicrostructure';
 
 interface HeaderProps {
   currentSymbol: MarketSymbol;
@@ -95,8 +96,12 @@ export const Header: React.FC<HeaderProps> = ({
           s.symbol.includes('OIL') ||
           s.symbol.includes('PAXG'))) ||
       (filterType === 'crypto' && s.type === 'crypto') ||
-      (filterType === 'vn30' && (s.type === 'vn30' || s.symbol === 'VNINDEX')) ||
-      (filterType === 'stock' && (s.type === 'stock' || s.type === 'index'));
+      (filterType === 'vn30' &&
+        (s.type === 'vn30' || s.quoteAsset === 'VND' || s.symbol === 'VNINDEX')) ||
+      (filterType === 'stock' &&
+        (s.type === 'stock' || s.type === 'index') &&
+        s.quoteAsset !== 'VND' &&
+        s.symbol !== 'VNINDEX');
 
     const matchesSearch =
       s.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -108,8 +113,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isPositive = currentSymbol.change24h >= 0;
   const isVND = currentSymbol.quoteAsset === 'VND';
+  const isVnIdxOrDeriv =
+    currentSymbol.symbol === 'VNINDEX' ||
+    currentSymbol.symbol === 'VN30' ||
+    isVnDerivativeSymbol(currentSymbol.symbol);
   const prefix = isVND ? '' : '$';
-  const suffix = isVND ? 'k' : '';
+  const suffix = isVND ? (isVnIdxOrDeriv ? ' đ' : 'k') : '';
   const isCommodity =
     currentSymbol.type === 'commodity' ||
     currentSymbol.symbol.includes('XAU') ||
@@ -174,14 +183,24 @@ export const Header: React.FC<HeaderProps> = ({
                   className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-bold ${
                     isCommodity
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/35'
+                      : isVnDerivativeSymbol(currentSymbol.symbol)
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/35'
                       : currentSymbol.type === 'crypto'
                       ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
-                      : currentSymbol.type === 'vn30'
+                      : currentSymbol.type === 'vn30' || isVND
                       ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                       : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
                   }`}
                 >
-                  {isCommodity ? 'HÀNG HÓA' : currentSymbol.type === 'vn30' ? 'VN30' : currentSymbol.type}
+                  {isCommodity
+                    ? 'HÀNG HÓA'
+                    : isVnDerivativeSymbol(currentSymbol.symbol)
+                    ? 'PHÁI SINH'
+                    : currentSymbol.type === 'vn30'
+                    ? 'VN30'
+                    : isVND
+                    ? 'CỔ PHIẾU VN'
+                    : currentSymbol.type}
                 </span>
               </div>
               <span className="text-[10px] text-slate-400 block truncate max-w-[85px] sm:max-w-[135px]">
@@ -482,7 +501,7 @@ export const Header: React.FC<HeaderProps> = ({
                       : tab === 'crypto'
                       ? '🪙 Coin'
                       : tab === 'vn30'
-                      ? '🇻🇳 VN30'
+                      ? '🇻🇳 Cổ phiếu VN'
                       : '🇺🇸 Mỹ'}
                   </button>
                 ))}
@@ -530,7 +549,15 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                     <div className="text-right font-mono tabular-nums">
                       <div className="text-xs font-bold text-white">
-                        {sVnd ? `${formatPrice(s.price)}k` : `$${formatPrice(s.price)}`}
+                        {sVnd
+                          ? `${formatPrice(s.price)}${
+                              s.symbol === 'VNINDEX' ||
+                              s.symbol === 'VN30' ||
+                              isVnDerivativeSymbol(s.symbol)
+                                ? ' đ'
+                                : 'k'
+                            }`
+                          : `$${formatPrice(s.price)}`}
                       </div>
                       <div
                         className={`text-[10px] font-semibold ${

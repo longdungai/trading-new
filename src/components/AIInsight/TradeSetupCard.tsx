@@ -24,6 +24,12 @@ import {
 } from 'lucide-react';
 import { formatPercent, formatPrice, formatTime } from '../../utils/formatters';
 import {
+  getVnExchangeBoard,
+  isVnDerivativeSymbol,
+  isVnStockOrIndexSymbol,
+  roundToVnTickSize,
+} from '../../services/vnMarket/vnStockMicrostructure';
+import {
   UserPaperTrade,
   getUserPaperTrades,
   addUserPaperTrade,
@@ -48,9 +54,18 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
   quoteAsset = 'USD',
   symbol = '',
 }) => {
-  const isVND = quoteAsset === 'VND' || symbol.includes('VN') || ['FPT', 'HPG', 'VIC', 'VHM', 'SJC', 'MWG', 'MSN', 'SSI', 'VCB'].includes(symbol);
+  const activeSymbol = strategyHub?.symbol || setup?.symbol || symbol;
+  const isVND =
+    quoteAsset === 'VND' ||
+    isVnStockOrIndexSymbol(activeSymbol) ||
+    ['FPT', 'HPG', 'VIC', 'VHM', 'SJC', 'MWG', 'MSN', 'SSI', 'VCB'].includes(activeSymbol);
+  const isVnIdxOrDeriv =
+    activeSymbol === 'VNINDEX' ||
+    activeSymbol === 'VN30' ||
+    isVnDerivativeSymbol(activeSymbol);
+  const vnBoard = isVND && activeSymbol ? getVnExchangeBoard(activeSymbol) : null;
   const prefix = isVND ? '' : '$';
-  const priceSuffix = isVND ? 'k' : '';
+  const priceSuffix = isVND ? (isVnIdxOrDeriv ? ' đ' : 'k') : '';
 
   // Active selected strategy in the Hub
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>('best');
@@ -66,11 +81,12 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
   const [testLeverage, setTestLeverage] = useState<number>(1);
   const [testEntryType, setTestEntryType] = useState<'current' | 'entry_zone'>('current');
 
-  // Derive current display item
+  // Derive current display item (with official HOSE/HNX/VN30F1M tick-size normalization for Vietnam assets)
   const currentItem: StrategyHubItem = React.useMemo(() => {
+    let rawItem: StrategyHubItem | null = null;
     if (!strategyHub || !strategyHub.strategies || strategyHub.strategies.length === 0) {
       if (setup) {
-        return {
+        rawItem = {
           id: 'setup',
           name: setup.strategyName,
           category: 'Chiến Lược Mặc Định',
@@ -89,18 +105,36 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
           isOptimal: true,
         };
       }
+    } else if (selectedStrategyId === 'best') {
+      rawItem = strategyHub.bestStrategy;
+    } else {
+      rawItem =
+        strategyHub.strategies.find((s) => s.id === selectedStrategyId) ||
+        strategyHub.bestStrategy;
+    }
+
+    if (!rawItem || !rawItem.name) {
       return {} as StrategyHubItem;
     }
 
-    if (selectedStrategyId === 'best') {
-      return strategyHub.bestStrategy;
+    if (isVND && activeSymbol && vnBoard && vnBoard !== 'INDEX') {
+      return {
+        ...rawItem,
+        entryZone: [
+          roundToVnTickSize(rawItem.entryZone[0], vnBoard),
+          roundToVnTickSize(rawItem.entryZone[1], vnBoard),
+        ],
+        stopLoss: roundToVnTickSize(rawItem.stopLoss, vnBoard),
+        takeProfit1: roundToVnTickSize(rawItem.takeProfit1, vnBoard),
+        takeProfit2: roundToVnTickSize(rawItem.takeProfit2, vnBoard),
+        takeProfit3: roundToVnTickSize(rawItem.takeProfit3, vnBoard),
+      };
     }
-    const found = strategyHub.strategies.find(s => s.id === selectedStrategyId);
-    return found || strategyHub.bestStrategy;
-  }, [strategyHub, setup, selectedStrategyId]);
+
+    return rawItem;
+  }, [strategyHub, setup, selectedStrategyId, isVND, activeSymbol, vnBoard]);
 
   const currentPrice = strategyHub ? strategyHub.currentPrice : (setup?.currentPrice || 100);
-  const activeSymbol = strategyHub?.symbol || setup?.symbol || symbol;
 
   // Real-time listener for open trades across ALL symbols (global background sync + active symbol)
   useEffect(() => {
@@ -351,6 +385,18 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
             <div className="text-[10px] sm:text-[11px] text-gray-400 mt-1 leading-snug">
               {currentItem.description}
             </div>
+            {isVND && vnBoard && vnBoard !== 'INDEX' && (
+              <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap text-[9.5px] font-mono text-cyan-300">
+                <span className="whitespace-nowrap">
+                  🇻🇳 Chuẩn bước giá {vnBoard === 'HNX_DERIVATIVE' ? 'HNX Phái sinh (0.1 điểm)' : `sàn ${vnBoard}`}
+                </span>
+                <span className="text-slate-400 whitespace-nowrap">
+                  {vnBoard === 'HNX_DERIVATIVE'
+                    ? 'Lô 1 HĐ • T+0 • ±7%'
+                    : `Lô chẵn 100 CP • T+2 • ±${vnBoard === 'UPCOM' ? 15 : vnBoard === 'HNX' ? 10 : 7}%`}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Entry, SL, TP Grid */}

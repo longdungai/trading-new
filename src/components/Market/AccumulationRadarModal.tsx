@@ -1,18 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MarketSymbol } from '../../types';
 import { AccumulationAnalysis, scanMarketAccumulation } from '../../services/ai/accumulationScanner';
+import { fetchVnStockInsights } from '../../services/vnMarket/vnStockInsightsClient';
+import { isVnDerivativeSymbol, isVnStockOrIndexSymbol } from '../../services/vnMarket/vnStockMicrostructure';
 import { formatPrice } from '../../utils/formatters';
 import {
-  Sparkles,
   X,
   Target,
   Flame,
   Gem,
-  ArrowUpRight,
-  TrendingDown,
-  ShieldAlert,
   Search,
-  ExternalLink,
   ChevronRight,
   Layers,
 } from 'lucide-react';
@@ -28,29 +25,71 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
   onSelectSymbol,
   onClose,
 }) => {
-  const [filterCategory, setFilterCategory] = useState<'all' | 'vn30' | 'commodity' | 'crypto' | 'stock'>('all');
+  const [filterCategory, setFilterCategory] = useState<
+    'all' | 'vn_all' | 'vn30' | 'commodity' | 'crypto' | 'stock'
+  >('all');
   const [search, setSearch] = useState('');
+  const [insightsTick, setInsightsTick] = useState(0);
 
-  // Scan and rank all symbols
+  // Scan and rank all symbols (re-evaluates when live VN fundamentals/foreign flow cache updates)
   const rankedList: AccumulationAnalysis[] = useMemo(() => {
+    void insightsTick;
     return scanMarketAccumulation(symbols);
-  }, [symbols]);
+  }, [symbols, insightsTick]);
 
   // Filter list
   const filteredList = useMemo(() => {
     return rankedList.filter(item => {
+      const symObj = symbols.find(s => s.symbol === item.symbol);
+      const isVN = symObj ? isVnStockOrIndexSymbol(symObj) : item.type === 'vn30';
+      if (filterCategory === 'vn_all' && (!isVN || isVnDerivativeSymbol(item.symbol))) return false;
       if (filterCategory === 'vn30' && item.type !== 'vn30' && item.symbol !== 'VNINDEX') return false;
-      if (filterCategory === 'commodity' && item.type !== 'commodity' && !item.symbol.includes('XAU') && !item.symbol.includes('OIL') && !item.symbol.includes('PAXG')) return false;
+      if (
+        filterCategory === 'commodity' &&
+        item.type !== 'commodity' &&
+        !item.symbol.includes('XAU') &&
+        !item.symbol.includes('OIL') &&
+        !item.symbol.includes('PAXG')
+      )
+        return false;
       if (filterCategory === 'crypto' && item.type !== 'crypto') return false;
-      if (filterCategory === 'stock' && item.type !== 'stock' && item.type !== 'index') return false;
+      if (filterCategory === 'stock' && (isVN || (item.type !== 'stock' && item.type !== 'index')))
+        return false;
 
       if (search.trim()) {
         const q = search.toLowerCase();
-        return item.symbol.toLowerCase().includes(q) || item.name.toLowerCase().includes(q);
+        return (
+          item.symbol.toLowerCase().includes(q) ||
+          item.name.toLowerCase().includes(q) ||
+          (item.vnSectorName && item.vnSectorName.toLowerCase().includes(q))
+        );
       }
       return true;
     });
-  }, [rankedList, filterCategory, search]);
+  }, [rankedList, symbols, filterCategory, search]);
+
+  // Background enrich top 10 visible Vietnam equities with live P/E, ROE & Foreign Flow
+  useEffect(() => {
+    let active = true;
+    const topVnTargets = filteredList
+      .filter(
+        it =>
+          isVnStockOrIndexSymbol(it.symbol) &&
+          !isVnDerivativeSymbol(it.symbol) &&
+          it.symbol !== 'VNINDEX' &&
+          it.symbol !== 'VN30' &&
+          it.peRatio == null
+      )
+      .slice(0, 10);
+
+    if (topVnTargets.length === 0) return;
+    void Promise.allSettled(topVnTargets.map(t => fetchVnStockInsights(t.symbol))).then(() => {
+      if (active) setInsightsTick(prev => prev + 1);
+    });
+    return () => {
+      active = false;
+    };
+  }, [filterCategory, search]);
 
   const hotCount = rankedList.filter(r => r.status === 'HOT_BUY').length;
   const dcaCount = rankedList.filter(r => r.status === 'GOOD_DCA').length;
@@ -119,6 +158,7 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
           <div className="flex gap-1 overflow-x-auto no-scrollbar w-full sm:w-auto">
             {[
               { id: 'all', label: 'Tất cả' },
+              { id: 'vn_all', label: '🇻🇳 Toàn Sàn VN' },
               { id: 'vn30', label: '🇻🇳 VN30' },
               { id: 'commodity', label: '🥇 Vàng & Dầu' },
               { id: 'crypto', label: '🪙 Crypto' },
@@ -127,7 +167,7 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
               <button
                 key={cat.id}
                 onClick={() => setFilterCategory(cat.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition ${
                   filterCategory === cat.id
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                     : 'bg-[#151e2c] text-gray-400 hover:text-white'
@@ -142,7 +182,7 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-gray-400" />
             <input
               type="text"
-              placeholder="Tìm mã hoặc tên..."
+              placeholder="Tìm mã, tên hoặc ngành VN..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-[#151e2c] border border-[#233044] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
@@ -155,8 +195,10 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
           {filteredList.map((item, index) => {
             const symObj = symbols.find(s => s.symbol === item.symbol);
             const isVND = item.type === 'vn30' || item.symbol === 'VNINDEX' || symObj?.quoteAsset === 'VND';
+            const isVnIdxOrDeriv =
+              item.symbol === 'VNINDEX' || item.symbol === 'VN30' || isVnDerivativeSymbol(item.symbol);
             const prefix = isVND ? '' : '$';
-            const priceSuffix = isVND ? 'k' : '';
+            const priceSuffix = isVND ? (isVnIdxOrDeriv ? ' đ' : 'k') : '';
 
             return (
               <div
@@ -176,22 +218,27 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
                 }`}
               >
                 {/* Left: Rank + Symbol + Reasons */}
-                <div className="flex items-start gap-3 min-w-0">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 ${
                     index < 3 ? 'bg-amber-500 text-black shadow-md shadow-amber-500/30' : 'bg-[#1a2538] text-gray-300'
                   }`}>
                     #{index + 1}
                   </div>
 
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-black text-sm sm:text-base text-white">
+                      <span className="font-mono font-black text-sm sm:text-base text-white shrink-0">
                         {item.symbol}
                       </span>
                       <span className="text-xs text-gray-400 font-medium truncate max-w-[200px]">
                         {item.name}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                      {item.vnSectorName && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/35 shrink-0 whitespace-nowrap">
+                          {item.vnSectorName}
+                        </span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase shrink-0 whitespace-nowrap ${
                         item.status === 'HOT_BUY'
                           ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40'
                           : item.status === 'GOOD_DCA'
@@ -202,13 +249,30 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
                       </span>
                     </div>
 
-                    {/* Reasons Tags */}
+                    {/* Reasons & Fundamental / Foreign Flow Tags */}
                     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 font-mono font-bold">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 font-mono font-bold shrink-0 whitespace-nowrap">
                         🤖 Kronos 24N: {item.kronosForecastPct >= 0 ? `+${item.kronosForecastPct}%` : `${item.kronosForecastPct}%`} ({item.kronosBullProb}% Bull)
                       </span>
+                      {item.peRatio != null && item.peRatio > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-300 border border-emerald-500/35 font-mono font-bold shrink-0 whitespace-nowrap">
+                          P/E {item.peRatio}x{item.roePct != null ? ` • ROE ${item.roePct}%` : ''}
+                        </span>
+                      )}
+                      {item.foreignNetBillion != null && item.foreignNetBillion !== 0 && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold shrink-0 whitespace-nowrap border ${
+                            item.foreignNetBillion > 0
+                              ? 'bg-teal-950/50 text-teal-300 border-teal-500/35'
+                              : 'bg-rose-950/50 text-rose-300 border-rose-500/35'
+                          }`}
+                        >
+                          Khối ngoại: {item.foreignNetBillion > 0 ? '+' : ''}
+                          {item.foreignNetBillion} tỷ
+                        </span>
+                      )}
                       {item.reasons.map((r, i) => (
-                        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-[#162130] text-gray-300 border border-[#24334a]">
+                        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-[#162130] text-gray-300 border border-[#24334a] break-words">
                           ✓ {r}
                         </span>
                       ))}

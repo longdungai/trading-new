@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { formatPercent, formatPrice } from '../../utils/formatters';
 import { getMarketSessionInfo } from '../../utils/marketHours';
+import { isVnDerivativeSymbol } from '../../services/vnMarket/vnStockMicrostructure';
 import { GLOBAL_SYMBOL_CATALOG, CatalogItem } from '../../services/api/symbolCatalog';
 import { analyzeAccumulationZone } from '../../services/ai/accumulationScanner';
 import { AccumulationRadarModal } from './AccumulationRadarModal';
@@ -108,8 +109,8 @@ export const Watchlist: React.FC<WatchlistProps> = ({
       }
       if (filter === 'commodity') return s.type === 'commodity' || s.symbol.includes('PAXG') || s.symbol.includes('GOLD') || s.symbol.includes('OIL') || s.symbol.includes('XAU');
       if (filter === 'crypto') return s.type === 'crypto';
-      if (filter === 'vn30') return s.type === 'vn30' || s.symbol === 'VNINDEX';
-      if (filter === 'stock') return s.type === 'stock' || s.type === 'index';
+      if (filter === 'vn30') return s.type === 'vn30' || s.quoteAsset === 'VND' || s.symbol === 'VNINDEX';
+      if (filter === 'stock') return (s.type === 'stock' || s.type === 'index') && s.quoteAsset !== 'VND' && s.symbol !== 'VNINDEX';
       return true;
     }).sort((a, b) => {
       if (filter === 'accumulation') {
@@ -268,7 +269,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                 : tab === 'crypto'
                 ? '🪙 Top Coin'
                 : tab === 'vn30'
-                ? '🇻🇳 VN30'
+                ? '🇻🇳 Cổ phiếu VN'
                 : tab === 'stock'
                 ? '🇺🇸 Cổ phiếu Mỹ'
                 : '★ Yêu thích'}
@@ -335,13 +336,23 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                       <span className={`text-[8px] px-1 rounded uppercase font-semibold ${
                         isCommodity
                           ? 'bg-amber-500/20 text-amber-300'
+                          : isVnDerivativeSymbol(s.symbol)
+                          ? 'bg-purple-500/20 text-purple-300'
                           : s.type === 'crypto'
                           ? 'bg-cyan-500/15 text-cyan-400'
-                          : s.type === 'vn30'
+                          : s.type === 'vn30' || isVND
                           ? 'bg-rose-500/15 text-rose-400'
                           : 'bg-indigo-500/15 text-indigo-400'
                       }`}>
-                        {isCommodity ? 'HH' : s.type === 'vn30' ? 'VN30' : s.type}
+                        {isCommodity
+                          ? 'HH'
+                          : isVnDerivativeSymbol(s.symbol)
+                          ? 'PS'
+                          : s.type === 'vn30'
+                          ? 'VN30'
+                          : isVND
+                          ? 'VN'
+                          : s.type}
                       </span>
 
                       <span
@@ -385,7 +396,15 @@ export const Watchlist: React.FC<WatchlistProps> = ({
                 <div className="flex items-center gap-1.5 shrink-0">
                   <div className="text-right font-mono tabular-nums">
                     <div className="text-xs font-bold text-slate-100 flex items-center justify-end">
-                      {isVND ? `${formatPrice(s.price)}k` : `$${formatPrice(s.price)}`}
+                      {isVND
+                        ? `${formatPrice(s.price)}${
+                            s.symbol === 'VNINDEX' ||
+                            s.symbol === 'VN30' ||
+                            isVnDerivativeSymbol(s.symbol)
+                              ? ' đ'
+                              : 'k'
+                          }`
+                        : `$${formatPrice(s.price)}`}
                     </div>
                     <div className={`text-[10px] font-semibold flex items-center justify-end gap-0.5 ${
                       isPos ? 'text-emerald-400' : 'text-rose-400'

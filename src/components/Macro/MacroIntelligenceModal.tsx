@@ -25,9 +25,12 @@ import { evaluateSymbolMacroImpact } from '../../services/macro/macroIntelligenc
 import { FedPivotIntelligenceView } from './FedPivotIntelligenceView';
 import { VnGoldFxArbitrageView, IntermarketCorrelationView } from './VnGoldAndCorrelationViews';
 import { MarketNewsAndBreadthView } from './MarketNewsAndBreadthView';
+import { VnMarketIntelligenceView } from './VnMarketIntelligenceView';
+import { Candle } from '../../types';
 
 export type MacroModalTab =
   | 'indicators'
+  | 'vn_market'
   | 'fed_pivot'
   | 'vn_gold_fx'
   | 'correlation'
@@ -39,6 +42,7 @@ interface MacroIntelligenceModalProps {
   snapshot: MacroIntelligenceSnapshot | null;
   currentSymbol: MarketSymbol;
   symbols: MarketSymbol[];
+  activeCandles?: Candle[];
   initialTab?: MacroModalTab;
   isRefreshing?: boolean;
   onRefresh: () => void;
@@ -50,6 +54,7 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
   snapshot,
   currentSymbol,
   symbols,
+  activeCandles = [],
   initialTab = 'indicators',
   isRefreshing = false,
   onRefresh,
@@ -204,6 +209,19 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
 
             <button
               type="button"
+              onClick={() => setActiveTab('vn_market')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition ${
+                activeTab === 'vn_market'
+                  ? 'bg-rose-500/20 text-rose-200 border-rose-500/50 shadow-sm'
+                  : 'text-slate-300 hover:text-white bg-[#101829] border-slate-800/90'
+              }`}
+            >
+              <span className="shrink-0">🇻🇳</span>
+              <span>TTCK Việt Nam (Phái sinh • Khối ngoại • 10 Ngành)</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('fed_pivot')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition ${
                 activeTab === 'fed_pivot'
@@ -305,7 +323,15 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-4">
-          {!snapshot ? (
+          {activeTab === 'vn_market' ? (
+            <VnMarketIntelligenceView
+              symbols={symbols}
+              currentSymbol={currentSymbol}
+              activeCandles={activeCandles}
+              onSelectSymbol={onSelectSymbol}
+              onClose={onClose}
+            />
+          ) : !snapshot ? (
             <div className="py-12 text-center text-slate-400 text-xs space-y-2">
               <RefreshCw className="w-6 h-6 text-cyan-400 animate-spin mx-auto" />
               <div className="px-4 leading-relaxed">

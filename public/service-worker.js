@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trading-new-shell-v4';
+const CACHE_NAME = 'trading-new-shell-v5';
 
 const BYPASS_PATTERNS = [
   '/api/',
@@ -6,6 +6,8 @@ const BYPASS_PATTERNS = [
   'binance.vision',
   'yahoo.com',
   'entrade.com.vn',
+  'vndirect.com.vn',
+  'simplize.vn',
   'ssi.com.vn',
   'stlouisfed.org',
   'newyorkfed.org',

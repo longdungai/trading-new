@@ -84,6 +84,18 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
     const systemCommands: CommandActionItem[] = [
       {
+        id: 'cmd_vn_market',
+        title: '🇻🇳 Mở Chuyên Trang TTCK Việt Nam (VN30F1M Basis • Khối Ngoại • Sóng 10 Ngành)',
+        subtitle: 'Độ lệch phái sinh VN30F1M, Top Mua/Bán ròng Khối ngoại HOSE, Định giá P/E ROE & Luân chuyển ngành',
+        badge: 'TTCK VN',
+        keywords: 'ttck viet nam vn30f1m phai sinh basis khoi ngoai song nganh hose hnx pe roe',
+        icon: 'macro',
+        onExecute: () => {
+          onOpenMacroTab('vn_market');
+          onClose();
+        },
+      },
+      {
         id: 'cmd_replay',
         title: '🎬 Bật / Tắt Chế Độ Bar Replay (Tua Ngược Lịch Sử Tập Giao Dịch)',
         subtitle: 'Cắt nến quá khứ, chạy từng nến 1x/2x/5x và vào lệnh tập không thiên kiến tương lai',

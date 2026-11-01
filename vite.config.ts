@@ -52,6 +52,18 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/entrade/, ''),
         secure: false,
       },
+      '/api/vndirect': {
+        target: 'https://api-finfo.vndirect.com.vn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/vndirect/, ''),
+        secure: false,
+      },
+      '/api/simplize': {
+        target: 'https://api2.simplize.vn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/simplize/, ''),
+        secure: false,
+      },
       '/api/fred': {
         target: 'https://fred.stlouisfed.org',
         changeOrigin: true,

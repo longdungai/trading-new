@@ -220,7 +220,7 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
         <div className="text-xs font-bold text-white">
           Đang tải hệ thống Fed Pivot Intelligence V2...
         </div>
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[11px] text-slate-400 leading-relaxed">
           Đồng bộ chuỗi dữ liệu chính thức từ FRED, BEA, BLS, NY Fed và hợp đồng tương lai CBOT ZQ.
         </p>
       </div>
@@ -230,13 +230,13 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
   const statusStyles = getStatusStyles(data.status);
   const scorePct = Math.min(100, Math.max(0, (data.pivotScore / 7) * 100));
 
-  // SVG Historical Chart Geometry
-  const svgW = 760;
-  const svgH = 210;
-  const padL = 34;
-  const padR = 16;
-  const padT = 18;
-  const padB = 28;
+  // SVG Historical Chart Geometry — Generous padding prevents Y-axis & X-axis edge text collisions
+  const svgW = 780;
+  const svgH = 232;
+  const padL = 46;
+  const padR = 24;
+  const padT = 20;
+  const padB = 34;
   const plotW = svgW - padL - padR;
   const plotH = svgH - padT - padB;
 
@@ -258,32 +258,37 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
   const linePath =
     filteredHistory.length > 0
       ? filteredHistory
-          .map((pt, idx) => `${idx === 0 ? 'M' : 'L'}${xForIndex(idx).toFixed(1)},${yForScore(pt.score).toFixed(1)}`)
+          .map(
+            (pt, idx) =>
+              `${idx === 0 ? 'M' : 'L'}${xForIndex(idx).toFixed(1)},${yForScore(pt.score).toFixed(1)}`
+          )
           .join(' ')
       : '';
 
   const areaPath =
     filteredHistory.length > 1
-      ? `${linePath} L${xForIndex(filteredHistory.length - 1).toFixed(1)},${(padT + plotH).toFixed(1)} L${xForIndex(0).toFixed(1)},${(padT + plotH).toFixed(1)} Z`
+      ? `${linePath} L${xForIndex(filteredHistory.length - 1).toFixed(1)},${(padT + plotH).toFixed(
+          1
+        )} L${xForIndex(0).toFixed(1)},${(padT + plotH).toFixed(1)} Z`
       : '';
 
   return (
     <div className="space-y-4 overflow-x-hidden">
       {/* ==================== AREA A: EXECUTIVE OVERVIEW ==================== */}
-      <section className={`p-3.5 sm:p-4 rounded-xl border ${statusStyles.ring} space-y-3`}>
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="space-y-1.5 min-w-0">
+      <section className={`p-3.5 sm:p-4 rounded-xl border ${statusStyles.ring} space-y-3 min-w-0`}>
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3.5">
+          <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/35 text-[10px] font-mono font-bold text-cyan-300 uppercase">
+              <span className="px-2 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/35 text-[10px] font-mono font-bold text-cyan-300 uppercase whitespace-nowrap shrink-0">
                 Khu vực A • Tổng Quan Hội Tụ
               </span>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-black border ${statusStyles.badge}`}
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-black border whitespace-nowrap shrink-0 ${statusStyles.badge}`}
               >
                 {data.statusLabel}
               </span>
               {data.nextFomcSummary && (
-                <span className="px-2 py-0.5 rounded bg-[#111b2e] border border-slate-700 text-[10px] font-mono text-amber-300 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded bg-[#111b2e] border border-slate-700 text-[10px] font-mono text-amber-300 inline-flex items-center gap-1 break-words">
                   <Clock className="w-3 h-3 text-amber-400 shrink-0" />
                   <span>
                     {data.nextFomcSummary.title}: còn {data.nextFomcSummary.daysRemaining} ngày
@@ -292,20 +297,22 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
               )}
             </div>
 
-            <h3 className="text-sm sm:text-base font-black text-white leading-snug">
+            <h3 className="text-sm sm:text-base font-black text-white leading-snug break-words">
               Kịch bản hiện tại: <span className="text-cyan-300">{data.dominantScenarioLabel}</span>
             </h3>
-            <p className="text-xs text-slate-300 leading-relaxed">{data.macroNarrativeSummary}</p>
+            <p className="text-xs text-slate-300 leading-relaxed break-words">
+              {data.macroNarrativeSummary}
+            </p>
           </div>
 
-          {/* Pivot Score Gauge Box */}
-          <div className="p-3 rounded-xl bg-[#080d18] border border-slate-800 shrink-0 lg:w-72 space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                <Gauge className="w-4 h-4 text-cyan-400" />
+          {/* Pivot Score Gauge Box — Clean numeric scale + wrapped regime tier pills */}
+          <div className="p-3 rounded-xl bg-[#080d18] border border-slate-800 shrink-0 w-full lg:w-80 xl:w-[340px] space-y-2">
+            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300 whitespace-nowrap">
+                <Gauge className="w-4 h-4 text-cyan-400 shrink-0" />
                 <span>Fed Pivot Score</span>
               </div>
-              <div className="font-mono">
+              <div className="font-mono whitespace-nowrap">
                 <span className="text-2xl font-black text-white">{data.pivotScore.toFixed(2)}</span>
                 <span className="text-xs font-bold text-slate-400"> / {data.maxScore}</span>
               </div>
@@ -318,15 +325,34 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
               />
             </div>
 
-            <div className="flex items-center justify-between text-[9px] font-mono text-slate-500">
-              <span>0 No Pivot</span>
-              <span>1.25 Watch</span>
-              <span>2.75 Early</span>
-              <span>4.25 Window</span>
-              <span>7</span>
+            <div className="flex items-center justify-between text-[9.5px] font-mono text-slate-400 whitespace-nowrap">
+              <span>0</span>
+              <span>1.25</span>
+              <span>2.75</span>
+              <span>4.25</span>
+              <span>5.75</span>
+              <span>7.0</span>
             </div>
 
-            <p className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded px-2 py-1 leading-snug">
+            <div className="flex flex-wrap gap-1 text-[9px] font-mono">
+              <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 whitespace-nowrap">
+                &lt;1.25 No Pivot
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-amber-950/30 border border-amber-500/30 text-amber-300 whitespace-nowrap">
+                ≥1.25 Watch
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-cyan-950/30 border border-cyan-500/30 text-cyan-300 whitespace-nowrap">
+                ≥2.75 Early
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-teal-950/30 border border-teal-500/30 text-teal-300 whitespace-nowrap">
+                ≥4.25 Window
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 whitespace-nowrap">
+                ≥5.75 Strong
+              </span>
+            </div>
+
+            <p className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded px-2 py-1 leading-snug break-words">
               Lưu ý: Pivot Score là điểm hội tụ tín hiệu vĩ mô, <strong>không phải</strong> xác suất % Fed cắt lãi suất.
             </p>
           </div>
@@ -334,44 +360,46 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
 
         {/* Data Confidence, Coverage & Snapshot Changes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
-          <div className="p-2.5 rounded-lg bg-[#090f1d] border border-slate-800/90 space-y-1">
-            <div className="flex items-center justify-between gap-2 text-[11px]">
-              <span className="font-bold text-slate-200 flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Độ tin cậy & Bao phủ dữ liệu</span>
+          <div className="p-2.5 rounded-lg bg-[#090f1d] border border-slate-800/90 space-y-1 min-w-0 overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
+              <span className="font-bold text-slate-200 flex items-center gap-1.5 min-w-0">
+                <Database className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="break-words">Độ tin cậy & Bao phủ dữ liệu</span>
               </span>
-              <span className="font-mono font-bold text-cyan-300">
+              <span className="font-mono font-bold text-cyan-300 whitespace-nowrap">
                 {data.dataQuality.validSignalsCount}/{data.dataQuality.totalSignalsCount} tín hiệu ({data.dataQuality.coverageRatioPct}%)
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">{data.dataQuality.confidenceLabel}</p>
+            <p className="text-[11px] text-slate-400 leading-relaxed break-words">
+              {data.dataQuality.confidenceLabel}
+            </p>
             {data.dataQuality.collinearityApplied && data.dataQuality.collinearityExplanation && (
-              <p className="text-[10px] text-cyan-300 font-mono">
+              <p className="text-[10px] text-cyan-300 font-mono leading-relaxed break-words">
                 • {data.dataQuality.collinearityExplanation}
               </p>
             )}
-            <div className="text-[10px] font-mono text-slate-500">
+            <div className="text-[10px] font-mono text-slate-500 break-words">
               Cập nhật gần nhất: {formatDateTimeVN(data.updatedAtMs)}
             </div>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-[#090f1d] border border-slate-800/90 space-y-1">
-            <div className="flex items-center justify-between gap-2 text-[11px]">
-              <span className="font-bold text-slate-200 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Thay đổi kể từ lần cập nhật trước</span>
+          <div className="p-2.5 rounded-lg bg-[#090f1d] border border-slate-800/90 space-y-1 min-w-0 overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
+              <span className="font-bold text-slate-200 flex items-center gap-1.5 min-w-0">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="break-words">Thay đổi kể từ lần cập nhật trước</span>
               </span>
               {data.snapshotDiff.previousTimestampMs && (
-                <span className="text-[10px] font-mono text-slate-500">
+                <span className="text-[10px] font-mono text-slate-500 whitespace-nowrap">
                   So với {formatDateTimeVN(data.snapshotDiff.previousTimestampMs)}
                 </span>
               )}
             </div>
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {data.snapshotDiff.highlights.slice(0, 3).map((hl, idx) => (
-                <li key={idx} className="text-[11px] text-slate-300 flex items-start gap-1.5">
-                  <span className="text-cyan-400 font-bold">•</span>
-                  <span>{hl}</span>
+                <li key={idx} className="text-[11px] text-slate-300 flex items-start gap-1.5 min-w-0">
+                  <span className="text-cyan-400 font-bold shrink-0">•</span>
+                  <span className="min-w-0 flex-1 leading-relaxed break-words">{hl}</span>
                 </li>
               ))}
             </ul>
@@ -382,15 +410,15 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
       {/* ==================== AREA B: 7 CORE SIGNALS ==================== */}
       <section className="space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-[10px] font-mono font-bold text-emerald-300 uppercase">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-[10px] font-mono font-bold text-emerald-300 uppercase whitespace-nowrap shrink-0">
               Khu vực B • 7 Tín Hiệu Định Lượng
             </span>
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
+            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white leading-snug break-words">
               Ma Trận Kiểm Định 7 Trụ Cột Xoay Trục Chính Sách
             </h3>
           </div>
-          <span className="text-[10px] font-mono text-slate-400">
+          <span className="text-[10px] font-mono text-slate-400 break-words">
             Dữ liệu thiếu / lỗi / quá hạn tự động gán UNKNOWN (0 điểm)
           </span>
         </div>
@@ -401,63 +429,67 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
             return (
               <div
                 key={sig.id}
-                className={`p-3 rounded-xl border flex flex-col justify-between gap-2 ${meta.cardBorder}`}
+                className={`p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 min-w-0 overflow-hidden ${meta.cardBorder}`}
               >
-                <div className="space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-white leading-snug">
+                <div className="space-y-2 min-w-0">
+                  <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="text-xs font-bold text-white leading-snug break-words">
                         {sig.order}. {sig.title}
                       </div>
-                      <div className="text-[10px] text-slate-400">{sig.subtitle}</div>
+                      <div className="text-[10.5px] text-slate-400 leading-snug break-words">
+                        {sig.subtitle}
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0 font-mono">
+                    <div className="flex sm:flex-col items-center sm:items-end gap-1.5 sm:gap-1 shrink-0 font-mono">
                       <span
-                        className={`px-2 py-0.5 rounded text-[9px] font-bold border ${meta.badgeClass}`}
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold border whitespace-nowrap ${meta.badgeClass}`}
                       >
                         {meta.label}
                       </span>
-                      <span className="text-[10px] font-bold text-cyan-300">
+                      <span className="text-[10px] font-bold text-cyan-300 whitespace-nowrap">
                         +{sig.effectiveScore.toFixed(2)}đ
                         {sig.collinearityAdjusted ? ` (gốc ${sig.rawScore.toFixed(1)}đ)` : ''}
                       </span>
                     </div>
                   </div>
 
-                  {/* Latest / Previous / Change Strip */}
-                  <div className="grid grid-cols-3 gap-1.5 p-2 rounded-lg bg-[#070c16] border border-slate-800/80 font-mono text-[10px]">
-                    <div className="min-w-0">
-                      <div className="text-[9px] font-sans text-slate-500">Mới nhất</div>
-                      <div className="font-bold text-white truncate" title={sig.latestDisplay}>
+                  {/* Latest / Previous / Change Strip — Stacks cleanly on mobile, wraps safely without clipping */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 rounded-lg bg-[#070c16] border border-slate-800/80 font-mono text-[10.5px]">
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="text-[9.5px] font-sans text-slate-500">Mới nhất</div>
+                      <div className="font-bold text-white leading-snug break-words">
                         {sig.latestDisplay}
                       </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[9px] font-sans text-slate-500">Trước đó</div>
-                      <div className="text-slate-300 truncate" title={sig.previousDisplay}>
+                    <div className="min-w-0 space-y-0.5 sm:border-l sm:border-slate-800/70 sm:pl-2">
+                      <div className="text-[9.5px] font-sans text-slate-500">Trước đó</div>
+                      <div className="text-slate-300 leading-snug break-words">
                         {sig.previousDisplay}
                       </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[9px] font-sans text-slate-500">Thay đổi</div>
-                      <div className="font-semibold text-cyan-300 truncate" title={sig.deltaDisplay}>
+                    <div className="min-w-0 space-y-0.5 sm:border-l sm:border-slate-800/70 sm:pl-2">
+                      <div className="text-[9.5px] font-sans text-slate-500">Thay đổi</div>
+                      <div className="font-semibold text-cyan-300 leading-snug break-words">
                         {sig.deltaDisplay}
                       </div>
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-slate-300 leading-relaxed">{sig.rationale}</p>
+                  <p className="text-[11px] text-slate-300 leading-relaxed break-words">
+                    {sig.rationale}
+                  </p>
 
                   {sig.collinearityNote && (
-                    <div className="text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded px-2 py-1">
+                    <div className="text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded px-2 py-1 leading-relaxed break-words">
                       {sig.collinearityNote}
                     </div>
                   )}
                 </div>
 
-                <div className="pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1 text-[9px] font-mono text-slate-500">
-                  <span>Nguồn: {sig.source}</span>
-                  <span>
+                <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[9.5px] font-mono text-slate-400">
+                  <span className="break-words">Nguồn: {sig.source}</span>
+                  <span className="break-words">
                     Công bố: {sig.releaseDate} • Lấy lúc {formatDateTimeVN(sig.fetchedAtISO)}
                   </span>
                 </div>
@@ -468,18 +500,18 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
       </section>
 
       {/* ==================== AREA C: HISTORICAL PIVOT CHART & SNAPSHOTS ==================== */}
-      <section className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-3">
+      <section className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-3 min-w-0 overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded bg-purple-500/15 border border-purple-500/35 text-[10px] font-mono font-bold text-purple-300 uppercase">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="px-2 py-0.5 rounded bg-purple-500/15 border border-purple-500/35 text-[10px] font-mono font-bold text-purple-300 uppercase whitespace-nowrap shrink-0">
               Khu vực C • Lịch Sử & Sự Kiện
             </span>
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
+            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white leading-snug break-words">
               Diễn Biến Điểm Hội Tụ (Point-in-Time) & Mốc FOMC / CPI / PCE / NFP
             </h3>
           </div>
 
-          <div className="flex items-center gap-1 font-mono">
+          <div className="flex items-center gap-1 font-mono shrink-0 flex-wrap">
             {(['30D', '90D', '1Y'] as HistoryHorizon[]).map(h => (
               <button
                 key={h}
@@ -488,7 +520,7 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                   setHorizon(h);
                   setHoverIdx(null);
                 }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap transition ${
                   horizon === h
                     ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50'
                     : 'bg-[#10192c] text-slate-400 border-slate-800 hover:text-white'
@@ -506,7 +538,7 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
             <div className="text-xs font-bold text-slate-300">
               Chưa có đủ dữ liệu lịch sử thực từ nguồn chính thức cho khung thời gian này
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-400 leading-relaxed">
               Hệ thống tuân thủ nguyên tắc minh bạch: tuyệt đối không tự dựng chuỗi lịch sử giả lập khi API vĩ mô chưa phản hồi.
             </p>
           </div>
@@ -514,15 +546,17 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
           <div className="space-y-2.5">
             {/* Interactive Point Readout Header */}
             {activePoint && (
-              <div className="px-3 py-2 rounded-lg bg-[#080d18] border border-slate-800/90 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+              <div className="px-3 py-2 rounded-lg bg-[#080d18] border border-slate-800/90 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-mono">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-slate-400">Ngày:</span>
-                  <span className="font-bold text-white">{activePoint.dateISO}</span>
-                  <span>•</span>
+                  <span className="font-bold text-white whitespace-nowrap">{activePoint.dateISO}</span>
+                  <span className="text-slate-600">•</span>
                   <span className="text-slate-400">Pivot Score:</span>
-                  <span className="font-black text-cyan-300">{activePoint.score.toFixed(2)} / 7</span>
-                  <span>•</span>
-                  <span className="text-emerald-300">{activePoint.status}</span>
+                  <span className="font-black text-cyan-300 whitespace-nowrap">
+                    {activePoint.score.toFixed(2)} / 7
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-emerald-300 break-words">{activePoint.status}</span>
                 </div>
                 <span className="text-[10px] text-slate-500">
                   Bao phủ lịch sử thực: {activePoint.validSignalsCount}/7 nguồn FRED/BLS/BEA
@@ -530,142 +564,148 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
               </div>
             )}
 
-            {/* Responsive SVG Timeline Chart */}
-            <div className="w-full rounded-xl bg-[#070b14] border border-slate-800/90 p-2 overflow-hidden">
-              <svg
-                viewBox={`0 0 ${svgW} ${svgH}`}
-                className="w-full h-44 sm:h-52 select-none touch-pan-y"
-                onMouseLeave={() => setHoverIdx(null)}
-                onMouseMove={e => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  if (rect.width <= 0) return;
-                  const relX = ((e.clientX - rect.left) / rect.width) * svgW;
-                  const ratio = Math.max(0, Math.min(1, (relX - padL) / plotW));
-                  const idx = Math.round(ratio * (filteredHistory.length - 1));
-                  setHoverIdx(idx);
-                }}
-              >
-                <defs>
-                  <linearGradient id="pivotAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.32" />
-                    <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.02" />
-                  </linearGradient>
-                </defs>
+            {/* Responsive SVG Timeline Chart — Horizontal pan on narrow mobile preserves readable axis spacing */}
+            <div className="w-full rounded-xl bg-[#070b14] border border-slate-800/90 p-2 overflow-x-auto no-scrollbar">
+              <div className="min-w-[540px]">
+                <svg
+                  viewBox={`0 0 ${svgW} ${svgH}`}
+                  className="w-full h-48 sm:h-56 select-none touch-pan-x"
+                  onMouseLeave={() => setHoverIdx(null)}
+                  onMouseMove={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    if (rect.width <= 0) return;
+                    const relX = ((e.clientX - rect.left) / rect.width) * svgW;
+                    const ratio = Math.max(0, Math.min(1, (relX - padL) / plotW));
+                    const idx = Math.round(ratio * (filteredHistory.length - 1));
+                    setHoverIdx(idx);
+                  }}
+                >
+                  <defs>
+                    <linearGradient id="pivotAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.32" />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.02" />
+                    </linearGradient>
+                  </defs>
 
-                {/* Horizontal Grid & Regime Thresholds */}
-                {[
-                  { val: 0, label: '0' },
-                  { val: 1.25, label: '1.25' },
-                  { val: 2.75, label: '2.75' },
-                  { val: 4.25, label: '4.25' },
-                  { val: 5.75, label: '5.75' },
-                  { val: 7, label: '7.0' },
-                ].map(g => {
-                  const y = yForScore(g.val);
-                  return (
-                    <g key={g.val}>
-                      <line
-                        x1={padL}
-                        y1={y}
-                        x2={svgW - padR}
-                        y2={y}
-                        stroke={g.val === 2.75 || g.val === 4.25 ? '#1e3a5f' : '#152036'}
-                        strokeDasharray={g.val === 0 || g.val === 7 ? undefined : '4 4'}
-                        strokeWidth={1}
-                      />
-                      <text
-                        x={padL - 5}
-                        y={y + 3}
-                        textAnchor="end"
-                        fontSize="9"
-                        fill="#64748b"
-                        fontFamily="monospace"
-                      >
-                        {g.label}
-                      </text>
-                    </g>
-                  );
-                })}
+                  {/* Horizontal Grid & Regime Thresholds */}
+                  {[
+                    { val: 0, label: '0.00' },
+                    { val: 1.25, label: '1.25' },
+                    { val: 2.75, label: '2.75' },
+                    { val: 4.25, label: '4.25' },
+                    { val: 5.75, label: '5.75' },
+                    { val: 7, label: '7.00' },
+                  ].map(g => {
+                    const y = yForScore(g.val);
+                    return (
+                      <g key={g.val}>
+                        <line
+                          x1={padL}
+                          y1={y}
+                          x2={svgW - padR}
+                          y2={y}
+                          stroke={g.val === 2.75 || g.val === 4.25 ? '#1e3a5f' : '#152036'}
+                          strokeDasharray={g.val === 0 || g.val === 7 ? undefined : '4 4'}
+                          strokeWidth={1}
+                        />
+                        <text
+                          x={padL - 7}
+                          y={y + 3.5}
+                          textAnchor="end"
+                          fontSize="10"
+                          fill="#94a3b8"
+                          fontFamily="monospace"
+                        >
+                          {g.label}
+                        </text>
+                      </g>
+                    );
+                  })}
 
-                {/* Macro Event Vertical Markers within History Range */}
-                {filteredEvents.map(ev => {
-                  const firstSec = filteredHistory[0].timestampSec;
-                  const lastSec = filteredHistory[filteredHistory.length - 1].timestampSec;
-                  if (ev.timestampSec < firstSec || ev.timestampSec > lastSec || lastSec <= firstSec) {
-                    return null;
-                  }
-                  const x =
-                    padL + ((ev.timestampSec - firstSec) / (lastSec - firstSec)) * plotW;
-                  const color =
-                    ev.type === 'FOMC'
-                      ? '#c084fc'
-                      : ev.type === 'PCE'
-                      ? '#34d399'
-                      : ev.type === 'CPI'
-                      ? '#fbbf24'
-                      : '#38bdf8';
-                  return (
-                    <g key={ev.id}>
+                  {/* Macro Event Vertical Markers within History Range */}
+                  {filteredEvents.map(ev => {
+                    const firstSec = filteredHistory[0].timestampSec;
+                    const lastSec = filteredHistory[filteredHistory.length - 1].timestampSec;
+                    if (ev.timestampSec < firstSec || ev.timestampSec > lastSec || lastSec <= firstSec) {
+                      return null;
+                    }
+                    const x =
+                      padL + ((ev.timestampSec - firstSec) / (lastSec - firstSec)) * plotW;
+                    const color =
+                      ev.type === 'FOMC'
+                        ? '#c084fc'
+                        : ev.type === 'PCE'
+                        ? '#34d399'
+                        : ev.type === 'CPI'
+                        ? '#fbbf24'
+                        : '#38bdf8';
+                    return (
+                      <g key={ev.id}>
+                        <line
+                          x1={x}
+                          y1={padT}
+                          x2={x}
+                          y2={padT + plotH}
+                          stroke={color}
+                          strokeOpacity={0.35}
+                          strokeDasharray="2 3"
+                          strokeWidth={1}
+                        />
+                        <circle cx={x} cy={padT + plotH - 4} r={2.5} fill={color} />
+                      </g>
+                    );
+                  })}
+
+                  {/* Area & Score Line */}
+                  {areaPath && <path d={areaPath} fill="url(#pivotAreaGrad)" />}
+                  {linePath && (
+                    <path
+                      d={linePath}
+                      fill="none"
+                      stroke="#22d3ee"
+                      strokeWidth={2.2}
+                      strokeLinejoin="round"
+                    />
+                  )}
+
+                  {/* Active Point Highlight */}
+                  {activePoint && (
+                    <g>
                       <line
-                        x1={x}
+                        x1={xForIndex(activePointIndex)}
                         y1={padT}
-                        x2={x}
+                        x2={xForIndex(activePointIndex)}
                         y2={padT + plotH}
-                        stroke={color}
-                        strokeOpacity={0.35}
-                        strokeDasharray="2 3"
+                        stroke="#38bdf8"
+                        strokeOpacity={0.6}
                         strokeWidth={1}
                       />
-                      <circle cx={x} cy={padT + plotH - 4} r={2.5} fill={color} />
+                      <circle
+                        cx={xForIndex(activePointIndex)}
+                        cy={yForScore(activePoint.score)}
+                        r={4.5}
+                        fill="#06b6d4"
+                        stroke="#ffffff"
+                        strokeWidth={1.5}
+                      />
                     </g>
-                  );
-                })}
+                  )}
 
-                {/* Area & Score Line */}
-                {areaPath && <path d={areaPath} fill="url(#pivotAreaGrad)" />}
-                {linePath && (
-                  <path
-                    d={linePath}
-                    fill="none"
-                    stroke="#22d3ee"
-                    strokeWidth={2.2}
-                    strokeLinejoin="round"
-                  />
-                )}
-
-                {/* Active Point Highlight */}
-                {activePoint && (
-                  <g>
-                    <line
-                      x1={xForIndex(activePointIndex)}
-                      y1={padT}
-                      x2={xForIndex(activePointIndex)}
-                      y2={padT + plotH}
-                      stroke="#38bdf8"
-                      strokeOpacity={0.6}
-                      strokeWidth={1}
-                    />
-                    <circle
-                      cx={xForIndex(activePointIndex)}
-                      cy={yForScore(activePoint.score)}
-                      r={4.5}
-                      fill="#06b6d4"
-                      stroke="#ffffff"
-                      strokeWidth={1.5}
-                    />
-                  </g>
-                )}
-
-                {/* Start / Middle / End X-Axis Labels */}
-                {[0, Math.floor((filteredHistory.length - 1) / 2), filteredHistory.length - 1].map(
-                  idx => {
+                  {/* Start / Middle / End X-Axis Labels (Deduplicated if 2 points) */}
+                  {Array.from(
+                    new Set([
+                      0,
+                      Math.floor((filteredHistory.length - 1) / 2),
+                      filteredHistory.length - 1,
+                    ])
+                  ).map(idx => {
                     const pt = filteredHistory[idx];
                     if (!pt) return null;
                     return (
                       <text
                         key={`xl-${idx}`}
                         x={xForIndex(idx)}
-                        y={svgH - 7}
+                        y={svgH - 9}
                         textAnchor={
                           idx === 0
                             ? 'start'
@@ -673,16 +713,16 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                             ? 'end'
                             : 'middle'
                         }
-                        fontSize="9"
-                        fill="#64748b"
+                        fontSize="10"
+                        fill="#94a3b8"
                         fontFamily="monospace"
                       >
                         {pt.dateISO}
                       </text>
                     );
-                  }
-                )}
-              </svg>
+                  })}
+                </svg>
+              </div>
             </div>
 
             {/* Event Markers Filter & Strip */}
@@ -691,13 +731,13 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                 <span className="text-[11px] font-bold text-slate-300">
                   Mốc sự kiện vĩ mô trên trục thời gian ({filteredEvents.length}):
                 </span>
-                <div className="flex items-center gap-1 font-mono text-[10px]">
+                <div className="flex items-center gap-1 flex-wrap font-mono text-[10px]">
                   {(['ALL', 'FOMC', 'PCE', 'CPI', 'NFP'] as const).map(t => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setSelectedEventFilter(t)}
-                      className={`px-2 py-0.5 rounded border transition ${
+                      className={`px-2 py-0.5 rounded border whitespace-nowrap transition ${
                         selectedEventFilter === t
                           ? 'bg-slate-200 text-slate-950 border-white font-bold'
                           : 'bg-[#090f1d] text-slate-400 border-slate-800 hover:text-white'
@@ -709,24 +749,26 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+              <div className="flex items-stretch gap-1.5 overflow-x-auto no-scrollbar pb-1">
                 {filteredEvents.slice(-10).map(ev => (
                   <div
                     key={ev.id}
-                    className="px-2.5 py-1.5 rounded-lg bg-[#080d18] border border-slate-800 shrink-0 text-[10px] space-y-0.5"
+                    className="px-2.5 py-1.5 rounded-lg bg-[#080d18] border border-slate-800 shrink-0 max-w-[260px] text-[10px] space-y-0.5"
                     title={ev.detail}
                   >
-                    <div className="flex items-center gap-1.5 font-mono">
+                    <div className="flex items-center gap-1.5 font-mono flex-wrap">
                       <span
-                        className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${getEventBadgeColor(
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold border leading-none whitespace-nowrap ${getEventBadgeColor(
                           ev.type
                         )}`}
                       >
                         {ev.shortTag}
                       </span>
-                      <span className="text-slate-400">{ev.dateISO}</span>
+                      <span className="text-slate-400 whitespace-nowrap">{ev.dateISO}</span>
                     </div>
-                    <div className="font-semibold text-slate-200">{ev.title}</div>
+                    <div className="font-semibold text-slate-200 leading-snug break-words">
+                      {ev.title}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -735,18 +777,20 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
         )}
 
         {/* Saved User Snapshots Comparison Box */}
-        <div className="pt-2 border-t border-slate-800/90 space-y-2">
+        <div className="pt-2.5 border-t border-slate-800/90 space-y-2 min-w-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Đối chiếu Lịch sử Snapshot đã lưu ({data.savedSnapshots.length} bản ghi)</span>
+            <span className="text-xs font-bold text-white flex items-center gap-1.5 min-w-0">
+              <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="break-words">
+                Đối chiếu Lịch sử Snapshot đã lưu ({data.savedSnapshots.length} bản ghi)
+              </span>
             </span>
 
             {data.savedSnapshots.length > 0 && (
               <select
                 value={comparedSnapshot?.id ?? ''}
                 onChange={e => setSelectedSnapshotId(e.target.value)}
-                className="bg-[#080d18] border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-400"
+                className="w-full sm:w-auto sm:max-w-[360px] truncate bg-[#080d18] border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-400"
               >
                 {data.savedSnapshots
                   .slice()
@@ -761,30 +805,30 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
           </div>
 
           {comparedSnapshot && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-lg bg-[#080d18] border border-slate-800/80 font-mono text-[10px]">
-              <div>
-                <div className="text-slate-500 font-sans">Snapshot đối chiếu</div>
-                <div className="text-slate-200 font-bold">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 p-2.5 rounded-lg bg-[#080d18] border border-slate-800/80 font-mono text-[10.5px]">
+              <div className="min-w-0 p-2 rounded-lg bg-[#0b1220]/80 border border-slate-800/70 space-y-0.5">
+                <div className="text-slate-500 font-sans text-[10px]">Snapshot đối chiếu</div>
+                <div className="text-slate-200 font-bold leading-snug break-words">
                   {comparedSnapshot.pivotScore.toFixed(2)}/7 ({comparedSnapshot.status})
                 </div>
               </div>
-              <div>
-                <div className="text-slate-500 font-sans">Core PCE 3T (Cũ → Mới)</div>
-                <div className="text-cyan-300 font-bold">
+              <div className="min-w-0 p-2 rounded-lg bg-[#0b1220]/80 border border-slate-800/70 space-y-0.5">
+                <div className="text-slate-500 font-sans text-[10px]">Core PCE 3T (Cũ → Mới)</div>
+                <div className="text-cyan-300 font-bold leading-snug break-words">
                   {comparedSnapshot.metrics.corePce3mAnn?.toFixed(2) ?? 'N/A'}% →{' '}
                   {data.signals.find(s => s.id === 'CORE_PCE')?.latestNumeric?.toFixed(2) ?? 'N/A'}%
                 </div>
               </div>
-              <div>
-                <div className="text-slate-500 font-sans">US 2Y (Cũ → Mới)</div>
-                <div className="text-cyan-300 font-bold">
+              <div className="min-w-0 p-2 rounded-lg bg-[#0b1220]/80 border border-slate-800/70 space-y-0.5">
+                <div className="text-slate-500 font-sans text-[10px]">US 2Y (Cũ → Mới)</div>
+                <div className="text-cyan-300 font-bold leading-snug break-words">
                   {comparedSnapshot.metrics.us2yYield?.toFixed(2) ?? 'N/A'}% →{' '}
                   {data.signals.find(s => s.id === 'US_TREASURY_2Y')?.latestNumeric?.toFixed(2) ?? 'N/A'}%
                 </div>
               </div>
-              <div>
-                <div className="text-slate-500 font-sans">HY Spread (Cũ → Mới)</div>
-                <div className="text-cyan-300 font-bold">
+              <div className="min-w-0 p-2 rounded-lg bg-[#0b1220]/80 border border-slate-800/70 space-y-0.5">
+                <div className="text-slate-500 font-sans text-[10px]">HY Spread (Cũ → Mới)</div>
+                <div className="text-cyan-300 font-bold leading-snug break-words">
                   {comparedSnapshot.metrics.hySpreadPct?.toFixed(2) ?? 'N/A'}% →{' '}
                   {data.signals.find(s => s.id === 'CREDIT_FINANCIAL_STRESS')?.latestNumeric?.toFixed(2) ?? 'N/A'}%
                 </div>
@@ -797,17 +841,19 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
       {/* ==================== AREA D: THREE SCENARIOS ANALYSIS ==================== */}
       <section className="space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 text-[10px] font-mono font-bold text-amber-300 uppercase">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 text-[10px] font-mono font-bold text-amber-300 uppercase whitespace-nowrap shrink-0">
               Khu vực D • Phân Tích 3 Kịch Bản
             </span>
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
+            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white leading-snug break-words">
               Soft Landing • Recession • Financial Stress
             </h3>
           </div>
-          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+          <span className="text-[10px] text-slate-400 flex items-center gap-1 min-w-0">
             <Info className="w-3 h-3 text-cyan-400 shrink-0" />
-            <span>Đánh giá mức độ tin cậy định tính — không tự tạo xác suất % giả định</span>
+            <span className="break-words">
+              Đánh giá mức độ tin cậy định tính — không tự tạo xác suất % giả định
+            </span>
           </span>
         </div>
 
@@ -826,35 +872,39 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
             return (
               <div
                 key={sc.id}
-                className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 ${
+                className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 min-w-0 overflow-hidden ${
                   isDom
                     ? 'bg-[#101a2e] border-cyan-400/50 shadow-lg shadow-cyan-500/5'
                     : 'bg-[#0b1220] border-slate-800'
                 }`}
               >
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
+                <div className="space-y-2 min-w-0">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="text-xs sm:text-sm font-black text-white">{sc.title}</h4>
+                        <h4 className="text-xs sm:text-sm font-black text-white leading-snug break-words">
+                          {sc.title}
+                        </h4>
                         {isDom && (
-                          <span className="px-1.5 py-0.2 rounded bg-cyan-500 text-slate-950 text-[9px] font-mono font-black uppercase">
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500 text-slate-950 text-[9px] font-mono font-black uppercase leading-none whitespace-nowrap shrink-0">
                             Trọng tâm
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] font-semibold text-cyan-300">
+                      <div className="text-[11px] font-semibold text-cyan-300 leading-snug break-words">
                         {sc.vietnameseTitle}
                       </div>
                     </div>
                     <span
-                      className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border shrink-0 ${tierBadge}`}
+                      className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border shrink-0 whitespace-nowrap ${tierBadge}`}
                     >
                       {sc.confidenceLabel}
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{sc.definition}</p>
+                  <p className="text-[11px] text-slate-400 leading-relaxed break-words">
+                    {sc.definition}
+                  </p>
 
                   <div className="space-y-1">
                     <div className="text-[10px] font-bold uppercase text-emerald-300">
@@ -862,9 +912,9 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                     </div>
                     <ul className="space-y-0.5">
                       {sc.supportingEvidence.map((item, i) => (
-                        <li key={i} className="text-[11px] text-slate-300 flex items-start gap-1.5">
-                          <span className="text-emerald-400 font-bold">+</span>
-                          <span>{item}</span>
+                        <li key={i} className="text-[11px] text-slate-300 flex items-start gap-1.5 min-w-0">
+                          <span className="text-emerald-400 font-bold shrink-0">+</span>
+                          <span className="min-w-0 flex-1 leading-relaxed break-words">{item}</span>
                         </li>
                       ))}
                     </ul>
@@ -876,9 +926,9 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                     </div>
                     <ul className="space-y-0.5">
                       {sc.conflictingSignals.map((item, i) => (
-                        <li key={i} className="text-[11px] text-slate-300 flex items-start gap-1.5">
-                          <span className="text-rose-400 font-bold">−</span>
-                          <span>{item}</span>
+                        <li key={i} className="text-[11px] text-slate-300 flex items-start gap-1.5 min-w-0">
+                          <span className="text-rose-400 font-bold shrink-0">−</span>
+                          <span className="min-w-0 flex-1 leading-relaxed break-words">{item}</span>
                         </li>
                       ))}
                     </ul>
@@ -890,18 +940,18 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                     </div>
                     <ul className="space-y-0.5">
                       {sc.confirmationConditions.map((item, i) => (
-                        <li key={i} className="text-[11px] text-slate-400 flex items-start gap-1.5">
-                          <span className="text-cyan-400">•</span>
-                          <span>{item}</span>
+                        <li key={i} className="text-[11px] text-slate-400 flex items-start gap-1.5 min-w-0">
+                          <span className="text-cyan-400 shrink-0">•</span>
+                          <span className="min-w-0 flex-1 leading-relaxed break-words">{item}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                <div className="pt-2 border-t border-slate-800/80 space-y-1 min-w-0">
                   <div className="text-[10px] font-bold text-amber-300">Tác động dự kiến:</div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                  <p className="text-[11px] text-slate-300 leading-relaxed break-words">
                     {sc.expectedMarketImpact}
                   </p>
                 </div>
@@ -914,15 +964,15 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
       {/* ==================== AREA E: CROSS-ASSET IMPACT MATRIX ==================== */}
       <section className="space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/35 text-[10px] font-mono font-bold text-blue-300 uppercase">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/35 text-[10px] font-mono font-bold text-blue-300 uppercase whitespace-nowrap shrink-0">
               Khu vực E • Tác Động Tài Sản
             </span>
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
+            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white leading-snug break-words">
               Truyền Dẫn Liên Thị Trường & Chuyển Biểu Đồ Nhanh
             </h3>
           </div>
-          <span className="text-[10px] font-mono text-slate-400">
+          <span className="text-[10px] font-mono text-slate-400 break-words">
             Nhấn mã tài sản để mở biểu đồ phân tích • Không tự động đặt lệnh
           </span>
         </div>
@@ -934,16 +984,20 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
             return (
               <div
                 key={grp.id}
-                className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 flex flex-col justify-between gap-2.5"
+                className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 flex flex-col justify-between gap-2.5 min-w-0 overflow-hidden"
               >
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-white">{grp.groupTitle}</h4>
-                      <div className="text-[10px] font-mono text-cyan-300">{grp.assetsLabel}</div>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <h4 className="text-xs sm:text-sm font-bold text-white leading-snug break-words">
+                        {grp.groupTitle}
+                      </h4>
+                      <div className="text-[10px] font-mono text-cyan-300 break-words">
+                        {grp.assetsLabel}
+                      </div>
                     </div>
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 ${
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
                         isBull
                           ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                           : isBear
@@ -952,19 +1006,21 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                       }`}
                     >
                       {isBull ? (
-                        <TrendingUp className="w-3 h-3" />
+                        <TrendingUp className="w-3 h-3 shrink-0" />
                       ) : isBear ? (
-                        <TrendingDown className="w-3 h-3" />
+                        <TrendingDown className="w-3 h-3 shrink-0" />
                       ) : (
-                        <Activity className="w-3 h-3" />
+                        <Activity className="w-3 h-3 shrink-0" />
                       )}
                       <span>{grp.directionLabel}</span>
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-slate-300 leading-relaxed">{grp.impactMechanism}</p>
+                  <p className="text-[11px] text-slate-300 leading-relaxed break-words">
+                    {grp.impactMechanism}
+                  </p>
 
-                  <div className="p-2 rounded-lg bg-[#080d18] border border-slate-800/80 space-y-1 text-[11px]">
+                  <div className="p-2 rounded-lg bg-[#080d18] border border-slate-800/80 space-y-1 text-[11px] leading-relaxed break-words">
                     <div>
                       <span className="font-bold text-emerald-300">Điều kiện xác nhận: </span>
                       <span className="text-slate-300">{grp.confirmationCondition}</span>
@@ -978,7 +1034,9 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
 
                 {/* Clickable Asset Jump Pills */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                  <span className="text-[10px] text-slate-400 font-semibold">Mở biểu đồ:</span>
+                  <span className="text-[10px] text-slate-400 font-semibold whitespace-nowrap">
+                    Mở biểu đồ:
+                  </span>
                   {grp.jumpTickers.map(ticker => {
                     const exists = availableTickerSet.has(ticker.toUpperCase());
                     return (
@@ -987,14 +1045,14 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                         type="button"
                         disabled={!exists}
                         onClick={() => onJumpToSymbol(ticker)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-0.5 border transition ${
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-0.5 border whitespace-nowrap transition ${
                           exists
                             ? 'bg-[#131f36] hover:bg-cyan-500/20 text-cyan-300 border-slate-700 hover:border-cyan-400 cursor-pointer'
                             : 'bg-slate-900 text-slate-500 border-slate-800 cursor-default'
                         }`}
                       >
                         <span>{ticker}</span>
-                        {exists && <ArrowUpRight className="w-2.5 h-2.5" />}
+                        {exists && <ArrowUpRight className="w-2.5 h-2.5 shrink-0" />}
                       </button>
                     );
                   })}
@@ -1008,40 +1066,42 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
       {/* ==================== AREA F: SMART ALERTS & TELEGRAM PHASE-2 CONTRACT ==================== */}
       <section className="space-y-2.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-rose-500/15 border border-rose-500/35 text-[10px] font-mono font-bold text-rose-300 uppercase">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="px-2 py-0.5 rounded bg-rose-500/15 border border-rose-500/35 text-[10px] font-mono font-bold text-rose-300 uppercase whitespace-nowrap shrink-0">
               Khu vực F • Cảnh Báo Thông Minh
             </span>
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
+            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white leading-snug break-words">
               Hệ Thống Phát Hiện Chuyển Dịch Có Ý Nghĩa & Chống Lặp
             </h3>
           </div>
-          <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
-            <Send className="w-3 h-3 text-cyan-400" />
-            <span>Telegram Ready (Server-side Webhook • 0 API Key ở Frontend)</span>
+          <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1 min-w-0">
+            <Send className="w-3 h-3 text-cyan-400 shrink-0" />
+            <span className="break-words">
+              Telegram Ready (Server-side Webhook • 0 API Key ở Frontend)
+            </span>
           </span>
         </div>
 
         {data.dataQuality.validSignalsCount < 4 ? (
-          <div className="p-4 rounded-xl bg-[#0c1322] border border-amber-500/35 flex items-start gap-2.5">
+          <div className="p-4 rounded-xl bg-[#0c1322] border border-amber-500/35 flex items-start gap-2.5 min-w-0">
             <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            <div className="space-y-1 text-xs">
-              <div className="font-bold text-amber-300">
+            <div className="space-y-1 text-xs min-w-0">
+              <div className="font-bold text-amber-300 leading-snug break-words">
                 Tạm khóa phát cảnh báo mới do độ bao phủ dữ liệu dưới ngưỡng an toàn ({data.dataQuality.validSignalsCount}/7)
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-400 leading-relaxed break-words">
                 Hệ thống tự động chặn phát cảnh báo từ dữ liệu thiếu, lỗi hoặc quá hạn nhằm bảo vệ quyết định của nhà đầu tư.
               </p>
             </div>
           </div>
         ) : data.activeAlerts.length === 0 ? (
-          <div className="p-4 rounded-xl bg-[#0c1322] border border-emerald-500/30 flex items-start gap-2.5">
+          <div className="p-4 rounded-xl bg-[#0c1322] border border-emerald-500/30 flex items-start gap-2.5 min-w-0">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-            <div className="space-y-1 text-xs">
-              <div className="font-bold text-emerald-300">
+            <div className="space-y-1 text-xs min-w-0">
+              <div className="font-bold text-emerald-300 leading-snug break-words">
                 Trạng thái Ổn định (No Pivot) — Chưa xuất hiện cảnh báo chuyển dịch hoặc rủi ro hệ thống mới
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-400 leading-relaxed break-words">
                 Bộ lọc chống nhiễu chỉ phát cảnh báo khi điểm hội tụ bước vào vùng Watch / Pivot hoặc xuất hiện tín hiệu căng thẳng tài chính thực sự.
               </p>
             </div>
@@ -1051,23 +1111,26 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
             {data.activeAlerts.map(alert => {
               const st = getAlertTierStyle(alert.tier);
               return (
-                <div key={alert.id} className={`p-3.5 rounded-xl border space-y-2.5 ${st.card}`}>
+                <div
+                  key={alert.id}
+                  className={`p-3.5 rounded-xl border space-y-2.5 min-w-0 overflow-hidden ${st.card}`}
+                >
                   <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                       {alert.tier === 'RISK_WARNING' ? (
                         <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
                       ) : (
                         <BellRing className="w-4 h-4 text-emerald-400 shrink-0" />
                       )}
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-black border ${st.badge}`}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-black border break-words ${st.badge}`}
                       >
                         {alert.tierLabel}
                       </span>
                     </div>
 
                     <span
-                      className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border ${
+                      className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border whitespace-nowrap shrink-0 ${
                         alert.isNew
                           ? 'bg-cyan-500/25 text-cyan-200 border-cyan-400/50'
                           : 'bg-slate-900/90 text-slate-400 border-slate-700'
@@ -1079,34 +1142,34 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
 
                   {/* 5 Mandatory Structured Answers */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px]">
-                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1">
+                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1 min-w-0">
                       <div className="font-bold text-cyan-300">1. Điều gì vừa thay đổi?</div>
-                      <p className="text-slate-200 leading-relaxed">{alert.whatChanged}</p>
+                      <p className="text-slate-200 leading-relaxed break-words">{alert.whatChanged}</p>
                     </div>
 
-                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1">
+                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1 min-w-0">
                       <div className="font-bold text-emerald-300">2. Bằng chứng nào xác nhận?</div>
-                      <ul className="space-y-0.5 text-slate-300">
+                      <ul className="space-y-0.5 text-slate-300 leading-relaxed break-words">
                         {alert.confirmingEvidence.slice(0, 3).map((ev, i) => (
                           <li key={i}>• {ev}</li>
                         ))}
                       </ul>
                     </div>
 
-                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1">
+                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1 min-w-0">
                       <div className="font-bold text-rose-300">3. Tín hiệu nào còn mâu thuẫn?</div>
-                      <ul className="space-y-0.5 text-slate-300">
+                      <ul className="space-y-0.5 text-slate-300 leading-relaxed break-words">
                         {alert.conflictingSignals.slice(0, 3).map((cf, i) => (
                           <li key={i}>• {cf}</li>
                         ))}
                       </ul>
                     </div>
 
-                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1">
+                    <div className="p-2.5 rounded-lg bg-[#080d18]/90 border border-slate-800/80 space-y-1 min-w-0">
                       <div className="font-bold text-amber-300">
                         5. Người dùng nên theo dõi / chuẩn bị gì?
                       </div>
-                      <ul className="space-y-0.5 text-slate-300">
+                      <ul className="space-y-0.5 text-slate-300 leading-relaxed break-words">
                         {alert.actionableChecklist.map((act, i) => (
                           <li key={i}>• {act}</li>
                         ))}
@@ -1117,7 +1180,7 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                   {/* Question 4: Affected Assets with Clickable Chart Jump */}
                   <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] font-bold text-slate-200">
+                      <span className="text-[11px] font-bold text-slate-200 whitespace-nowrap">
                         4. Tác động tới tài sản:
                       </span>
                       {alert.affectedAssets.map(ticker => {
@@ -1128,20 +1191,20 @@ export const FedPivotIntelligenceView: React.FC<FedPivotIntelligenceViewProps> =
                             type="button"
                             disabled={!exists}
                             onClick={() => onJumpToSymbol(ticker)}
-                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-0.5 border transition ${
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-0.5 border whitespace-nowrap transition ${
                               exists
                                 ? 'bg-[#131f36] hover:bg-cyan-500/20 text-cyan-300 border-slate-700 hover:border-cyan-400 cursor-pointer'
                                 : 'bg-slate-900 text-slate-500 border-slate-800'
                             }`}
                           >
                             <span>{ticker}</span>
-                            {exists && <ArrowUpRight className="w-2.5 h-2.5" />}
+                            {exists && <ArrowUpRight className="w-2.5 h-2.5 shrink-0" />}
                           </button>
                         );
                       })}
                     </div>
 
-                    <span className="text-[9px] font-mono text-slate-500">
+                    <span className="text-[9px] font-mono text-slate-500 break-words">
                       Endpoint giai đoạn 2: {alert.telegramContract.serverEndpoint}
                     </span>
                   </div>

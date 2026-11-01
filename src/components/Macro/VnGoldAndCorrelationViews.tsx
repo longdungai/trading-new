@@ -33,9 +33,11 @@ interface VnGoldFxArbitrageViewProps {
 function renderComparisonCard(comp: GoldSpreadComparison | null, emptyTitle: string) {
   if (!comp) {
     return (
-      <div className="p-3 rounded-xl bg-[#0b111e] border border-slate-800/90 text-slate-400 text-[11px]">
-        <div className="font-bold text-slate-200 mb-1">{emptyTitle}</div>
-        <p>Nhập giá bán niêm yết tại tiệm vàng (triệu VNĐ/lượng) ở ô bên trên để hệ thống tính chính xác độ vênh thực tế so với giá thế giới quy đổi.</p>
+      <div className="p-3 rounded-xl bg-[#0b111e] border border-slate-800/90 text-slate-400 text-[11px] min-w-0">
+        <div className="font-bold text-slate-200 mb-1 break-words">{emptyTitle}</div>
+        <p className="leading-relaxed break-words">
+          Nhập giá bán niêm yết tại tiệm vàng (triệu VNĐ/lượng) ở ô bên trên để hệ thống tính chính xác độ vênh thực tế so với giá thế giới quy đổi.
+        </p>
       </div>
     );
   }
@@ -59,34 +61,48 @@ function renderComparisonCard(comp: GoldSpreadComparison | null, emptyTitle: str
       : 'CẢNH BÁO ĐỘ VÊNH CAO';
 
   return (
-    <div className="p-3.5 rounded-xl bg-[#0d1423] border border-slate-800 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-bold text-white text-xs">{comp.label}</span>
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${badgeStyle}`}>
+    <div className="p-3.5 rounded-xl bg-[#0d1423] border border-slate-800 space-y-2.5 min-w-0 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-bold text-white text-xs leading-snug break-words min-w-0">
+          {comp.label}
+        </span>
+        <span
+          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border whitespace-nowrap shrink-0 ${badgeStyle}`}
+        >
           {regimeLabel}
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-2 font-mono text-xs">
-        <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/80">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-xs">
+        <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/80 min-w-0">
           <div className="text-[10px] text-slate-400 font-sans">Giá nội địa</div>
-          <div className="font-extrabold text-white">{comp.dealerSellMillion.toFixed(2)} tr</div>
+          <div className="font-extrabold text-white break-words">
+            {comp.dealerSellMillion.toFixed(2)} tr
+          </div>
         </div>
-        <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/80">
+        <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/80 min-w-0">
           <div className="text-[10px] text-slate-400 font-sans">Chênh lệch/lượng</div>
-          <div className={`font-extrabold ${comp.spreadMillionPerTael > 8 ? 'text-rose-400' : 'text-amber-300'}`}>
+          <div
+            className={`font-extrabold break-words ${
+              comp.spreadMillionPerTael > 8 ? 'text-rose-400' : 'text-amber-300'
+            }`}
+          >
             {comp.spreadMillionPerTael >= 0 ? '+' : ''}
             {comp.spreadMillionPerTael.toFixed(2)} tr
           </div>
         </div>
-        <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/80">
+        <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/80 min-w-0">
           <div className="text-[10px] text-slate-400 font-sans">% Độ vênh</div>
-          <div className={`font-extrabold ${comp.spreadPct > 9.5 ? 'text-rose-400' : 'text-cyan-300'}`}>
+          <div
+            className={`font-extrabold break-words ${
+              comp.spreadPct > 9.5 ? 'text-rose-400' : 'text-cyan-300'
+            }`}
+          >
             {comp.spreadPct >= 0 ? '+' : ''}
             {comp.spreadPct.toFixed(2)}%
           </div>
         </div>
       </div>
-      <p className="text-[11px] text-slate-300 leading-relaxed">{comp.guidance}</p>
+      <p className="text-[11px] text-slate-300 leading-relaxed break-words">{comp.guidance}</p>
     </div>
   );
 }
@@ -137,7 +153,7 @@ export const VnGoldFxArbitrageView: React.FC<VnGoldFxArbitrageViewProps> = ({
   if (!arb) {
     return (
       <div className="p-6 text-center rounded-xl bg-[#0c121e] border border-slate-800 text-slate-400 text-xs">
-        Đang đồng bộ báo giá thực tế `XAUUSD` và tỷ giá `USD/VND` từ thị trường liên ngân hàng...
+        Đang đồng bộ báo giá thực tế XAUUSD và tỷ giá USD/VND từ thị trường liên ngân hàng...
       </div>
     );
   }
@@ -152,69 +168,81 @@ export const VnGoldFxArbitrageView: React.FC<VnGoldFxArbitrageViewProps> = ({
       : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/45';
 
   return (
-    <div className="space-y-4 text-xs">
+    <div className="space-y-4 text-xs overflow-x-hidden">
       {/* World Gold Converted to VND Live Parity */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-950/25 via-[#0d1424] to-[#0a101d] border border-amber-500/35 space-y-3">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-950/25 via-[#0d1424] to-[#0a101d] border border-amber-500/35 space-y-3 min-w-0">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-amber-400" />
-            <span className="font-extrabold text-amber-200 uppercase tracking-wider text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Coins className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="font-extrabold text-amber-200 uppercase tracking-wider text-xs leading-snug break-words">
               Giá Vàng Thế Giới Quy Đổi Chuẩn Việt Nam (Thời Gian Thực)
             </span>
           </div>
           <button
+            type="button"
             onClick={() => onJumpToSymbol('XAUUSD')}
-            className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-200 font-mono text-[11px] font-bold flex items-center gap-1 transition"
+            className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-200 font-mono text-[11px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0 transition"
           >
             <span>Biểu đồ XAUUSD</span>
-            <ArrowUpRight className="w-3 h-3" />
+            <ArrowUpRight className="w-3 h-3 shrink-0" />
           </button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 font-mono">
-          <div className="p-2.5 rounded-xl bg-[#080d17]/90 border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-sans">Vàng Quốc tế ({arb.spotGoldSource})</div>
-            <div className="text-sm sm:text-base font-black text-white mt-0.5">
-              ${arb.spotGoldUsdOz.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/oz
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 font-mono">
+          <div className="p-2.5 rounded-xl bg-[#080d17]/90 border border-slate-800 min-w-0">
+            <div className="text-[10px] text-slate-400 font-sans break-words">
+              Vàng Quốc tế ({arb.spotGoldSource})
             </div>
-            <div className={`text-[10px] font-bold ${arb.spotGoldChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <div className="text-sm sm:text-base font-black text-white mt-0.5 break-words">
+              $
+              {arb.spotGoldUsdOz.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+              /oz
+            </div>
+            <div
+              className={`text-[10px] font-bold ${
+                arb.spotGoldChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
               {arb.spotGoldChange24h >= 0 ? '+' : ''}
               {arb.spotGoldChange24h}% (24h)
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-[#080d17]/90 border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-sans">
+          <div className="p-2.5 rounded-xl bg-[#080d17]/90 border border-slate-800 min-w-0">
+            <div className="text-[10px] text-slate-400 font-sans break-words">
               Tỷ giá áp dụng ({arb.isCustomUsdVnd ? 'Tự chọn' : 'Liên NH'})
             </div>
-            <div className="text-sm sm:text-base font-black text-cyan-300 mt-0.5">
+            <div className="text-sm sm:text-base font-black text-cyan-300 mt-0.5 break-words">
               {arb.effectiveUsdVnd.toLocaleString('en-US', { maximumFractionDigits: 0 })} ₫
             </div>
-            <div className="text-[10px] text-slate-400 font-sans">
+            <div className="text-[10px] text-slate-400 font-sans break-words">
               1 lượng = {TROY_OZ_PER_VN_TAEL.toFixed(5)} oz
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-[#080d17]/90 border border-amber-500/30">
-            <div className="text-[10px] text-amber-300/90 font-sans font-semibold">
+          <div className="p-2.5 rounded-xl bg-[#080d17]/90 border border-amber-500/30 min-w-0">
+            <div className="text-[10px] text-amber-300/90 font-sans font-semibold break-words">
               Quy đổi gốc (Chưa phí)
             </div>
-            <div className="text-sm sm:text-base font-black text-amber-300 mt-0.5">
+            <div className="text-sm sm:text-base font-black text-amber-300 mt-0.5 break-words">
               {arb.worldRawMillionPerTael.toFixed(2)} tr/lượng
             </div>
-            <div className="text-[10px] text-slate-400">
+            <div className="text-[10px] text-slate-400 break-words">
               ~ {arb.worldRawMillionPerMace.toFixed(3)} tr/chỉ
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-400/50">
-            <div className="text-[10px] text-amber-200 font-sans font-bold">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-400/50 min-w-0">
+            <div className="text-[10px] text-amber-200 font-sans font-bold break-words">
               Giá nhập khẩu CIF (+1.05%)
             </div>
-            <div className="text-sm sm:text-base font-black text-white mt-0.5">
+            <div className="text-sm sm:text-base font-black text-white mt-0.5 break-words">
               {arb.worldCifParityMillionPerTael.toFixed(2)} tr/lượng
             </div>
-            <div className="text-[10px] text-amber-200/90">
+            <div className="text-[10px] text-amber-200/90 break-words">
               ~ {arb.worldCifParityMillionPerMace.toFixed(3)} tr/chỉ
             </div>
           </div>
@@ -222,20 +250,22 @@ export const VnGoldFxArbitrageView: React.FC<VnGoldFxArbitrageViewProps> = ({
       </div>
 
       {/* Interactive Domestic Dealer Spread Calculator (Zero Fabricated SJC Quotes) */}
-      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-3">
+      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-3 min-w-0">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="font-bold text-white flex items-center gap-1.5">
-            <Scale className="w-4 h-4 text-cyan-400" />
-            <span>Máy Tính Độ Vênh Vàng Miếng SJC & Vàng Nhẫn 9999 Nội Địa</span>
+          <div className="font-bold text-white flex items-center gap-1.5 min-w-0">
+            <Scale className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span className="leading-snug break-words">
+              Máy Tính Độ Vênh Vàng Miếng SJC & Vàng Nhẫn 9999 Nội Địa
+            </span>
           </div>
-          <span className="text-[10px] text-slate-400 font-mono">
+          <span className="text-[10px] text-slate-400 font-mono break-words">
             Đối chiếu trực tiếp với chuẩn CIF {arb.worldCifParityMillionPerTael.toFixed(2)} tr/lượng
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          <div>
-            <label className="block text-[10px] text-slate-400 mb-1">
+          <div className="min-w-0">
+            <label className="block text-[10px] text-slate-400 mb-1 leading-snug break-words">
               Giá bán Vàng miếng SJC (triệu/lượng)
             </label>
             <input
@@ -251,8 +281,8 @@ export const VnGoldFxArbitrageView: React.FC<VnGoldFxArbitrageViewProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-[10px] text-slate-400 mb-1">
+          <div className="min-w-0">
+            <label className="block text-[10px] text-slate-400 mb-1 leading-snug break-words">
               Giá bán Vàng Nhẫn 9999 (triệu/lượng)
             </label>
             <input
@@ -268,8 +298,8 @@ export const VnGoldFxArbitrageView: React.FC<VnGoldFxArbitrageViewProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-[10px] text-slate-400 mb-1">
+          <div className="min-w-0">
+            <label className="block text-[10px] text-slate-400 mb-1 leading-snug break-words">
               Tỷ giá USD/VND quy đổi riêng (Tùy chọn)
             </label>
             <input
@@ -293,13 +323,17 @@ export const VnGoldFxArbitrageView: React.FC<VnGoldFxArbitrageViewProps> = ({
       </div>
 
       {/* Vietnam FX & Foreign Institutional Flow Pressure Meter */}
-      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2.5">
+      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2.5 min-w-0">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="font-bold text-white flex items-center gap-1.5">
-            <ShieldAlert className="w-4 h-4 text-emerald-400" />
-            <span>Thước Đo Áp Lực Tỷ Giá USD/VND & Dòng Vốn Khối Ngoại (VN-Index)</span>
+          <div className="font-bold text-white flex items-center gap-1.5 min-w-0">
+            <ShieldAlert className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="leading-snug break-words">
+              Thước Đo Áp Lực Tỷ Giá USD/VND & Dòng Vốn Khối Ngoại (VN-Index)
+            </span>
           </div>
-          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${fxBadge}`}>
+          <span
+            className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border whitespace-nowrap shrink-0 ${fxBadge}`}
+          >
             Điểm Áp lực: {arb.fxPressureScore}/100
           </span>
         </div>
@@ -317,18 +351,23 @@ export const VnGoldFxArbitrageView: React.FC<VnGoldFxArbitrageViewProps> = ({
           />
         </div>
 
-        <div className="font-bold text-slate-100">{arb.fxPressureHeadline}</div>
-        <p className="text-[11px] text-slate-300 leading-relaxed">{arb.fxPressureGuidance}</p>
+        <div className="font-bold text-slate-100 leading-snug break-words">
+          {arb.fxPressureHeadline}
+        </div>
+        <p className="text-[11px] text-slate-300 leading-relaxed break-words">
+          {arb.fxPressureGuidance}
+        </p>
 
         <div className="flex flex-wrap gap-1.5 pt-1 font-mono text-[10.5px]">
           {['VNINDEX', 'VCB', 'FPT', 'SSI', 'HPG'].map(tk => (
             <button
               key={tk}
+              type="button"
               onClick={() => onJumpToSymbol(tk)}
-              className="px-2 py-0.5 rounded bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-cyan-300 flex items-center gap-1 transition"
+              className="px-2 py-0.5 rounded bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-cyan-300 flex items-center gap-1 whitespace-nowrap transition"
             >
               <span>{tk}</span>
-              <ArrowUpRight className="w-2.5 h-2.5" />
+              <ArrowUpRight className="w-2.5 h-2.5 shrink-0" />
             </button>
           ))}
         </div>
@@ -406,38 +445,40 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
 
   if (isLoading) {
     return (
-      <div className="p-8 text-center rounded-xl bg-[#0c121e] border border-slate-800 text-slate-400 text-xs font-mono">
+      <div className="p-8 text-center rounded-xl bg-[#0c121e] border border-slate-800 text-slate-400 text-xs font-mono leading-relaxed break-words">
         Đang tính toán Ma trận Tương quan Log-Return 30 phiên thực tế giữa {targetKeys.join(', ')}...
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 text-xs">
+    <div className="space-y-4 text-xs overflow-x-hidden">
       {/* Correlation Matrix Table */}
-      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2.5">
+      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2.5 min-w-0">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="font-bold text-white flex items-center gap-1.5">
-            <GitCompare className="w-4 h-4 text-cyan-400" />
-            <span>Ma Trận Tương Quan Liên Thị Trường (30 Phiên 1D — Pearson Log-Return)</span>
+          <div className="font-bold text-white flex items-center gap-1.5 min-w-0">
+            <GitCompare className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span className="leading-snug break-words">
+              Ma Trận Tương Quan Liên Thị Trường (30 Phiên 1D — Pearson Log-Return)
+            </span>
           </div>
-          <span className="text-[10px] font-mono text-slate-400">
+          <span className="text-[10px] font-mono text-slate-400 break-words">
             +1.00 Cùng chiều chặt • 0.00 Độc lập • -1.00 Ngược chiều
           </span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse font-mono text-[11px] text-center">
+          <table className="w-full min-w-[560px] border-collapse font-mono text-[11px] text-center">
             <thead>
               <tr>
-                <th className="p-2 text-left text-slate-400 bg-[#080d17] border border-slate-800">
+                <th className="px-2.5 py-2 text-left text-slate-400 bg-[#080d17] border border-slate-800 whitespace-nowrap">
                   Tài sản
                 </th>
                 {corrData.symbols.map(sym => (
                   <th
                     key={sym}
                     onClick={() => onJumpToSymbol(sym)}
-                    className="p-2 text-cyan-300 bg-[#080d17] border border-slate-800 cursor-pointer hover:text-white"
+                    className="px-2.5 py-2 text-cyan-300 bg-[#080d17] border border-slate-800 cursor-pointer hover:text-white whitespace-nowrap"
                   >
                     {sym}
                   </th>
@@ -449,7 +490,7 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
                 <tr key={rowSym}>
                   <td
                     onClick={() => onJumpToSymbol(rowSym)}
-                    className="p-2 text-left font-bold text-white bg-[#080d17] border border-slate-800 cursor-pointer hover:text-cyan-300 whitespace-nowrap"
+                    className="px-2.5 py-2 text-left font-bold text-white bg-[#080d17] border border-slate-800 cursor-pointer hover:text-cyan-300 whitespace-nowrap"
                   >
                     {rowSym}
                   </td>
@@ -459,9 +500,18 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
                     return (
                       <td
                         key={colSym}
-                        className={`p-2 border border-slate-800/80 ${getCellStyle(r, diag)}`}
+                        className={`px-2.5 py-2 border border-slate-800/80 whitespace-nowrap ${getCellStyle(
+                          r,
+                          diag
+                        )}`}
                       >
-                        {r === null ? 'N/A' : diag ? '1.00' : (r > 0 ? `+${r.toFixed(2)}` : r.toFixed(2))}
+                        {r === null
+                          ? 'N/A'
+                          : diag
+                          ? '1.00'
+                          : r > 0
+                          ? `+${r.toFixed(2)}`
+                          : r.toFixed(2)}
                       </td>
                     );
                   })}
@@ -473,16 +523,18 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
       </div>
 
       {/* Intermarket Divergence Detector */}
-      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2.5">
-        <div className="font-bold text-white flex items-center gap-1.5">
-          <Activity className="w-4 h-4 text-amber-400" />
-          <span>Phát Hiện Phân Kỳ Liên Thị Trường Ngắn Hạn (5 Phiên Gần Nhất vs Nền 30 Phiên)</span>
+      <div className="p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 space-y-2.5 min-w-0">
+        <div className="font-bold text-white flex items-center gap-1.5 min-w-0">
+          <Activity className="w-4 h-4 text-amber-400 shrink-0" />
+          <span className="leading-snug break-words">
+            Phát Hiện Phân Kỳ Liên Thị Trường Ngắn Hạn (5 Phiên Gần Nhất vs Nền 30 Phiên)
+          </span>
         </div>
 
         {corrData.divergences.length === 0 ? (
-          <div className="p-3 rounded-lg bg-[#080d17] border border-slate-800 text-slate-400 text-[11px] flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>
+          <div className="p-3 rounded-lg bg-[#080d17] border border-slate-800 text-slate-400 text-[11px] flex items-start sm:items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
+            <span className="leading-relaxed break-words">
               Các cặp tài sản liên thị trường hiện vận động đồng pha với cấu trúc tương quan lịch sử 30 phiên — chưa xuất hiện phân kỳ bất thường.
             </span>
           </div>
@@ -491,17 +543,23 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
             {corrData.divergences.map(div => (
               <div
                 key={div.id}
-                className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/35 space-y-1"
+                className="p-3 rounded-xl bg-amber-950/20 border border-amber-500/35 space-y-1.5 min-w-0"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-amber-200 flex items-center gap-1.5 font-mono">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    {div.pairLabel} (r = {div.correlation30Bar > 0 ? '+' : ''}
-                    {div.correlation30Bar.toFixed(2)})
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-amber-200 flex items-center gap-1.5 font-mono break-words">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>
+                      {div.pairLabel} (r = {div.correlation30Bar > 0 ? '+' : ''}
+                      {div.correlation30Bar.toFixed(2)})
+                    </span>
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-200">{div.summary}</p>
-                <p className="text-[11px] text-cyan-300">💡 {div.actionableHint}</p>
+                <p className="text-[11px] text-slate-200 leading-relaxed break-words">
+                  {div.summary}
+                </p>
+                <p className="text-[11px] text-cyan-300 leading-relaxed break-words">
+                  💡 {div.actionableHint}
+                </p>
               </div>
             ))}
           </div>

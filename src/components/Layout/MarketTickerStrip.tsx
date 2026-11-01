@@ -84,7 +84,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
     aiPrediction?.trend === 'STRONG_BEARISH' || aiPrediction?.trend === 'BEARISH';
 
   return (
-    <div className="h-7 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
+    <div className="h-7 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0 overflow-hidden z-20">
       {/* Left: Macro Shock Radar Trigger + Fed Pivot Watch Pill + VN Gold Parity Pill */}
       {onOpenMacroModal && (
         <div className="flex items-center gap-1 shrink-0">
@@ -150,9 +150,9 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
               <Landmark className="w-3 h-3 text-emerald-400 shrink-0" />
               <span className="font-bold text-cyan-300">Fed Pivot</span>
               {macroSnapshot.fedPivotV2 ? (
-                <span className="text-[9px] font-bold text-emerald-300">
+                <span className="text-[9px] font-bold text-emerald-300 whitespace-nowrap">
                   {macroSnapshot.fedPivotV2.pivotScore.toFixed(1)}/7
-                  <span className="hidden md:inline text-slate-400">
+                  <span className="hidden 2xl:inline text-slate-400">
                     {' '}• {macroSnapshot.fedPivotV2.statusLabel}
                   </span>
                 </span>
@@ -207,7 +207,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
       </div>
 
       {/* Center: Scrollable Quick-Switch Macro Benchmarks */}
-      <div className="flex-1 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+      <div className="flex-1 min-w-0 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
         {quickSymbols.map(sym => {
           const isActive = sym.symbol === currentSymbol.symbol;
           const isUp = sym.change24h >= 0;

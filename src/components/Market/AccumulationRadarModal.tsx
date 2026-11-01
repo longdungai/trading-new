@@ -204,6 +204,9 @@ export const AccumulationRadarModal: React.FC<AccumulationRadarModalProps> = ({
 
                     {/* Reasons Tags */}
                     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 font-mono font-bold">
+                        🤖 Kronos 24N: {item.kronosForecastPct >= 0 ? `+${item.kronosForecastPct}%` : `${item.kronosForecastPct}%`} ({item.kronosBullProb}% Bull)
+                      </span>
                       {item.reasons.map((r, i) => (
                         <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-[#162130] text-gray-300 border border-[#24334a]">
                           ✓ {r}

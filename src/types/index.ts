@@ -44,6 +44,29 @@ export interface IndicatorSettings {
   smartMoneyConcepts: boolean;
   aiForecast: boolean;
   monteCarloPaths: boolean;
+  kronosGhostCandles: boolean;
+}
+
+export type KronosModelKey = 'kronos-mini' | 'kronos-small' | 'kronos-base';
+
+export interface KronosConfig {
+  modelKey: KronosModelKey;
+  predLen: number;
+  temperature: number;
+  topP: number;
+  sampleCount: number;
+  endpointUrl?: string;
+}
+
+export interface KronosMetadata {
+  modelName: string;
+  params: string;
+  contextLength: number;
+  engineMode: 'KRONOS_CLOUD_PYTORCH' | 'KRONOS_LOCAL_TRANSFORMER';
+  s1Bits: number;
+  s2Bits: number;
+  tokenEntropy: number;
+  latencyMs: number;
 }
 
 export interface SupportResistanceLevel {
@@ -96,9 +119,11 @@ export interface AIPrediction {
   confidenceScore: number; // 0 - 100%
   expectedPriceChangePercent: number;
   forecastHorizonBars: number;
-  upperConfidenceBound: { time: number; price: number }[]; // 95%
-  lowerConfidenceBound: { time: number; price: number }[]; // 95%
-  medianForecast: { time: number; price: number }[];
+  upperConfidenceBound: { time: number; price: number }[]; // 95% (Kronos P95)
+  lowerConfidenceBound: { time: number; price: number }[]; // 95% (Kronos P05)
+  medianForecast: { time: number; price: number }[]; // Kronos P50
+  predictedCandles: Candle[]; // Kronos Full OHLCV Ghost Candlesticks
+  kronosMeta: KronosMetadata;
   scenarios: AIPredictionScenario[];
   volatilityForecast: number;
   aiReasoning: string[];

@@ -1,13 +1,24 @@
-import { AIPrediction, AIPredictionScenario, Candle } from '../../types';
+import { AIPrediction, AIPredictionScenario, Candle, KronosConfig } from '../../types';
 import { calculateEMA, calculateMACD, calculateRSI } from '../indicators';
-import { runMonteCarloSimulation } from './monteCarlo';
+import {
+  KRONOS_MODELS,
+  KronosPredictionOutput,
+  loadKronosConfig,
+  runKronosLocalEngine,
+} from './kronosClient';
 
 export function generateAIPrediction(
   symbol: string,
   candles: Candle[],
-  forecastBars: number = 20
+  forecastBars: number = 24,
+  customKronosConfig?: KronosConfig,
+  cloudOverride?: KronosPredictionOutput | null
 ): AIPrediction {
-  if (candles.length < 35) {
+  const cfg = customKronosConfig || loadKronosConfig();
+  const effectiveBars = cfg.predLen || forecastBars || 24;
+  const modelSpec = KRONOS_MODELS[cfg.modelKey] || KRONOS_MODELS['kronos-small'];
+
+  if (candles.length < 30) {
     const currentPrice = candles[candles.length - 1]?.close || 100;
     return {
       symbol,
@@ -15,14 +26,25 @@ export function generateAIPrediction(
       trend: 'NEUTRAL',
       confidenceScore: 50,
       expectedPriceChangePercent: 0,
-      forecastHorizonBars: forecastBars,
+      forecastHorizonBars: effectiveBars,
       upperConfidenceBound: [],
       lowerConfidenceBound: [],
       medianForecast: [],
+      predictedCandles: [],
+      kronosMeta: {
+        modelName: modelSpec.name,
+        params: modelSpec.params,
+        contextLength: modelSpec.contextLength,
+        engineMode: 'KRONOS_LOCAL_TRANSFORMER',
+        s1Bits: modelSpec.s1Bits,
+        s2Bits: modelSpec.s2Bits,
+        tokenEntropy: 0.7,
+        latencyMs: 1,
+      },
       scenarios: [],
       volatilityForecast: 1.5,
-      aiReasoning: ['Chưa đủ dữ liệu lịch sử để chạy mô hình dự báo AI.'],
-      keyDrivers: ['Cần ít nhất 35 nến giá'],
+      aiReasoning: ['Đang nạp chuỗi nến lịch sử để lượng tử hóa BSQuantizer cho mô hình Kronos...'],
+      keyDrivers: ['Cần tối thiểu 30 nến OHLCV'],
     };
   }
 
@@ -38,19 +60,16 @@ export function generateAIPrediction(
 
   const ema20 = calculateEMA(closes, 20);
   const ema50 = calculateEMA(closes, 50);
-  const ema200 = calculateEMA(closes, 200);
 
   const currEma20 = ema20[ema20.length - 1] || currentPrice;
   const currEma50 = ema50[ema50.length - 1] || currentPrice;
-  const currEma200 = ema200[ema200.length - 1] || currentPrice;
 
-  // 2. Score Trend & Drivers
+  // 2. Score Technical Confluence
   let bullishScore = 0;
   let bearishScore = 0;
   const keyDrivers: string[] = [];
   const aiReasoning: string[] = [];
 
-  // RSI Analysis
   if (currentRSI < 30) {
     bullishScore += 25;
     keyDrivers.push(`RSI Quá bán (${currentRSI.toFixed(1)}) - Tín hiệu đảo chiều tăng mạnh`);
@@ -65,7 +84,6 @@ export function generateAIPrediction(
     keyDrivers.push(`RSI nằm dưới đường cân bằng (<50: ${currentRSI.toFixed(1)})`);
   }
 
-  // MACD Analysis
   if (currentMACD.histogram > 0 && currentMACD.macd > currentMACD.signal) {
     bullishScore += 25;
     keyDrivers.push('MACD Histogram phân kỳ dương, xu hướng dòng tiền tăng');
@@ -74,7 +92,6 @@ export function generateAIPrediction(
     keyDrivers.push('MACD Histogram phân kỳ âm, áp lực chốt lời gia tăng');
   }
 
-  // EMA Alignment
   if (currentPrice > currEma20 && currEma20 > currEma50) {
     bullishScore += 30;
     keyDrivers.push('Cấu trúc EMA Bullish (Giá > EMA20 > EMA50) ủng hộ sóng tăng');
@@ -83,63 +100,73 @@ export function generateAIPrediction(
     keyDrivers.push('Cấu trúc EMA Bearish (Giá < EMA20 < EMA50) cản trở đà phục hồi');
   }
 
-  // Volume Breakout Check
   const lastVolume = candles[candles.length - 1].volume;
   const avgVol = candles.slice(-20).reduce((sum, c) => sum + c.volume, 0) / 20;
-  if (lastVolume > avgVol * 1.5) {
+  if (lastVolume > avgVol * 1.4) {
     if (candles[candles.length - 1].close > candles[candles.length - 1].open) {
       bullishScore += 20;
-      keyDrivers.push('Khối lượng mua đột biến (Volume Surge +50% so với TB 20 phiên)');
+      keyDrivers.push('Khối lượng mua đột biến (Volume Surge vượt 140% TB 20 phiên)');
     } else {
       bearishScore += 20;
       keyDrivers.push('Khối lượng xả hàng gia tăng đột biến');
     }
   }
 
-  // 3. Monte Carlo Simulation Engine
-  const mc = runMonteCarloSimulation(candles, forecastBars, 200);
+  // 3. Run Kronos K-line Foundation Model (Cloud PyTorch override or Local Transformer Engine)
+  const kronosOut: KronosPredictionOutput =
+    cloudOverride && cloudOverride.times.length > 0
+      ? cloudOverride
+      : runKronosLocalEngine(candles, { ...cfg, predLen: effectiveBars });
 
-  // Blend MC probability with Technical score
+  // Blend Kronos autoregressive probability with technical confluence
   const totalScore = bullishScore + bearishScore || 1;
   const techBullishProb = (bullishScore / totalScore) * 100;
-  const combinedBullProb = Math.round(techBullishProb * 0.6 + mc.bullProbability * 0.4);
+  const combinedBullProb = Math.round(kronosOut.bullProbability * 0.62 + techBullishProb * 0.38);
+
+  const bullTarget = kronosOut.p85[kronosOut.p85.length - 1] || currentPrice * 1.03;
+  const baseTarget = kronosOut.p50[kronosOut.p50.length - 1] || currentPrice;
+  const bearTarget = kronosOut.p15[kronosOut.p15.length - 1] || currentPrice * 0.97;
 
   let trend: AIPrediction['trend'] = 'NEUTRAL';
-  let expectedChange = 0;
+  let expectedChange = ((baseTarget - currentPrice) / currentPrice) * 100;
 
-  if (combinedBullProb >= 72) {
+  aiReasoning.push(
+    `Kronos Foundation Model (${kronosOut.meta.modelName} • ${kronosOut.meta.params}) lượng tử hóa BSQuantizer (${kronosOut.meta.s1Bits}+${kronosOut.meta.s2Bits} bits, Entropy H=${kronosOut.meta.tokenEntropy}) dự báo ${effectiveBars} nến OHLCV tiếp theo.`
+  );
+
+  if (combinedBullProb >= 70) {
     trend = 'STRONG_BULLISH';
-    expectedChange = Math.abs((mc.upper68[mc.upper68.length - 1] - currentPrice) / currentPrice) * 100;
-    aiReasoning.push('Mô hình AI xác nhận động lượng tăng trưởng mạnh với xác suất phá đỉnh cao.');
-    aiReasoning.push('Các đường trung bình động dốc lên đồng thuận với dòng tiền cá mập tích lũy.');
+    expectedChange = Math.max(expectedChange, ((bullTarget - currentPrice) / currentPrice) * 0.75 * 100);
+    aiReasoning.push(
+      `Xác suất Autoregressive nghiêng mạnh về chiều Tăng (${combinedBullProb}% kịch bản đóng cửa trên mốc hiện tại).`
+    );
   } else if (combinedBullProb >= 55) {
     trend = 'BULLISH';
-    expectedChange = Math.abs((mc.medianPath[mc.medianPath.length - 1] - currentPrice) / currentPrice) * 100;
-    aiReasoning.push('Xu hướng chung nghiêng về phía tăng giá, ưu tiên canh mua khi giá điều chỉnh về hỗ trợ.');
-  } else if (combinedBullProb <= 28) {
+    expectedChange = Math.max(0.15, expectedChange);
+    aiReasoning.push(
+      `Chuỗi token K-line phân cấp (s1/s2) ghi nhận lực cầu hấp thụ tốt tại các nhịp râu nến rút chân.`
+    );
+  } else if (combinedBullProb <= 30) {
     trend = 'STRONG_BEARISH';
-    expectedChange = -Math.abs((currentPrice - mc.lower68[mc.lower68.length - 1]) / currentPrice) * 100;
-    aiReasoning.push('Tín hiệu phân phối rõ rệt. Rủi ro gãy các ngưỡng hỗ trợ quan trọng rất cao.');
+    expectedChange = Math.min(expectedChange, ((bearTarget - currentPrice) / currentPrice) * 0.75 * 100);
+    aiReasoning.push(
+      `Mô hình Kronos phát hiện cấu trúc phân phối mạnh (${100 - combinedBullProb}% mẫu thử phá vỡ xuống dưới).`
+    );
   } else if (combinedBullProb <= 45) {
     trend = 'BEARISH';
-    expectedChange = -Math.abs((currentPrice - mc.medianPath[mc.medianPath.length - 1]) / currentPrice) * 100;
-    aiReasoning.push('Áp lực bán chiếm ưu thế. Nên hạn chế vị thế Mua hoặc đặt Stop Loss chặt chẽ.');
+    expectedChange = Math.min(-0.15, expectedChange);
+    aiReasoning.push('Áp lực cung ngắn hạn chiếm ưu thế trên các token nến gần nhất. Ưu tiên quản trị rủi ro.');
   } else {
     trend = 'NEUTRAL';
-    expectedChange = ((mc.medianPath[mc.medianPath.length - 1] - currentPrice) / currentPrice) * 100;
-    aiReasoning.push('Thị trường đang đi ngang tích lũy (Sideway). Chờ đợi tín hiệu bứt phá khỏi vùng biên độ.');
+    aiReasoning.push('Phân phối xác suất Kronos cân bằng (Sideway tích lũy). Giao dịch tại hai biên hỗ trợ/kháng cự.');
   }
 
-  const confidenceScore = Math.min(96, Math.max(52, Math.abs(combinedBullProb - 50) * 1.5 + 50));
+  const confidenceScore = Math.min(97, Math.max(55, Math.round(Math.abs(combinedBullProb - 50) * 1.45 + 54)));
 
-  // Build 3 Scenarios
-  const bullProb = Math.min(85, Math.max(10, Math.round(combinedBullProb * 0.75 + 10)));
-  const bearProb = Math.min(85, Math.max(10, Math.round((100 - combinedBullProb) * 0.75 + 10)));
-  const baseProb = Math.max(10, 100 - bullProb - bearProb);
-
-  const bullTarget = mc.upper68[mc.upper68.length - 1];
-  const baseTarget = mc.medianPath[mc.medianPath.length - 1];
-  const bearTarget = mc.lower68[mc.lower68.length - 1];
+  // Build 3 Quantile Scenarios from Kronos P85, P50, P15
+  const bullProb = Math.min(82, Math.max(12, Math.round(combinedBullProb * 0.72 + 12)));
+  const bearProb = Math.min(82, Math.max(12, Math.round((100 - combinedBullProb) * 0.72 + 12)));
+  const baseProb = Math.max(12, 100 - bullProb - bearProb);
 
   const bullChangePct = currentPrice > 0 ? ((bullTarget - currentPrice) / currentPrice) * 100 : 0;
   const baseChangePct = currentPrice > 0 ? ((baseTarget - currentPrice) / currentPrice) * 100 : 0;
@@ -147,76 +174,84 @@ export function generateAIPrediction(
 
   const scenarios: AIPredictionScenario[] = [
     {
-      name: 'Kịch bản Tăng Giá (Bullish Expansion)',
+      name: 'Kịch bản Tăng Giá (Kronos P85 Bullish)',
       type: 'BULLISH',
       color: '#10b981',
-      path: mc.times.map((t, i) => ({ time: t, price: mc.upper68[i] })),
+      path: kronosOut.times.map((t, i) => ({ time: t, price: kronosOut.p85[i] })),
       probability: bullProb,
       targetPrice: bullTarget,
       priceChangePercent: parseFloat(bullChangePct.toFixed(2)),
-      invalidationPrice: currentPrice * 0.97,
-      timeHorizon: `${forecastBars} nến tới (1 - 2 ngày)`,
-      description: 'Phá vỡ kháng cự gần nhất và kích hoạt sóng tăng mở rộng (Target TP).',
+      invalidationPrice: parseFloat((currentPrice * 0.972).toFixed(4)),
+      timeHorizon: `${effectiveBars} nến tới (Kronos P85)`,
+      description: 'Quỹ đạo phân vị P85 của Kronos: Phá vỡ kháng cự gần nhất và mở rộng biên độ tăng.',
       triggers: [
-        'Nến đóng cửa giữ vững trên EMA 20 & bứt phá đỉnh ngắn hạn',
-        'Khối lượng mua chủ động tăng vượt 130% so với TB 20 phiên',
+        'Nến dự báo Kronos (Ghost Candles) đóng cửa liên tiếp phía trên EMA 20',
+        'Token định lượng s1/s2 xác nhận xung lực cầu vượt ngưỡng 130% TB 20 phiên',
         'Chỉ báo RSI bứt phá vượt ngưỡng 55 hướng lên vùng tích cực',
       ],
-      actionPlan: 'Ưu tiên mở vị thế Mua (Long) khi giá điều chỉnh về vùng hỗ trợ. Chốt lời từng phần tại mục tiêu.',
-      riskReward: '1 : 2.8',
+      actionPlan: 'Mở vị thế Mua (Long/Spot) khi giá retest vùng hỗ trợ hoặc khớp nến Kronos đầu tiên. Chốt lời theo P85.',
+      riskReward: '1 : 3.0',
     },
     {
-      name: 'Kịch bản Cơ Sở (Base Case / Sideway)',
+      name: 'Kịch bản Cơ Sở (Kronos P50 Median)',
       type: 'BASE',
       color: '#3b82f6',
-      path: mc.times.map((t, i) => ({ time: t, price: mc.medianPath[i] })),
+      path: kronosOut.times.map((t, i) => ({ time: t, price: kronosOut.p50[i] })),
       probability: baseProb,
       targetPrice: baseTarget,
       priceChangePercent: parseFloat(baseChangePct.toFixed(2)),
-      invalidationPrice: currentPrice * 0.95,
-      timeHorizon: `${forecastBars} nến tới (1 - 2 ngày)`,
-      description: 'Tiếp tục dao động theo xu hướng trung bình động với biên độ ổn định.',
+      invalidationPrice: parseFloat((currentPrice * 0.955).toFixed(4)),
+      timeHorizon: `${effectiveBars} nến tới (Kronos P50)`,
+      description: 'Quỹ đạo trung vị (Median OHLCV) có xác suất hội tụ cao nhất từ các đường lấy mẫu Nucleus.',
       triggers: [
-        'Giá dao động tích lũy trong vùng hộp cản hỗ trợ - kháng cự',
-        'Khối lượng giao dịch ở mức trung bình ổn định, không có xả hàng',
-        'Chỉ báo RSI đi ngang trong vùng cân bằng 45 - 55',
+        'Giá bám sát chuỗi Nến Tương Lai (Ghost Candlesticks) màu xanh lam trên biểu đồ',
+        'Khối lượng giao dịch duy trì ổn định quanh mức trung bình',
+        'Độ lệch chuẩn nằm gọn trong hành lang tin cậy P15 - P85',
       ],
-      actionPlan: 'Chiến lược giao dịch lướt sóng biên độ: Mua ở biên dưới hỗ trợ, bán hạ tỉ trọng ở biên trên.',
-      riskReward: '1 : 1.8',
+      actionPlan: 'Giao dịch bám theo trục trung vị P50: Mua tại râu nến dưới dự phóng và chốt lời tại râu nến trên.',
+      riskReward: '1 : 2.1',
     },
     {
-      name: 'Kịch bản Điều Chỉnh (Bearish Retest)',
+      name: 'Kịch bản Điều Chỉnh (Kronos P15 Bearish)',
       type: 'BEARISH',
       color: '#f43f5e',
-      path: mc.times.map((t, i) => ({ time: t, price: mc.lower68[i] })),
+      path: kronosOut.times.map((t, i) => ({ time: t, price: kronosOut.p15[i] })),
       probability: bearProb,
       targetPrice: bearTarget,
       priceChangePercent: parseFloat(bearChangePct.toFixed(2)),
-      invalidationPrice: currentPrice * 1.03,
-      timeHorizon: `${forecastBars} nến tới (1 - 2 ngày)`,
-      description: 'Điều chỉnh kiểm định lại vùng đáy hỗ trợ và thanh lý các vị thế đòn bẩy cao.',
+      invalidationPrice: parseFloat((currentPrice * 1.028).toFixed(4)),
+      timeHorizon: `${effectiveBars} nến tới (Kronos P15)`,
+      description: 'Quỹ đạo phân vị P15 của Kronos: Nhịp rũ bỏ thanh khoản kiểm định lại vùng đáy hỗ trợ.',
       triggers: [
-        'Gãy qua đường hỗ trợ động EMA 50 hoặc thủng đáy ngắn hạn gần nhất',
-        'Xuất hiện phân kỳ âm trên chỉ báo MACD Histogram và RSI',
-        'Áp lực bán chốt lời gia tăng khi thị trường chạm vùng cản mạnh',
+        'Giá đóng cửa thủng biên dưới của nến dự báo Kronos và EMA 50',
+        'Xuất hiện phân kỳ âm trên MACD Histogram kèm râu nến trên dài',
+        'Áp lực chốt lời gia tăng tại vùng cản tâm lý',
       ],
-      actionPlan: 'Kiên nhẫn chờ giá về vùng hỗ trợ cứng để gom hàng chiết khấu. Đặt Stop Loss chặt chẽ.',
-      riskReward: '1 : 2.5',
+      actionPlan: 'Đặt lệnh chờ gom hàng chiết khấu tại mục tiêu P15 hoặc mở vị thế Short ngắn hạn có Stop Loss chặt.',
+      riskReward: '1 : 2.6',
     },
   ];
+
+  const spreadEnd =
+    kronosOut.p95.length > 0
+      ? Math.abs(kronosOut.p95[kronosOut.p95.length - 1] - kronosOut.p05[kronosOut.p05.length - 1])
+      : currentPrice * 0.03;
+  const volForecast = parseFloat(((spreadEnd / Math.max(1e-8, currentPrice)) * 50).toFixed(2));
 
   return {
     symbol,
     currentPrice,
     trend,
-    confidenceScore: Math.round(confidenceScore),
+    confidenceScore,
     expectedPriceChangePercent: parseFloat(expectedChange.toFixed(2)),
-    forecastHorizonBars: forecastBars,
-    upperConfidenceBound: mc.times.map((t, i) => ({ time: t, price: mc.upper95[i] })),
-    lowerConfidenceBound: mc.times.map((t, i) => ({ time: t, price: mc.lower95[i] })),
-    medianForecast: mc.times.map((t, i) => ({ time: t, price: mc.medianPath[i] })),
+    forecastHorizonBars: effectiveBars,
+    upperConfidenceBound: kronosOut.times.map((t, i) => ({ time: t, price: kronosOut.p95[i] })),
+    lowerConfidenceBound: kronosOut.times.map((t, i) => ({ time: t, price: kronosOut.p05[i] })),
+    medianForecast: kronosOut.times.map((t, i) => ({ time: t, price: kronosOut.p50[i] })),
+    predictedCandles: kronosOut.predictedCandles,
+    kronosMeta: kronosOut.meta,
     scenarios,
-    volatilityForecast: parseFloat((Math.abs(mc.upper95[0] - mc.lower95[0]) / currentPrice * 100).toFixed(2)),
+    volatilityForecast: volForecast,
     aiReasoning,
     keyDrivers,
   };

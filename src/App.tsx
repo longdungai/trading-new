@@ -4,6 +4,7 @@ import {
   Candle,
   FibonacciLevel,
   IndicatorSettings,
+  KronosConfig,
   MarketSentiment,
   MarketSymbol,
   OrderBlock,
@@ -30,6 +31,12 @@ import { calculateSupportResistance } from './services/analysis/supportResistanc
 import { calculateFibonacciLevels } from './services/analysis/fibonacci';
 import { detectOrderBlocks } from './services/analysis/smartMoney';
 import { generateAIPrediction } from './services/ai/mlForecaster';
+import {
+  fetchKronosCloudPrediction,
+  KronosPredictionOutput,
+  loadKronosConfig,
+  saveKronosConfig,
+} from './services/ai/kronosClient';
 import { generateTradeSetup, generateStrategyHub } from './services/ai/signalGenerator';
 import { analyzeAccumulationZone } from './services/ai/accumulationScanner';
 import { formatPrice, formatPercent, formatVolume } from './utils/formatters';
@@ -81,7 +88,7 @@ export const App: React.FC = () => {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  // Indicator Settings (Mặc định ban đầu chỉ bật RSI, MACD, Hỗ trợ/Kháng cự, và BB)
+  // Indicator Settings (Mặc định bật RSI, MACD, Hỗ trợ/Kháng cự, BB, và Nến AI Kronos)
   const [settings, setSettings] = useState<IndicatorSettings>({
     rsi: true,
     macd: true,
@@ -97,9 +104,19 @@ export const App: React.FC = () => {
     volumeProfile: false,
     autoFibonacci: false,
     smartMoneyConcepts: false,
-    aiForecast: false,
+    aiForecast: true,
     monteCarloPaths: false,
+    kronosGhostCandles: true,
   });
+
+  // Kronos Foundation Model Configuration & Optional Cloud Override
+  const [kronosConfig, setKronosConfig] = useState<KronosConfig>(() => loadKronosConfig());
+  const [kronosCloudOutput, setKronosCloudOutput] = useState<KronosPredictionOutput | null>(null);
+
+  const handleUpdateKronosConfig = useCallback((nextCfg: KronosConfig) => {
+    setKronosConfig(nextCfg);
+    saveKronosConfig(nextCfg);
+  }, []);
 
   const wsRef = useRef<BinanceWebSocket | null>(null);
 
@@ -337,9 +354,24 @@ export const App: React.FC = () => {
     return detectOrderBlocks(candles);
   }, [candles]);
 
+  // Attempt non-blocking connection to Kronos PyTorch Server if configured
+  useEffect(() => {
+    let active = true;
+    if (candles.length >= 30) {
+      fetchKronosCloudPrediction(currentSymbol.symbol, candles, kronosConfig).then(res => {
+        if (active) setKronosCloudOutput(res);
+      });
+    } else {
+      setKronosCloudOutput(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [currentSymbol.symbol, candles.length, kronosConfig]);
+
   const aiPrediction: AIPrediction | null = useMemo(() => {
-    return generateAIPrediction(currentSymbol.symbol, candles, 24);
-  }, [currentSymbol.symbol, candles]);
+    return generateAIPrediction(currentSymbol.symbol, candles, kronosConfig.predLen, kronosConfig, kronosCloudOutput);
+  }, [currentSymbol.symbol, candles, kronosConfig, kronosCloudOutput]);
 
   const strategyHub: StrategyAnalysisHub = useMemo(() => {
     return generateStrategyHub(currentSymbol.symbol, candles, timeframe);
@@ -510,6 +542,10 @@ export const App: React.FC = () => {
                   <AIPredictionCard
                     prediction={aiPrediction}
                     quoteAsset={currentSymbol.quoteAsset}
+                    kronosConfig={kronosConfig}
+                    onUpdateKronosConfig={handleUpdateKronosConfig}
+                    showGhostCandles={settings.kronosGhostCandles}
+                    onToggleGhostCandles={() => handleToggleIndicator('kronosGhostCandles')}
                   />
                   <TradeSetupCard
                     strategyHub={strategyHub}

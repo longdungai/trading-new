@@ -9,3 +9,16 @@ services:
       - "8080:80"
     environment:
       - NODE_ENV=production
+      - VITE_KRONOS_API_URL=http://localhost:7860
+    depends_on:
+      - kronos-server
+
+  kronos-server:
+    build: ./kronos-server
+    container_name: kronos_foundation_server
+    restart: always
+    ports:
+      - "7860:7860"
+    environment:
+      - KRONOS_DEFAULT_MODEL=kronos-small
+      - PORT=7860

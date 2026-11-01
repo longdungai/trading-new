@@ -60,11 +60,13 @@
 
 ---
 
-## 🤖 Mô Hình Dự Báo Đường Giá AI & Monte Carlo
+## 🤖 Mô Hình Dự Báo Ngôn Ngữ Nến Kronos Foundation Model (AAAI 2026)
 
-* **3 Kịch Bản Xác Suất Mô Phỏng:** Tăng Giá (Bullish Target), Cơ Sở (Base Target) và Điều Chỉnh (Bearish Target).
-* **Hành Lang Biến Động Tin Cậy Monte Carlo 95%:** Đo lường độ lệch chuẩn và biên độ dao động dự kiến trong các cây nến tiếp theo.
-* **Cơ Sở Thuật Toán:** Phân tích đa chỉ số động lượng, biến động ATR và dòng tiền lớn.
+Dự án đã tích hợp trực tiếp kiến trúc **Kronos: A Foundation Model for the Language of Financial Markets** ([`shiyu-coder/Kronos`](https://github.com/shiyu-coder/Kronos)):
+* **🕯️ Dự Báo Chuỗi Nến Tương Lai (Kronos Ghost Candlesticks):** Lượng tử hóa chuỗi nến đa chiều `[Open, High, Low, Close, Volume]` qua bộ **Binary Spherical Quantizer (BSQuantizer)** thành các token phân cấp $s_1, s_2$ và vẽ trực tiếp các cây nến tương lai dự kiến ngay trên biểu đồ.
+* **📊 3 Phân Vị Xác Suất Tự Hồi Quy (P85 / P50 / P15):** Trích xuất trực tiếp từ đa đường lấy mẫu Nucleus Sampling (`sample_count`) cho 3 kịch bản: **P85 Tăng Giá**, **P50 Trung Vị Cơ Sở**, và **P15 Điều Chỉnh**, kèm hành lang tin cậy **P05 – P95**.
+* **⚙️ Tùy Chỉnh 3 Biến Thể Mô Hình Ngay Trên Giao Diện:** Chuyển đổi tức thì giữa `Kronos-mini (4.1M - 2048 context)`, `Kronos-small (24.7M - 512 context)` và `Kronos-base (102.3M - 512 context)`, tùy chỉnh số nến dự báo (`12`, `24`, `36`, `48` nến) và nhiệt độ lấy mẫu (`T`).
+* **🚀 Kiến Trúc Hybrid (Client Transformer + PyTorch FastAPI Server):** Chạy mượt tức thì trên trình duyệt Vercel (0ms latency) và tự động nâng cấp lên PyTorch GPU khi kết nối với `kronos-server` (FastAPI/Docker).
 
 ---
 
@@ -113,6 +115,10 @@ Hoặc nhấp đúp chuột vào file **`start.bat`** trên Windows để mở n
 
 ```
 trading-new/
+├── kronos-server/           # [MỚI] Backend Python FastAPI chạy mô hình PyTorch Kronos
+│   ├── model/               # Kiến trúc KronosTokenizer (BSQuantizer) & Kronos DualHead
+│   ├── app.py               # API dự báo phân vị P05/P15/P50/P85/P95 & Batch Prediction
+│   └── Dockerfile           # Đóng gói sẵn cho Hugging Face Spaces / Docker
 ├── public/                  # Cấu hình PWA (manifest.json, service-worker.js)
 ├── src/
 │   ├── components/

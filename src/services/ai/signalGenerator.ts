@@ -10,6 +10,7 @@ import {
 import { calculateSupportResistance } from '../analysis/supportResistance';
 import { calculateFibonacciLevels } from '../analysis/fibonacci';
 import { detectOrderBlocks } from '../analysis/smartMoney';
+import { loadKronosConfig, runKronosLocalEngine } from './kronosClient';
 
 // Main Strategy Hub Analysis Engine
 export function generateStrategyHub(
@@ -567,6 +568,79 @@ export function generateStrategyHub(
       winProbability: 68,
       triggers,
       riskLevel: 'MEDIUM',
+    });
+  }
+
+  // ================= 10. KRONOS FOUNDATION MODEL (K-LINE TOKENIZER AI) =================
+  {
+    const kronosCfg = loadKronosConfig();
+    const kronosOut = runKronosLocalEngine(candles, kronosCfg);
+    const predCandles = kronosOut.predictedCandles;
+    const bullProb = kronosOut.bullProbability;
+
+    let action: SignalAction = 'WAIT';
+    let score = 72;
+    const triggers: string[] = [];
+
+    const p50End = kronosOut.p50[kronosOut.p50.length - 1] || currentPrice;
+    const p85End = kronosOut.p85[kronosOut.p85.length - 1] || currentPrice * 1.03;
+    const p15End = kronosOut.p15[kronosOut.p15.length - 1] || currentPrice * 0.97;
+    const expectedMovePct = ((p50End - currentPrice) / currentPrice) * 100;
+
+    triggers.push(
+      `Mô hình ngôn ngữ nến ${kronosOut.meta.modelName} (${kronosOut.meta.params}) lượng tử hóa BSQuantizer ${kronosOut.meta.s1Bits}+${kronosOut.meta.s2Bits} bits (Entropy H=${kronosOut.meta.tokenEntropy})`
+    );
+
+    if (bullProb >= 66 || (bullProb >= 58 && currentPrice > lastEma20)) {
+      action = bullProb >= 72 ? 'STRONG_BUY' : 'BUY';
+      score = Math.min(95, Math.round(74 + (bullProb - 50) * 0.45));
+      triggers.push(`Xác suất Autoregressive Tăng đạt ${bullProb}% (Kỳ vọng trung vị P50: ${expectedMovePct >= 0 ? '+' : ''}${expectedMovePct.toFixed(2)}%)`);
+      triggers.push(`Chuỗi ${predCandles.length} Nến Tương Lai (Ghost Candles) xác nhận cấu trúc đáy nâng dần`);
+    } else if (bullProb <= 34 || (bullProb <= 42 && currentPrice < lastEma20)) {
+      action = bullProb <= 28 ? 'STRONG_SELL' : 'SELL';
+      score = Math.min(94, Math.round(74 + (50 - bullProb) * 0.45));
+      triggers.push(`Xác suất Autoregressive Giảm đạt ${100 - bullProb}% (Cảnh báo suy yếu về P15: $${p15End.toFixed(2)})`);
+      triggers.push('Token phân cấp s1/s2 phát hiện áp lực cung tại các râu nến trên');
+    } else {
+      action = currentPrice >= lastEma50 ? 'BUY' : 'WAIT';
+      score = 76;
+      triggers.push(`Phân phối xác suất Kronos tích lũy biên độ hẹp (${bullProb}% Bull / ${100 - bullProb}% Bear)`);
+    }
+
+    const firstFewLows = predCandles.slice(0, 4).map(c => c.low);
+    const firstFewHighs = predCandles.slice(0, 4).map(c => c.high);
+    const minPredLow = firstFewLows.length > 0 ? Math.min(...firstFewLows) : currentPrice * 0.99;
+    const maxPredHigh = firstFewHighs.length > 0 ? Math.max(...firstFewHighs) : currentPrice * 1.01;
+
+    const isBuySignal = action.includes('BUY');
+    const entryLow = isBuySignal ? Math.min(currentPrice * 0.996, minPredLow) : currentPrice * 0.997;
+    const entryHigh = isBuySignal ? currentPrice * 1.003 : Math.max(currentPrice * 1.004, maxPredHigh);
+
+    const slDistance = Math.max(currentAtr * 1.4, currentPrice * 0.018);
+    const sl = isBuySignal ? currentPrice - slDistance : currentPrice + slDistance;
+    const risk = Math.abs(currentPrice - sl);
+
+    const tp1 = isBuySignal ? Math.max(currentPrice + risk * 1.6, p50End) : Math.min(currentPrice - risk * 1.6, p50End);
+    const tp2 = isBuySignal ? Math.max(currentPrice + risk * 2.8, p85End) : Math.min(currentPrice - risk * 2.8, p15End);
+    const tp3 = isBuySignal ? currentPrice + risk * 4.2 : currentPrice - risk * 4.2;
+
+    strategies.push({
+      id: 'kronos_foundation_ai',
+      name: `Kronos Foundation Model (${kronosOut.meta.modelName})`,
+      shortName: '🤖 Kronos AI',
+      category: 'Foundation Model (K-Line Transformer AAAI 2026)',
+      description: 'Dự báo tự hồi quy chuỗi nến OHLCV bằng bộ lượng tử hóa cầu nhị phân (BSQuantizer) và Transformer phân cấp s1/s2.',
+      action,
+      score,
+      entryZone: [parseFloat(entryLow.toFixed(2)), parseFloat(entryHigh.toFixed(2))],
+      stopLoss: parseFloat(sl.toFixed(2)),
+      takeProfit1: parseFloat(tp1.toFixed(2)),
+      takeProfit2: parseFloat(tp2.toFixed(2)),
+      takeProfit3: parseFloat(tp3.toFixed(2)),
+      riskRewardRatio: parseFloat((risk > 0 ? (Math.abs(tp2 - currentPrice) / risk) : 2.8).toFixed(2)),
+      winProbability: Math.max(64, Math.min(84, Math.round(50 + Math.abs(bullProb - 50) * 0.65))),
+      triggers,
+      riskLevel: 'LOW',
     });
   }
 

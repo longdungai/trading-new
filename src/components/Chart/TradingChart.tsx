@@ -55,6 +55,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const supertrendSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
 
   // AI Forecast Series References
+  const kronosCandleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const aiBullishRef = useRef<ISeriesApi<'Line'> | null>(null);
   const aiBaseRef = useRef<ISeriesApi<'Line'> | null>(null);
   const aiBearishRef = useRef<ISeriesApi<'Line'> | null>(null);
@@ -156,11 +157,22 @@ export const TradingChart: React.FC<TradingChartProps> = ({
 
     supertrendSeriesRef.current = chart.addLineSeries({ color: '#10b981', lineWidth: 2, title: 'SuperTrend' });
 
+    // Kronos Ghost Candlestick Series (Future OHLCV Projection)
+    kronosCandleSeriesRef.current = chart.addCandlestickSeries({
+      upColor: 'rgba(6, 182, 212, 0.48)',
+      downColor: 'rgba(249, 115, 22, 0.48)',
+      borderVisible: true,
+      borderUpColor: '#06b6d4',
+      borderDownColor: '#f97316',
+      wickUpColor: '#22d3ee',
+      wickDownColor: '#fb923c',
+    });
+
     // AI Lines
-    aiBullishRef.current = chart.addLineSeries({ color: '#10b981', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'AI Bull' });
-    aiBaseRef.current = chart.addLineSeries({ color: '#38bdf8', lineWidth: 2, lineStyle: LineStyle.Solid, title: 'AI Base' });
-    aiBearishRef.current = chart.addLineSeries({ color: '#f43f5e', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'AI Bear' });
-    mcUpperRef.current = chart.addLineSeries({ color: 'rgba(168, 85, 247, 0.65)', lineWidth: 1, lineStyle: LineStyle.Dotted, title: 'MC 95%' });
+    aiBullishRef.current = chart.addLineSeries({ color: '#10b981', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Kronos P85' });
+    aiBaseRef.current = chart.addLineSeries({ color: '#38bdf8', lineWidth: 2, lineStyle: LineStyle.Solid, title: 'Kronos P50' });
+    aiBearishRef.current = chart.addLineSeries({ color: '#f43f5e', lineWidth: 2, lineStyle: LineStyle.Dashed, title: 'Kronos P15' });
+    mcUpperRef.current = chart.addLineSeries({ color: 'rgba(168, 85, 247, 0.65)', lineWidth: 1, lineStyle: LineStyle.Dotted, title: 'Kronos 95%' });
     mcLowerRef.current = chart.addLineSeries({ color: 'rgba(168, 85, 247, 0.65)', lineWidth: 1, lineStyle: LineStyle.Dotted });
 
     // Resize Observer with smooth handling
@@ -311,12 +323,32 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     }
 
-    // 8. Update AI Forecast Paths
+    // 8. Update Kronos Ghost Candlesticks & AI Forecast Paths
     const lastCandle = candles[candles.length - 1];
+    if (
+      settings.kronosGhostCandles &&
+      aiPrediction &&
+      aiPrediction.predictedCandles &&
+      aiPrediction.predictedCandles.length > 0 &&
+      kronosCandleSeriesRef.current
+    ) {
+      kronosCandleSeriesRef.current.setData(
+        aiPrediction.predictedCandles.map(c => ({
+          time: c.time as any,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }))
+      );
+    } else if (kronosCandleSeriesRef.current) {
+      kronosCandleSeriesRef.current.setData([]);
+    }
+
     if (settings.aiForecast && aiPrediction && aiPrediction.scenarios.length > 0 && lastCandle) {
-      const bullScenario = aiPrediction.scenarios.find(s => s.name.includes('Tăng'));
-      const baseScenario = aiPrediction.scenarios.find(s => s.name.includes('Cơ sở'));
-      const bearScenario = aiPrediction.scenarios.find(s => s.name.includes('Điều chỉnh'));
+      const bullScenario = aiPrediction.scenarios.find(s => s.type === 'BULLISH' || s.name.includes('Tăng'));
+      const baseScenario = aiPrediction.scenarios.find(s => s.type === 'BASE' || s.name.includes('Cơ Sở'));
+      const bearScenario = aiPrediction.scenarios.find(s => s.type === 'BEARISH' || s.name.includes('Điều Chỉnh'));
 
       if (bullScenario && aiBullishRef.current) {
         aiBullishRef.current.setData([

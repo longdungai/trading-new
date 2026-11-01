@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { AIPrediction, AIPredictionScenario } from '../../types';
+import { AIPrediction, AIPredictionScenario, KronosConfig, KronosModelKey } from '../../types';
+import { KRONOS_MODELS } from '../../services/ai/kronosClient';
 import {
   Sparkles,
   TrendingUp,
@@ -7,67 +8,229 @@ import {
   Target,
   BrainCircuit,
   CheckCircle2,
-  AlertCircle,
   X,
-  ArrowUpRight,
-  ArrowDownRight,
-  ShieldAlert,
   Clock,
   Scale,
   Zap,
   Activity,
+  Settings2,
+  Cpu,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { formatPercent, formatPrice } from '../../utils/formatters';
 
 interface AIPredictionCardProps {
   prediction: AIPrediction | null;
   quoteAsset?: string;
+  kronosConfig?: KronosConfig;
+  onUpdateKronosConfig?: (next: KronosConfig) => void;
+  showGhostCandles?: boolean;
+  onToggleGhostCandles?: () => void;
 }
 
-export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, quoteAsset = 'USD' }) => {
+export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
+  prediction,
+  quoteAsset = 'USD',
+  kronosConfig,
+  onUpdateKronosConfig,
+  showGhostCandles = true,
+  onToggleGhostCandles,
+}) => {
   const [selectedScenario, setSelectedScenario] = useState<AIPredictionScenario | null>(null);
+  const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
 
   if (!prediction) {
     return (
       <div className="p-3 sm:p-4 rounded-xl bg-[#121824] border border-[#1e293b] text-gray-400 text-xs">
-        Đang khởi chạy mạng thần kinh AI dự báo đường giá...
+        Đang khởi chạy mạng thần kinh Kronos Foundation Model dự báo đường giá...
       </div>
     );
   }
 
   const isVND = quoteAsset === 'VND';
   const prefix = isVND ? '' : '$';
-  const suffix = isVND ? 'k VNĐ' : '';
   const priceSuffix = isVND ? 'k' : '';
 
   const isBull = prediction.trend === 'STRONG_BULLISH' || prediction.trend === 'BULLISH';
   const isBear = prediction.trend === 'STRONG_BEARISH' || prediction.trend === 'BEARISH';
+  const meta = prediction.kronosMeta;
+
+  const handleModelChange = (modelKey: KronosModelKey) => {
+    if (!kronosConfig || !onUpdateKronosConfig) return;
+    onUpdateKronosConfig({ ...kronosConfig, modelKey });
+  };
+
+  const handleHorizonChange = (predLen: number) => {
+    if (!kronosConfig || !onUpdateKronosConfig) return;
+    onUpdateKronosConfig({ ...kronosConfig, predLen });
+  };
+
+  const handleTempChange = (temperature: number) => {
+    if (!kronosConfig || !onUpdateKronosConfig) return;
+    onUpdateKronosConfig({ ...kronosConfig, temperature });
+  };
 
   return (
     <>
-      <div className="p-3 sm:p-4 rounded-xl bg-[#101622] border border-[#1f2a3e] flex flex-col gap-3 sm:gap-4 shadow-xl select-none">
-        {/* Header with AI Badge & Confidence Gauge */}
+      <div className="p-3 sm:p-4 rounded-xl bg-[#101622] border border-[#1f2a3e] flex flex-col gap-3 sm:gap-3.5 shadow-xl select-none">
+        {/* Header with Kronos Badge & Confidence Gauge */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
-              <Sparkles className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+              <Cpu className="w-4 h-4" />
             </div>
             <div>
               <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                Dự Báo Đường Giá AI
+                <span>Dự Báo AI Kronos</span>
+                <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[9px] font-mono">
+                  {meta?.modelName || 'Kronos-small'} ({meta?.params || '24.7M'})
+                </span>
               </div>
-              <div className="text-[10px] sm:text-[11px] text-gray-400">Monte Carlo & ML Corridor</div>
+              <div className="text-[10px] sm:text-[11px] text-gray-400 flex items-center gap-1.5">
+                <span>BSQuantizer {meta?.s1Bits || 10}+{meta?.s2Bits || 10}bit</span>
+                <span>•</span>
+                <span className="text-cyan-400 font-mono">H={meta?.tokenEntropy ?? 0.88}</span>
+              </div>
             </div>
           </div>
 
-          {/* Confidence Badge */}
-          <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-[#182234] border border-[#2b3a54]">
-            <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-[11px] sm:text-xs font-mono font-bold text-purple-300">
-              {prediction.confidenceScore}% Tin Cậy
-            </span>
+          <div className="flex items-center gap-1.5">
+            {onUpdateKronosConfig && (
+              <button
+                onClick={() => setIsConfigOpen(prev => !prev)}
+                className={`p-1.5 rounded-lg border transition ${
+                  isConfigOpen
+                    ? 'bg-cyan-600/30 text-cyan-300 border-cyan-400'
+                    : 'bg-[#182234] text-gray-400 border-[#2b3a54] hover:text-white'
+                }`}
+                title="Tùy chỉnh tham số mô hình Kronos"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Confidence Badge */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#182234] border border-[#2b3a54]">
+              <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-[11px] font-mono font-bold text-purple-300">
+                {prediction.confidenceScore}%
+              </span>
+            </div>
           </div>
         </div>
+
+        {/* Quick Action Bar: Ghost Candles Toggle & Model Selector */}
+        <div className="flex items-center justify-between gap-2 bg-[#0d121c] px-2.5 py-1.5 rounded-lg border border-[#1b2536]">
+          <div className="flex items-center gap-1.5 text-[10px] text-gray-300 font-mono">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                meta?.engineMode === 'KRONOS_CLOUD_PYTORCH' ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400'
+              }`}
+            />
+            <span>
+              {meta?.engineMode === 'KRONOS_CLOUD_PYTORCH'
+                ? 'PyTorch GPU Server'
+                : 'Kronos Transformer Engine'}
+            </span>
+            <span className="text-gray-500">({meta?.latencyMs || 2}ms)</span>
+          </div>
+
+          {onToggleGhostCandles && (
+            <button
+              onClick={onToggleGhostCandles}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition ${
+                showGhostCandles
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                  : 'bg-[#161f2e] text-gray-400 border-gray-700 hover:text-white'
+              }`}
+            >
+              {showGhostCandles ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              <span>{showGhostCandles ? 'Đang Vẽ Nến Tương Lai' : 'Hiện Nến Tương Lai'}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Expandable Kronos Model Hyperparameters Panel */}
+        {isConfigOpen && kronosConfig && onUpdateKronosConfig && (
+          <div className="p-2.5 rounded-xl bg-[#0c111a] border border-cyan-500/30 space-y-2.5 text-[11px] animate-in fade-in">
+            <div className="flex items-center justify-between text-[10px] font-bold uppercase text-cyan-300">
+              <span>Cấu Hình Kronos Foundation Model</span>
+              <span className="font-mono text-gray-400">Context: {meta?.contextLength || 512} bars</span>
+            </div>
+
+            {/* Model Variant Selector */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['kronos-mini', 'kronos-small', 'kronos-base'] as KronosModelKey[]).map(key => {
+                const m = KRONOS_MODELS[key];
+                const active = kronosConfig.modelKey === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleModelChange(key)}
+                    className={`p-1.5 rounded-lg border text-left transition ${
+                      active
+                        ? 'bg-cyan-600/25 border-cyan-400 text-white'
+                        : 'bg-[#141c2b] border-[#223046] text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-mono font-bold text-[10px] text-cyan-300">{m.name}</div>
+                    <div className="text-[9px] text-gray-400">{m.params} • {m.contextLength}ctx</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Horizon & Temperature Controls */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase font-semibold mb-1">
+                  Số Nến Dự Báo (pred_len)
+                </div>
+                <div className="flex gap-1 font-mono">
+                  {[12, 24, 36, 48].map(len => (
+                    <button
+                      key={len}
+                      onClick={() => handleHorizonChange(len)}
+                      className={`flex-1 py-1 rounded text-[10px] font-bold border ${
+                        kronosConfig.predLen === len
+                          ? 'bg-blue-600 text-white border-blue-400'
+                          : 'bg-[#141c2b] text-gray-400 border-[#223046]'
+                      }`}
+                    >
+                      {len}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[9px] text-gray-400 uppercase font-semibold mb-1">
+                  Nhiệt Độ Lấy Mẫu (T={kronosConfig.temperature})
+                </div>
+                <div className="flex gap-1 font-mono">
+                  {[
+                    { label: '0.6', val: 0.6 },
+                    { label: '0.85', val: 0.85 },
+                    { label: '1.1', val: 1.1 },
+                  ].map(t => (
+                    <button
+                      key={t.label}
+                      onClick={() => handleTempChange(t.val)}
+                      className={`flex-1 py-1 rounded text-[10px] font-bold border ${
+                        kronosConfig.temperature === t.val
+                          ? 'bg-purple-600 text-white border-purple-400'
+                          : 'bg-[#141c2b] text-gray-400 border-[#223046]'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Trend Status & Expected Move */}
         <div className={`p-2.5 sm:p-3 rounded-xl border flex items-center justify-between ${
@@ -93,13 +256,13 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, 
                  prediction.trend === 'BEARISH' ? '📉 ĐIỀU CHỈNH GIẢM' : '⚖️ ĐI NGANG (SIDEWAYS)'}
               </div>
               <div className="text-[10px] sm:text-[11px] opacity-80">
-                Biến động: <span className="font-mono font-bold">{formatPercent(prediction.expectedPriceChangePercent)}</span> ({prediction.forecastHorizonBars} nến tới)
+                Kỳ vọng P50: <span className="font-mono font-bold">{formatPercent(prediction.expectedPriceChangePercent)}</span> ({prediction.forecastHorizonBars} nến OHLCV tới)
               </div>
             </div>
           </div>
 
           <div className="text-right font-mono shrink-0 pl-1">
-            <div className="text-[9px] uppercase opacity-75">Biến Động</div>
+            <div className="text-[9px] uppercase opacity-75">Biên P95</div>
             <div className="text-xs font-bold text-gray-200">±{prediction.volatilityForecast}%</div>
           </div>
         </div>
@@ -107,8 +270,8 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, 
         {/* 3 Actionable Scenarios (Clickable with Hint) */}
         <div className="space-y-1.5 sm:space-y-2">
           <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-            <span>3 Kịch Bản Mô Phỏng:</span>
-            <span className="text-[9px] text-blue-400 font-normal lowercase">(Chạm để xem chi tiết)</span>
+            <span>3 Phân Vị Xác Suất Kronos (P85 / P50 / P15):</span>
+            <span className="text-[9px] text-cyan-400 font-normal lowercase">(Chạm xem chi tiết)</span>
           </div>
 
           <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
@@ -126,8 +289,8 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, 
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] sm:text-[10px] font-bold truncate max-w-[50px] sm:max-w-[70px]" style={{ color: sc.color }}>
-                        {idx === 0 ? 'Tăng Giá' : idx === 1 ? 'Cơ Sở' : 'Điều Chỉnh'}
+                      <span className="text-[9px] sm:text-[10px] font-bold truncate max-w-[55px] sm:max-w-[75px]" style={{ color: sc.color }}>
+                        {idx === 0 ? 'P85 Tăng' : idx === 1 ? 'P50 Cơ Sở' : 'P15 Giảm'}
                       </span>
                       <span className="text-[9px] sm:text-[10px] font-mono font-bold px-1 rounded bg-[#1c2738] text-gray-200">
                         {sc.probability}%
@@ -149,13 +312,13 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, 
         {/* Key Market Drivers & AI Reasoning */}
         <div className="p-2.5 sm:p-3 rounded-lg bg-[#0d131d] border border-[#1b2536] space-y-1.5">
           <div className="text-[10px] font-semibold uppercase text-gray-400 flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-blue-400" />
-            Cơ Sở Dự Báo Thuật Toán AI:
+            <CheckCircle2 className="w-3 h-3 text-cyan-400" />
+            Luận Giải Kronos K-Line Foundation Model:
           </div>
           <ul className="space-y-1">
             {prediction.aiReasoning.map((r, i) => (
               <li key={i} className="text-[10px] sm:text-[11px] text-gray-300 flex items-start gap-1.5">
-                <span className="text-blue-400 font-bold shrink-0">•</span>
+                <span className="text-cyan-400 font-bold shrink-0">•</span>
                 <span>{r}</span>
               </li>
             ))}
@@ -186,7 +349,7 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, 
                       Xác Suất: {selectedScenario.probability}%
                     </span>
                   </h3>
-                  <p className="text-[10px] sm:text-[11px] text-gray-400">Chi tiết lộ trình, điều kiện kích hoạt & kế hoạch hành động</p>
+                  <p className="text-[10px] sm:text-[11px] text-gray-400">Chi tiết lộ trình Kronos, điều kiện kích hoạt & kế hoạch hành động</p>
                 </div>
               </div>
 
@@ -221,10 +384,10 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, 
                 </div>
 
                 <div className="p-2 rounded-lg bg-[#141b27] border border-[#222e42]">
-                  <div className="text-[9px] text-gray-400 uppercase font-semibold">Khung Thời Gian</div>
+                  <div className="text-[9px] text-gray-400 uppercase font-semibold">Khung Dự Báo</div>
                   <div className="text-xs font-bold text-cyan-300 mt-0.5 flex items-center gap-1">
                     <Clock className="w-3 h-3 text-cyan-400" />
-                    <span>24 nến</span>
+                    <span>{prediction.forecastHorizonBars} nến</span>
                   </div>
                   <div className="text-[9px] text-gray-400">{selectedScenario.timeHorizon}</div>
                 </div>
@@ -244,7 +407,7 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({ prediction, 
                 <div className="flex items-center justify-between text-[10px] text-gray-400 font-semibold uppercase">
                   <span className="flex items-center gap-1">
                     <Activity className="w-3 h-3 text-blue-400" />
-                    Đường Đi Mô Phỏng Dự Kiến (Trajectory Path):
+                    Quỹ Đạo Nến Tương Lai Kronos (Autoregressive Path):
                   </span>
                   <span className="font-mono" style={{ color: selectedScenario.color }}>
                     Xác suất: {selectedScenario.probability}%

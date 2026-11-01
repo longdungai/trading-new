@@ -104,6 +104,18 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
 
       {/* AI Models & Projections */}
       <button
+        onClick={() => onToggle('kronosGhostCandles')}
+        className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-bold border shrink-0 transition ${
+          settings.kronosGhostCandles
+            ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400/70 shadow-sm shadow-cyan-500/20'
+            : 'bg-[#141a24] text-gray-400 border-[#232d3f] hover:text-white'
+        }`}
+      >
+        <BrainCircuit className="w-3 h-3 text-cyan-400" />
+        <span>Nến AI Kronos</span>
+      </button>
+
+      <button
         onClick={() => onToggle('aiForecast')}
         className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md text-[11px] font-medium border shrink-0 transition ${
           settings.aiForecast
@@ -112,7 +124,7 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
         }`}
       >
         <Sparkles className="w-3 h-3 text-blue-400" />
-        <span>Dự Báo AI</span>
+        <span>Đường Kịch Bản AI</span>
       </button>
 
       <button
@@ -124,7 +136,7 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({ settings, on
         }`}
       >
         <BrainCircuit className="w-3 h-3 text-purple-400" />
-        <span>Monte Carlo</span>
+        <span>Biên Tin Cậy 95%</span>
       </button>
 
       <div className="h-4 w-px bg-gray-800 shrink-0 mx-0.5" />

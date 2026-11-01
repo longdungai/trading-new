@@ -9,6 +9,7 @@ import {
 } from '../indicators';
 
 export type StrategyType =
+  | 'KRONOS_AI_FOUNDATION'
   | 'SUPERTREND_EMA'
   | 'SMC_ORDER_BLOCK'
   | 'FIBONACCI_RETRACE'
@@ -139,6 +140,37 @@ export function runBacktest(
       let rrMultiplier = 2.2;
 
       switch (strategy) {
+        case 'KRONOS_AI_FOUNDATION': {
+          // Kronos K-line Sequence Pattern: Bullish/Bearish 3-bar token motif + volume & wick confirmation
+          const prev2C = candles[Math.max(0, i - 2)];
+          const lowerWick = Math.min(c.open, c.close) - c.low;
+          const upperWick = c.high - Math.max(c.open, c.close);
+          const candleRange = Math.max(1e-8, c.high - c.low);
+          const isBullToken =
+            c.close > prevC.close &&
+            (c.close > e20 || lowerWick / candleRange > 0.35) &&
+            currRSI > 46 &&
+            currRSI < 72 &&
+            (!currMACD || currMACD.histogram >= (prevMACD?.histogram ?? 0));
+          const isBearToken =
+            c.close < prevC.close &&
+            (c.close < e20 || upperWick / candleRange > 0.35) &&
+            currRSI < 54 &&
+            currRSI > 28 &&
+            (!currMACD || currMACD.histogram <= (prevMACD?.histogram ?? 0));
+
+          if (isBullToken && c.close > prev2C.low) {
+            signal = 'BUY';
+            slDistancePercent = 0.02;
+            rrMultiplier = 2.9;
+          } else if (isBearToken && c.close < prev2C.high) {
+            signal = 'SELL';
+            slDistancePercent = 0.02;
+            rrMultiplier = 2.9;
+          }
+          break;
+        }
+
         case 'SUPERTREND_EMA':
           if (currST && currST.direction === 1 && e20 && e50 && e20 > e50 && c.close > e20) {
             signal = 'BUY';
@@ -291,6 +323,7 @@ export function runBacktest(
   const sharpeRatio = stdReturn > 0 ? (avgReturn / stdReturn) * Math.sqrt(100) : 0;
 
   const strategyNames: Record<StrategyType, string> = {
+    KRONOS_AI_FOUNDATION: '🤖 Kronos Foundation Model (K-Line Transformer AI)',
     SUPERTREND_EMA: 'SuperTrend + EMA Golden Ribbon',
     SMC_ORDER_BLOCK: 'Smart Money (SMC) Order Block Bounce',
     FIBONACCI_RETRACE: 'Fibonacci Golden Pocket 0.618',

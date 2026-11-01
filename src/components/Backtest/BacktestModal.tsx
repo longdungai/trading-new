@@ -270,6 +270,7 @@ export const BacktestModal: React.FC<BacktestModalProps> = ({ candles, symbolNam
               }}
               className="w-full bg-[#182232] border border-[#27364e] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
             >
+              <option value="KRONOS_AI_FOUNDATION">🤖 0. Kronos Foundation Model (K-Line Transformer AAAI 2026)</option>
               <option value="SPOT_ACCUMULATION">🎯 1. Kịch Bản Giao Dịch Spot & Tích Sản (DCA Không Margin)</option>
               <option value="DAILY_DAYTRADING">⚡ 2. Kịch Bản Trading Daily (Lướt Sóng Trong Ngày)</option>
               <option value="SUPERTREND_EMA">📈 3. SuperTrend + EMA Golden Ribbon</option>

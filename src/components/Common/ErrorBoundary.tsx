@@ -1,4 +1,4 @@
-﻿import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
 interface Props {
@@ -63,9 +63,9 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-white font-mono">Đã Xảy Ra Sự Cố Hiển Thị</h2>
+              <h2 className="text-lg font-bold text-white font-mono">�� X?y Ra S? C? Hi?n Th?</h2>
               <p className="text-xs text-gray-400 mt-1">
-                Có thể do dữ liệu bộ nhớ tạm cũ hoặc sự cố kết nối. Bạn có thể thử tải lại hoặc làm mới toàn bộ bộ nhớ đệm.
+                C� th? do d? li?u b? nh? t?m cu ho?c s? c? k?t n?i. B?n c� th? th? t?i l?i ho?c l�m m?i to�n b? b? nh? d?m.
               </p>
             </div>
 
@@ -81,7 +81,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="flex-1 py-2.5 px-3 rounded-xl bg-[#1e293b] hover:bg-[#334155] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition"
               >
                 <RefreshCw className="w-4 h-4" />
-                <span>Tải Lại Trang</span>
+                <span>T?i L?i Trang</span>
               </button>
 
               <button
@@ -89,7 +89,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/20 transition"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>Xóa Cache & Khôi Phục</span>
+                <span>X�a Cache & Kh�i Ph?c</span>
               </button>
             </div>
           </div>

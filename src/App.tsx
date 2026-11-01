@@ -47,6 +47,7 @@ import {
   saveKronosConfig,
 } from './services/ai/kronosClient';
 import { generateTradeSetup, generateStrategyHub } from './services/ai/signalGenerator';
+import { evaluateChartRecommendation } from './services/ai/chartVerdictEngine';
 import { analyzeAccumulationZone } from './services/ai/accumulationScanner';
 import {
   evaluateSymbolMacroImpact,
@@ -76,10 +77,19 @@ import {
   isVnStockOrIndexSymbol,
 } from './services/vnMarket/vnStockMicrostructure';
 import {
+  fetchVnStockInsights,
+  getCachedVnStockInsights,
+  VN_INSIGHTS_UPDATED_EVENT,
+} from './services/vnMarket/vnStockInsightsClient';
+import {
   isCryptoSymbol,
   isUsOrGlobalEquitySymbol,
 } from './services/globalMarket/globalExecutionEngines';
-import { getCachedGlobalInsights } from './services/globalMarket/globalMarketInsightsClient';
+import {
+  fetchGlobalMarketInsights,
+  getCachedGlobalInsights,
+  GLOBAL_INSIGHTS_UPDATED_EVENT,
+} from './services/globalMarket/globalMarketInsightsClient';
 import { Watchlist } from './components/Market/Watchlist';
 import { OrderBook } from './components/Market/OrderBook';
 import { SentimentMeter } from './components/Market/SentimentMeter';
@@ -195,6 +205,7 @@ export const App: React.FC = () => {
     kronosWalkForward: true,
     vnPriceLimits: true,
     globalOptionsAndLiqLines: true,
+    recommendedPlanLines: true,
   });
 
   // Kronos Foundation Model Configuration & Optional Cloud Override
@@ -819,6 +830,73 @@ export const App: React.FC = () => {
     return evaluateSymbolMacroImpact(currentSymbol, macroSnapshot);
   }, [currentSymbol, macroSnapshot]);
 
+  const [liveCryptoFng, setLiveCryptoFng] = useState<number | null>(null);
+  const [insightsRevision, setInsightsRevision] = useState<number>(0);
+
+  // Proactively hydrate VN or Global/Crypto institutional insights for the active chart symbol
+  // (works even in Zen Mode or Mobile Chart-only view) and re-evaluate verdict on cache updates
+  useEffect(() => {
+    const bump = () => setInsightsRevision(r => r + 1);
+    window.addEventListener(VN_INSIGHTS_UPDATED_EVENT, bump);
+    window.addEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, bump);
+    return () => {
+      window.removeEventListener(VN_INSIGHTS_UPDATED_EVENT, bump);
+      window.removeEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, bump);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isReplayMode) return;
+    const symUpper = currentSymbol.symbol.toUpperCase();
+    if (isVnStockOrIndexSymbol(currentSymbol)) {
+      if (
+        !['VNINDEX', 'VN30', 'HNXINDEX', 'UPCOMINDEX'].includes(symUpper) &&
+        !isVnDerivativeSymbol(symUpper)
+      ) {
+        void fetchVnStockInsights(symUpper, false);
+      }
+    } else if (isCryptoSymbol(currentSymbol) || isUsOrGlobalEquitySymbol(currentSymbol)) {
+      void fetchGlobalMarketInsights(symUpper, false);
+    }
+  }, [currentSymbol, isReplayMode]);
+
+  useEffect(() => {
+    let active = true;
+    const syncFng = (force: boolean = false) => {
+      void fetchLiveCryptoFearAndGreed(force).then(val => {
+        if (active && val !== null) setLiveCryptoFng(val);
+      });
+    };
+    syncFng(false);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncFng(false);
+      }
+    }, 180_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const liveBtcFundingPct8h = useMemo(() => {
+    const item = macroSnapshot?.indicators.find(i => i.id === 'BTC_FUNDING');
+    return item && Number.isFinite(item.value) ? item.value : null;
+  }, [macroSnapshot]);
+
+  const marketSentiment: MarketSentiment = useMemo(() => {
+    const perSymbolFunding =
+      getCachedGlobalInsights(currentSymbol.symbol)?.perpCarry?.fundingRate8hPct ??
+      liveBtcFundingPct8h;
+    return getMarketSentiment(
+      currentSymbol,
+      candles,
+      symbols,
+      liveCryptoFng,
+      perSymbolFunding
+    );
+  }, [currentSymbol, candles, symbols, liveCryptoFng, liveBtcFundingPct8h, insightsRevision]);
+
   const aiPrediction: AIPrediction | null = useMemo(() => {
     return generateAIPrediction(
       currentSymbol.symbol,
@@ -842,15 +920,45 @@ export const App: React.FC = () => {
     macroSnapshot,
   ]);
 
+  const chartVerdict = useMemo(() => {
+    const vnInsights = isReplayMode ? null : getCachedVnStockInsights(currentSymbol.symbol);
+    const globalInsights = isReplayMode ? null : getCachedGlobalInsights(currentSymbol.symbol);
+    return evaluateChartRecommendation({
+      symbolObj: currentSymbol,
+      candles: effectiveCandles,
+      timeframe,
+      mtfCandlesMap: effectiveMtfMap,
+      aiPrediction,
+      macroSnapshot,
+      marketSentiment,
+      vnInsights,
+      globalInsights,
+      allSymbols: symbols,
+      isReplayMode,
+    });
+  }, [
+    currentSymbol,
+    effectiveCandles,
+    timeframe,
+    effectiveMtfMap,
+    aiPrediction,
+    macroSnapshot,
+    marketSentiment,
+    symbols,
+    isReplayMode,
+    insightsRevision,
+  ]);
+
   const strategyHub: StrategyAnalysisHub = useMemo(() => {
     return generateStrategyHub(
       currentSymbol.symbol,
       effectiveCandles,
       timeframe,
       macroSnapshot,
-      currentSymbol
+      currentSymbol,
+      chartVerdict
     );
-  }, [currentSymbol, effectiveCandles, timeframe, macroSnapshot]);
+  }, [currentSymbol, effectiveCandles, timeframe, macroSnapshot, chartVerdict]);
 
   const currentAccumulation = useMemo(() => {
     return analyzeAccumulationZone(currentSymbol, effectiveCandles);
@@ -862,9 +970,10 @@ export const App: React.FC = () => {
       effectiveCandles,
       timeframe,
       macroSnapshot,
-      currentSymbol
+      currentSymbol,
+      chartVerdict
     );
-  }, [currentSymbol, effectiveCandles, timeframe, macroSnapshot]);
+  }, [currentSymbol, effectiveCandles, timeframe, macroSnapshot, chartVerdict]);
 
   // Auto-record & reconcile Kronos P50 checkpoints strictly against REAL closed candles & live quotes
   useEffect(() => {
@@ -915,27 +1024,6 @@ export const App: React.FC = () => {
     setAuditEntries(next);
   }, [aiPrediction, candles, timeframe]);
 
-  const [liveCryptoFng, setLiveCryptoFng] = useState<number | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const syncFng = (force: boolean = false) => {
-      void fetchLiveCryptoFearAndGreed(force).then(val => {
-        if (active && val !== null) setLiveCryptoFng(val);
-      });
-    };
-    syncFng(false);
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        syncFng(false);
-      }
-    }, 180_000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
-
   // Unified Tab Wakeup & Network Reconnect Real-Time Resynchronization
   useEffect(() => {
     const resyncAllRealTimeStreams = () => {
@@ -947,6 +1035,20 @@ export const App: React.FC = () => {
       void fetchLiveCryptoFearAndGreed(true).then(val => {
         if (val !== null) setLiveCryptoFng(val);
       });
+      const symUpper = currentSymbolRef.current.symbol.toUpperCase();
+      if (isVnStockOrIndexSymbol(currentSymbolRef.current)) {
+        if (
+          !['VNINDEX', 'VN30', 'HNXINDEX', 'UPCOMINDEX'].includes(symUpper) &&
+          !isVnDerivativeSymbol(symUpper)
+        ) {
+          void fetchVnStockInsights(symUpper, true);
+        }
+      } else if (
+        isCryptoSymbol(currentSymbolRef.current) ||
+        isUsOrGlobalEquitySymbol(currentSymbolRef.current)
+      ) {
+        void fetchGlobalMarketInsights(symUpper, true);
+      }
     };
 
     document.addEventListener('visibilitychange', resyncAllRealTimeStreams);
@@ -957,24 +1059,6 @@ export const App: React.FC = () => {
       window.removeEventListener('online', resyncAllRealTimeStreams);
     };
   }, [syncLivePrices, refreshMacroSnapshot, loadData, syncMtfCandles]);
-
-  const liveBtcFundingPct8h = useMemo(() => {
-    const item = macroSnapshot?.indicators.find(i => i.id === 'BTC_FUNDING');
-    return item && Number.isFinite(item.value) ? item.value : null;
-  }, [macroSnapshot]);
-
-  const marketSentiment: MarketSentiment = useMemo(() => {
-    const perSymbolFunding =
-      getCachedGlobalInsights(currentSymbol.symbol)?.perpCarry?.fundingRate8hPct ??
-      liveBtcFundingPct8h;
-    return getMarketSentiment(
-      currentSymbol,
-      candles,
-      symbols,
-      liveCryptoFng,
-      perSymbolFunding
-    );
-  }, [currentSymbol, candles, symbols, liveCryptoFng, liveBtcFundingPct8h]);
 
   const isVND = Boolean(
     currentSymbol?.quoteAsset === 'VND' ||
@@ -1225,6 +1309,7 @@ export const App: React.FC = () => {
                 fibLevels={fibLevels}
                 orderBlocks={orderBlocks}
                 aiPrediction={aiPrediction}
+                chartVerdict={chartVerdict}
                 symbolName={currentSymbol.symbol}
                 symbolFullName={currentSymbol.name}
                 currentSymbol={currentSymbol}
@@ -1232,6 +1317,7 @@ export const App: React.FC = () => {
                   compareSymbol && compareSymbol !== currentSymbol.symbol ? compareSymbol : null
                 }
                 compareCandles={effectiveCompareCandles}
+                onTogglePlanLines={() => handleToggleIndicator('recommendedPlanLines')}
                 onQuickCreatePriceAlert={(price) => {
                   setPresetAlertPrice(price);
                   setIsAlertModalOpen(true);

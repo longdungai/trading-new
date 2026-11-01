@@ -122,7 +122,19 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
 
         <div className="h-4 w-px bg-slate-800 shrink-0 mx-0.5" />
 
-        {/* Cluster 1: Flagship Kronos AI Projections & Institutional Volume Profile */}
+        {/* Cluster 1: Flagship Kronos AI Projections, Recommended Plan & Institutional Volume Profile */}
+        <button
+          onClick={() => onToggle('recommendedPlanLines')}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+            settings.recommendedPlanLines !== false
+              ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/60 shadow-sm shadow-emerald-500/15'
+              : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+          }`}
+          title="Hiển thị đường vùng Entry, Cắt lỗ (SL) & Chốt lời (TP1/TP2) của Hội đồng Khuyến nghị 6 tầng trực tiếp trên biểu đồ"
+        >
+          <span>🎯 Kế Hoạch Lệnh</span>
+        </button>
+
         <button
           onClick={() => onToggle('kronosGhostCandles')}
           className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${

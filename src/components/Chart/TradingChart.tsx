@@ -21,7 +21,10 @@ import {
   computeVnPriceLimits,
   isVnStockOrIndexSymbol,
 } from '../../services/vnMarket/vnStockMicrostructure';
-import { getCachedVnFundamentals } from '../../services/vnMarket/vnStockInsightsClient';
+import {
+  getCachedVnFundamentals,
+  VN_INSIGHTS_UPDATED_EVENT,
+} from '../../services/vnMarket/vnStockInsightsClient';
 import {
   computeCryptoLiquidationAndCarry,
   isCryptoSymbol,
@@ -40,7 +43,9 @@ import {
   calculateRollingVWAP,
   calculateVisibleVolumeProfile,
 } from '../../services/analysis/volumeProfileMtf';
+import { ChartRecommendationVerdict } from '../../services/ai/chartVerdictEngine';
 import { ChartDrawingOverlay } from './ChartDrawingOverlay';
+import { ChartVerdictOverlay } from './ChartVerdictOverlay';
 
 interface TradingChartProps {
   candles: Candle[];
@@ -50,11 +55,13 @@ interface TradingChartProps {
   fibLevels: FibonacciLevel[];
   orderBlocks?: OrderBlock[];
   aiPrediction: AIPrediction | null;
+  chartVerdict?: ChartRecommendationVerdict | null;
   symbolName?: string;
   symbolFullName?: string;
   currentSymbol?: MarketSymbol;
   compareSymbolName?: string | null;
   compareCandles?: Candle[];
+  onTogglePlanLines?: () => void;
   onQuickCreatePriceAlert?: (price: number) => void;
 }
 
@@ -65,11 +72,13 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   srLevels,
   fibLevels,
   aiPrediction,
+  chartVerdict = null,
   symbolName = '',
   symbolFullName = '',
   currentSymbol,
   compareSymbolName = null,
   compareCandles = [],
+  onTogglePlanLines,
   onQuickCreatePriceAlert,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -107,14 +116,18 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const [globalInsightsTick, setGlobalInsightsTick] = useState(0);
 
   useEffect(() => {
-    const onGlobalUpdated = (e: Event) => {
+    const onInsightsUpdated = (e: Event) => {
       const detailSym = (e as CustomEvent)?.detail?.symbol;
       if (!detailSym || detailSym === symbolName.toUpperCase()) {
         setGlobalInsightsTick(t => t + 1);
       }
     };
-    window.addEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, onGlobalUpdated);
-    return () => window.removeEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, onGlobalUpdated);
+    window.addEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, onInsightsUpdated);
+    window.addEventListener(VN_INSIGHTS_UPDATED_EVENT, onInsightsUpdated);
+    return () => {
+      window.removeEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, onInsightsUpdated);
+      window.removeEventListener(VN_INSIGHTS_UPDATED_EVENT, onInsightsUpdated);
+    };
   }, [symbolName]);
 
   // Track hover state and previous symbol/timeframe to preserve pan/zoom on real-time ticks
@@ -714,6 +727,70 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     }
 
+    // 7C. Unified 6-Pillar Recommended Trade Plan Lines (ENTRY • SL • TP1 • TP2)
+    if (
+      settings.recommendedPlanLines !== false &&
+      chartVerdict &&
+      chartVerdict.hasActionablePlan &&
+      chartVerdict.entryMidPrice > 0
+    ) {
+      const isReduceOnly = chartVerdict.verdictCode === 'REDUCE_TAKE_PROFIT';
+      const entryRef =
+        chartVerdict.verdictCode === 'ACCUMULATE_LIMIT'
+          ? chartVerdict.entryZone[1]
+          : chartVerdict.entryMidPrice;
+      const slPct = ((chartVerdict.stopLoss - entryRef) / entryRef) * 100;
+      const tp1Pct = ((chartVerdict.takeProfit1 - entryRef) / entryRef) * 100;
+      const tp2Pct = ((chartVerdict.takeProfit2 - entryRef) / entryRef) * 100;
+
+      priceLinesRef.current.push(
+        candleSeries.createPriceLine({
+          price: entryRef,
+          color: isReduceOnly ? '#fbbf24' : '#38bdf8',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: isReduceOnly
+            ? '⚠️ VÙNG HẠ TỶ TRỌNG'
+            : chartVerdict.verdictCode === 'ACCUMULATE_LIMIT'
+            ? '🎯 KÊ LIMIT GOM'
+            : chartVerdict.isShortPlan
+            ? '🎯 ENTRY SHORT'
+            : '🎯 ENTRY MUA',
+        }),
+        candleSeries.createPriceLine({
+          price: chartVerdict.stopLoss,
+          color: '#fb7185',
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          axisLabelVisible: true,
+          title: isReduceOnly
+            ? `🛡️ CẢN VÔ HIỆU (${slPct >= 0 ? '+' : ''}${slPct.toFixed(1)}%)`
+            : `🛑 CẮT LỖ SL (${slPct >= 0 ? '+' : ''}${slPct.toFixed(1)}%)`,
+        }),
+        candleSeries.createPriceLine({
+          price: chartVerdict.takeProfit1,
+          color: '#34d399',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: isReduceOnly
+            ? `📥 NỀN GOM LẠI 1 (${tp1Pct.toFixed(1)}%)`
+            : `✅ CHỐT LỜI TP1 (${tp1Pct >= 0 ? '+' : ''}${tp1Pct.toFixed(1)}%)`,
+        }),
+        candleSeries.createPriceLine({
+          price: chartVerdict.takeProfit2,
+          color: '#10b981',
+          lineWidth: 2,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: isReduceOnly
+            ? `📥 NỀN GOM SÂU (${tp2Pct.toFixed(1)}%)`
+            : `🏆 MỤC TIÊU TP2 (${tp2Pct >= 0 ? '+' : ''}${tp2Pct.toFixed(1)}% • 1:${chartVerdict.riskRewardRatio})`,
+        })
+      );
+    }
+
     // 8. Update Kronos Ghost Candlesticks, Walk-Forward & AI Forecast Paths
     if (
       settings.kronosGhostCandles &&
@@ -824,6 +901,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     srLevels,
     fibLevels,
     aiPrediction,
+    chartVerdict,
     vpvrProfile,
     compareSymbolName,
     compareCandles,
@@ -849,45 +927,58 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         </div>
       )}
 
-      {/* Top-Left Live OHLCV + KronosChart HUD Legend */}
-      <div className="absolute top-2 left-2.5 z-10 pointer-events-none flex flex-col gap-1 max-w-[86%]">
-        <div className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded-md bg-[#080d18]/80 backdrop-blur-sm border border-slate-800/80 text-[10px] font-mono tabular-nums text-slate-300 shadow">
+      {/* Top-Left Unified HUD Stack (OHLCV + 6-Pillar Action Verdict + Walk-Forward) */}
+      <div className="absolute top-2 left-2.5 right-[68px] z-[18] pointer-events-none flex flex-col items-start gap-1.5">
+        <div className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded-md bg-[#080d18]/80 backdrop-blur-sm border border-slate-800/80 text-[10px] font-mono tabular-nums text-slate-300 shadow max-w-full">
           {symbolName && (
-            <span className="font-bold text-white">
+            <span className="font-bold text-white shrink-0">
               {symbolName} <span className="text-cyan-400">({timeframe})</span>
             </span>
           )}
           <span
             ref={ohlcHudRef}
-            className="text-slate-300 data-[trend=up]:text-emerald-400 data-[trend=down]:text-rose-400 data-[trend=ghost]:text-cyan-300 font-medium"
+            className="text-slate-300 data-[trend=up]:text-emerald-400 data-[trend=down]:text-rose-400 data-[trend=ghost]:text-cyan-300 font-medium truncate"
           />
           {compareSymbolName && (
-            <span className="px-1.5 py-0.2 rounded bg-pink-500/20 border border-pink-400/40 text-pink-300 font-bold">
+            <span className="px-1.5 py-0.2 rounded bg-pink-500/20 border border-pink-400/40 text-pink-300 font-bold shrink-0">
               vs {compareSymbolName} (Trục Trái)
             </span>
           )}
         </div>
 
-        {(settings.kronosWalkForward || settings.kronosGhostCandles) && aiPrediction && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {settings.kronosWalkForward && wf && (
-              <div className="px-2 py-0.5 rounded-md bg-[#0b111d]/85 backdrop-blur-sm border border-amber-500/35 text-[10px] font-mono flex items-center gap-1.5 shadow">
-                <span className="w-2 h-0.5 bg-amber-400 inline-block" />
-                <span className="text-amber-300 font-bold">Kiểm định {wf.holdoutBars} nến:</span>
-                <span className="text-emerald-300 font-bold">{wf.directionalAccuracy}% đúng hướng</span>
-                <span className="text-slate-400">• MAPE {wf.mapePercent}%</span>
-              </div>
-            )}
+        {/* Sub-stack shifted right (pl-9 sm:pl-10) to completely clear the left Drawing Tool Rail */}
+        <div className="w-full pl-9 sm:pl-10 flex flex-col items-start gap-1.5">
+          {chartVerdict && (
+            <ChartVerdictOverlay
+              verdict={chartVerdict}
+              quoteAsset={currentSymbol?.quoteAsset}
+              showPlanLines={settings.recommendedPlanLines !== false}
+              onTogglePlanLines={onTogglePlanLines}
+              onQuickCreatePriceAlert={onQuickCreatePriceAlert}
+            />
+          )}
 
-            {settings.kronosGhostCandles && vp?.surgeDetected && (
-              <div className="px-2 py-0.5 rounded-md bg-cyan-950/85 backdrop-blur-sm border border-cyan-400/50 text-[10px] font-mono flex items-center gap-1 text-cyan-200 shadow">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                <span className="font-bold">6D Vol Surge:</span>
-                <span>Đột biến thanh khoản tại nến +{vp.peakBarOffset}</span>
-              </div>
-            )}
-          </div>
-        )}
+          {(settings.kronosWalkForward || settings.kronosGhostCandles) && aiPrediction && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {settings.kronosWalkForward && wf && (
+                <div className="px-2 py-0.5 rounded-md bg-[#0b111d]/85 backdrop-blur-sm border border-amber-500/35 text-[10px] font-mono flex items-center gap-1.5 shadow">
+                  <span className="w-2 h-0.5 bg-amber-400 inline-block" />
+                  <span className="text-amber-300 font-bold">Kiểm định {wf.holdoutBars} nến:</span>
+                  <span className="text-emerald-300 font-bold">{wf.directionalAccuracy}% đúng hướng</span>
+                  <span className="text-slate-400">• MAPE {wf.mapePercent}%</span>
+                </div>
+              )}
+
+              {settings.kronosGhostCandles && vp?.surgeDetected && (
+                <div className="px-2 py-0.5 rounded-md bg-cyan-950/85 backdrop-blur-sm border border-cyan-400/50 text-[10px] font-mono flex items-center gap-1 text-cyan-200 shadow">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                  <span className="font-bold">6D Vol Surge:</span>
+                  <span>Đột biến thanh khoản tại nến +{vp.peakBarOffset}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Right-Docked Visible Range Volume Profile (VPVR) Histogram Overlay */}

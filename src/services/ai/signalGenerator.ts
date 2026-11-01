@@ -21,6 +21,10 @@ import { calculateFibonacciLevels } from '../analysis/fibonacci';
 import { detectOrderBlocks } from '../analysis/smartMoney';
 import { loadKronosConfig, runKronosLocalEngine } from './kronosClient';
 import { evaluateSymbolMacroImpact } from '../macro/macroIntelligence';
+import {
+  ChartRecommendationVerdict,
+  evaluateChartRecommendation,
+} from './chartVerdictEngine';
 
 // Main Strategy Hub Analysis Engine
 export function generateStrategyHub(
@@ -28,7 +32,8 @@ export function generateStrategyHub(
   candles: Candle[],
   timeframe: Timeframe = '1h',
   macroSnapshot?: MacroIntelligenceSnapshot | null,
-  symbolObj?: MarketSymbol
+  symbolObj?: MarketSymbol,
+  unifiedVerdictOverride?: ChartRecommendationVerdict | null
 ): StrategyAnalysisHub {
   if (!candles || candles.length < 30) {
     const fallbackPrice = candles && candles.length > 0 ? candles[candles.length - 1].close : 100;
@@ -699,11 +704,56 @@ export function generateStrategyHub(
     }
   }
 
-  // Find Optimal Strategy (Highest Score with Clear Action)
-  let bestStrategy = strategies.slice().sort((a, b) => b.score - a.score)[0];
-  if (bestStrategy) {
-    bestStrategy.isOptimal = true;
-  }
+  // Inject Flagship 6-Pillar Unified Institutional Recommendation Verdict at Index 0
+  const fallbackSymObj: MarketSymbol = symbolObj || {
+    symbol,
+    name: symbol,
+    type: 'crypto',
+    baseAsset: symbol,
+    quoteAsset: 'USD',
+    price: currentPrice,
+    change24h: 0,
+    high24h: currentPrice * 1.02,
+    low24h: currentPrice * 0.98,
+    volume24h: 0,
+  };
+  const unifiedVerdict =
+    unifiedVerdictOverride ??
+    evaluateChartRecommendation({
+      symbolObj: fallbackSymObj,
+      candles,
+      timeframe,
+      macroSnapshot,
+    });
+
+  const unifiedTriggers: string[] = [
+    `[Kết luận: ${unifiedVerdict.verdictLabelVi}] ${unifiedVerdict.executionStyleVi} • Đòn bẩy: ${unifiedVerdict.leverageGuidanceVi}`,
+    ...unifiedVerdict.bullishDriversVi.map(d => `[Động lực] ${d}`),
+    ...unifiedVerdict.riskFactorsVi.slice(0, 2).map(r => `[Rủi ro / Kiểm soát] ${r}`),
+  ];
+
+  const unifiedStrategyItem: StrategyHubItem = {
+    id: 'unified_institutional_verdict',
+    name: `Hội Đồng Khuyến Nghị Hợp Nhất (${unifiedVerdict.verdictLabelVi})`,
+    shortName: '🏛️ Hợp Nhất 6 Tầng',
+    category: 'Khuyến Nghị Hợp Nhất Toàn Diện (MTF • VPVR • AI • Định Chế • Vĩ Mô)',
+    description: unifiedVerdict.verdictTaglineVi,
+    action: unifiedVerdict.signalAction,
+    score: unifiedVerdict.convictionScore,
+    entryZone: unifiedVerdict.entryZone,
+    stopLoss: unifiedVerdict.stopLoss,
+    takeProfit1: unifiedVerdict.takeProfit1,
+    takeProfit2: unifiedVerdict.takeProfit2,
+    takeProfit3: unifiedVerdict.takeProfit3,
+    riskRewardRatio: unifiedVerdict.riskRewardRatio,
+    winProbability: unifiedVerdict.winProbability,
+    triggers: unifiedTriggers,
+    riskLevel: unifiedVerdict.riskLevel,
+    isOptimal: true,
+  };
+
+  strategies.unshift(unifiedStrategyItem);
+  const bestStrategy = unifiedStrategyItem;
 
   // Compute Overall Market Consensus
   const buyCount = strategies.filter(s => s.action.includes('BUY')).length;
@@ -722,7 +772,7 @@ export function generateStrategyHub(
     currentPrice,
     overallConsensus,
     confluenceCount: { buy: buyCount, sell: sellCount, neutral: neutralCount },
-    bestStrategy: bestStrategy || strategies[0],
+    bestStrategy,
     strategies,
     macroImpact,
   };
@@ -734,9 +784,17 @@ export function generateTradeSetup(
   candles: Candle[],
   timeframe: Timeframe = '1h',
   macroSnapshot?: MacroIntelligenceSnapshot | null,
-  symbolObj?: MarketSymbol
+  symbolObj?: MarketSymbol,
+  unifiedVerdictOverride?: ChartRecommendationVerdict | null
 ): TradeSetup {
-  const hub = generateStrategyHub(symbol, candles, timeframe, macroSnapshot, symbolObj);
+  const hub = generateStrategyHub(
+    symbol,
+    candles,
+    timeframe,
+    macroSnapshot,
+    symbolObj,
+    unifiedVerdictOverride
+  );
   const best = hub.bestStrategy;
 
   return {

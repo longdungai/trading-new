@@ -135,6 +135,12 @@ let cachedUpcomingEvents: VnCorporateEventItem[] | null = null;
 let cachedMarketLeadersTs = 0;
 
 const CACHE_TTL_MS = 45_000;
+export const VN_INSIGHTS_UPDATED_EVENT = 'trading_new_vn_insights_updated';
+
+export function getCachedVnStockInsights(symbol: string): VnStockInsightsPayload | null {
+  const clean = (symbol || '').trim().toUpperCase().replace(/\.VN$/i, '');
+  return insightsCache.get(clean)?.data ?? null;
+}
 
 export function getCachedVnFundamentals(symbol: string): VnSymbolFundamentals | undefined {
   return fundamentalsQuickMap.get(symbol.trim().toUpperCase());
@@ -592,5 +598,10 @@ export async function fetchVnStockInsights(
   }
 
   insightsCache.set(cleanSym, { ts: Date.now(), data: payload });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(VN_INSIGHTS_UPDATED_EVENT, { detail: { symbol: cleanSym } })
+    );
+  }
   return payload;
 }

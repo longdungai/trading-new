@@ -1,6 +1,14 @@
-import React, { useState } from 'react';
-import { AIPrediction, AIPredictionScenario, KronosConfig, KronosModelKey, Timeframe } from '../../types';
+import React, { useMemo, useState } from 'react';
+import {
+  AIPrediction,
+  AIPredictionScenario,
+  ForecastAuditEntry,
+  KronosConfig,
+  KronosModelKey,
+  Timeframe,
+} from '../../types';
 import { KRONOS_MODELS } from '../../services/ai/kronosClient';
+import { computeForecastAuditStats } from '../../services/ai/forecastAuditLog';
 import {
   Sparkles,
   TrendingUp,
@@ -20,6 +28,10 @@ import {
   History,
   BarChart3,
   Layers,
+  Globe2,
+  Pin,
+  ClipboardCheck,
+  Trash2,
 } from 'lucide-react';
 import { formatPercent, formatPrice } from '../../utils/formatters';
 
@@ -34,6 +46,10 @@ interface AIPredictionCardProps {
   onToggleWalkForward?: () => void;
   activeTimeframe?: Timeframe;
   onSelectTimeframe?: (tf: Timeframe) => void;
+  auditEntries?: ForecastAuditEntry[];
+  onPinAuditCheckpoint?: () => void;
+  onClearAuditLog?: () => void;
+  onOpenMacroModal?: () => void;
 }
 
 export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
@@ -47,9 +63,16 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
   onToggleWalkForward,
   activeTimeframe = '1h',
   onSelectTimeframe,
+  auditEntries = [],
+  onPinAuditCheckpoint,
+  onClearAuditLog,
+  onOpenMacroModal,
 }) => {
   const [selectedScenario, setSelectedScenario] = useState<AIPredictionScenario | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
+  const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
+
+  const auditStats = useMemo(() => computeForecastAuditStats(auditEntries), [auditEntries]);
 
   if (!prediction) {
     return (
@@ -458,6 +481,34 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
 
         {/* Key Market Drivers & AI Reasoning */}
         <div className="p-2.5 sm:p-3 rounded-lg bg-[#0d131d] border border-[#1b2536] space-y-1.5">
+          {prediction.macroImpact && (
+            <div
+              className={`px-2 py-1.5 mb-1.5 rounded-lg border flex items-center justify-between gap-2 text-[10px] ${
+                prediction.macroImpact.bias === 'SEVERE_HEADWIND'
+                  ? 'bg-rose-950/35 border-rose-500/40 text-rose-200'
+                  : prediction.macroImpact.bias === 'HEADWIND'
+                  ? 'bg-amber-950/30 border-amber-500/35 text-amber-200'
+                  : prediction.macroImpact.bias === 'TAILWIND'
+                  ? 'bg-emerald-950/30 border-emerald-500/35 text-emerald-200'
+                  : 'bg-[#121a29] border-slate-700/80 text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0 truncate font-medium">
+                <Globe2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="truncate">{prediction.macroImpact.headline}</span>
+              </div>
+              {onOpenMacroModal && (
+                <button
+                  type="button"
+                  onClick={onOpenMacroModal}
+                  className="px-1.5 py-0.5 rounded bg-black/30 hover:bg-black/50 text-cyan-300 font-mono font-bold shrink-0 border border-cyan-500/30 transition"
+                >
+                  Radar Vĩ Mô
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="text-[10px] font-semibold uppercase text-gray-400 flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3 text-cyan-400" />
             Luận Giải Kronos K-Line Foundation Model:
@@ -470,6 +521,136 @@ export const AIPredictionCard: React.FC<AIPredictionCardProps> = ({
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* Real-Time Forecast Audit Log (100% Real Market Reconciliation) */}
+        <div className="rounded-xl bg-[#0c121d] border border-[#1d293e] overflow-hidden">
+          <div className="px-2.5 py-2 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAuditOpen(prev => !prev)}
+              className="flex items-center gap-1.5 text-left min-w-0 flex-1"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-200 truncate">
+                Sổ Kiểm Chứng AI Thực Tế
+              </span>
+              <span className="px-1.5 py-0.2 rounded bg-slate-800 text-[9px] font-mono text-cyan-300 shrink-0">
+                {auditStats.verifiedCount} khớp • {auditStats.pendingCount} chờ
+              </span>
+            </button>
+
+            <div className="flex items-center gap-1 shrink-0">
+              {onPinAuditCheckpoint && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPinAuditCheckpoint();
+                    setIsAuditOpen(true);
+                  }}
+                  className="px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-[9px] font-bold flex items-center gap-1 transition"
+                  title="Ghim mốc dự báo P50 hiện tại để đối chiếu tự động với giá đóng cửa thực tế"
+                >
+                  <Pin className="w-2.5 h-2.5" />
+                  <span>Ghim Kiểm Chứng</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {isAuditOpen && (
+            <div className="px-2.5 pb-2.5 pt-1.5 border-t border-slate-800/80 space-y-2 text-[10px]">
+              <div className="grid grid-cols-2 gap-1.5 font-mono">
+                <div className="p-1.5 rounded-lg bg-[#121a29] border border-slate-800">
+                  <div className="text-[9px] text-slate-400 font-sans">Tỷ lệ đúng hướng thật</div>
+                  <div className="text-xs font-bold text-emerald-400">
+                    {auditStats.directionalHitRate !== null
+                      ? `${auditStats.directionalHitRate}% (${auditStats.verifiedCount} mẫu)`
+                      : 'Đang chờ đóng nến'}
+                  </div>
+                </div>
+                <div className="p-1.5 rounded-lg bg-[#121a29] border border-slate-800">
+                  <div className="text-[9px] text-slate-400 font-sans">Sai số giá thực tế TB</div>
+                  <div className="text-xs font-bold text-cyan-300">
+                    {auditStats.meanAbsErrorPct !== null ? `±${auditStats.meanAbsErrorPct}%` : '--'}
+                  </div>
+                </div>
+              </div>
+
+              {auditEntries.length === 0 ? (
+                <div className="text-slate-400 text-[10px] py-1.5 text-center">
+                  Nhấn <strong>Ghim Kiểm Chứng</strong> để lưu dự báo Kronos P50 và tự động đối chiếu khi nến tương lai đóng cửa thật.
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-40 overflow-y-auto pr-0.5">
+                  {auditEntries.slice(0, 8).map(entry => {
+                    const isVerified = entry.status === 'VERIFIED';
+                    const targetTimeLabel = new Date(entry.targetTimestamp * 1000).toLocaleTimeString(
+                      'vi-VN',
+                      { hour: '2-digit', minute: '2-digit' }
+                    );
+                    return (
+                      <div
+                        key={entry.id}
+                        className="p-1.5 rounded-lg bg-[#111827] border border-slate-800/90 flex items-center justify-between gap-2 font-mono"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span className="font-bold text-white">{entry.symbol}</span>
+                            <span className="text-slate-400">
+                              {entry.timeframe} (+{entry.horizonBars} nến)
+                            </span>
+                          </div>
+                          <div className="text-[9px] text-slate-400 truncate">
+                            Gốc {formatPrice(entry.entryPrice)} → P50{' '}
+                            <span className="text-cyan-300 font-semibold">
+                              {formatPrice(entry.predictedPriceP50)}
+                            </span>{' '}
+                            ({entry.predictedChangePct >= 0 ? '+' : ''}
+                            {entry.predictedChangePct}%)
+                          </div>
+                        </div>
+
+                        {isVerified ? (
+                          <div className="text-right shrink-0">
+                            <div
+                              className={`text-[9px] font-bold ${
+                                entry.directionHit ? 'text-emerald-400' : 'text-rose-400'
+                              }`}
+                            >
+                              {entry.directionHit ? '✓ KHỚP HƯỚNG' : '✕ LỆCH HƯỚNG'}
+                            </div>
+                            <div className="text-[9px] text-slate-300">
+                              Thật: {formatPrice(entry.actualPrice || 0)} (±{entry.absErrorPct}%)
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-right shrink-0">
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-sans font-semibold">
+                              Chờ {targetTimeLabel}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {auditEntries.length > 0 && onClearAuditLog && (
+                <div className="flex justify-end pt-0.5">
+                  <button
+                    type="button"
+                    onClick={onClearAuditLog}
+                    className="text-[9px] text-slate-500 hover:text-rose-400 flex items-center gap-1 transition"
+                  >
+                    <Trash2 className="w-2.5 h-2.5" />
+                    <span>Xóa lịch sử kiểm chứng</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

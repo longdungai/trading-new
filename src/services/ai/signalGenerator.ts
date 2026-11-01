@@ -1,4 +1,13 @@
-import { Candle, SignalAction, StrategyAnalysisHub, StrategyHubItem, Timeframe, TradeSetup } from '../../types';
+import {
+  Candle,
+  MacroIntelligenceSnapshot,
+  MarketSymbol,
+  SignalAction,
+  StrategyAnalysisHub,
+  StrategyHubItem,
+  Timeframe,
+  TradeSetup,
+} from '../../types';
 import {
   calculateATR,
   calculateBollingerBands,
@@ -11,12 +20,15 @@ import { calculateSupportResistance } from '../analysis/supportResistance';
 import { calculateFibonacciLevels } from '../analysis/fibonacci';
 import { detectOrderBlocks } from '../analysis/smartMoney';
 import { loadKronosConfig, runKronosLocalEngine } from './kronosClient';
+import { evaluateSymbolMacroImpact } from '../macro/macroIntelligence';
 
 // Main Strategy Hub Analysis Engine
 export function generateStrategyHub(
   symbol: string,
   candles: Candle[],
-  timeframe: Timeframe = '1h'
+  timeframe: Timeframe = '1h',
+  macroSnapshot?: MacroIntelligenceSnapshot | null,
+  symbolObj?: MarketSymbol
 ): StrategyAnalysisHub {
   if (!candles || candles.length < 30) {
     const fallbackPrice = candles && candles.length > 0 ? candles[candles.length - 1].close : 100;
@@ -644,6 +656,49 @@ export function generateStrategyHub(
     });
   }
 
+  // Apply Real-Time Cross-Market Macro Conditioning before ranking Optimal Strategy
+  const macroImpact = evaluateSymbolMacroImpact(
+    symbolObj || { symbol, type: 'crypto', quoteAsset: 'USD' },
+    macroSnapshot
+  );
+
+  if (macroImpact && macroImpact.scoreAdjustment !== 0) {
+    const primaryMacroNote = macroImpact.bullets[0] || macroImpact.headline;
+    for (const s of strategies) {
+      if (s.action.includes('BUY')) {
+        s.score = Math.max(35, Math.min(98, s.score + macroImpact.scoreAdjustment));
+        s.winProbability = Math.max(
+          45,
+          Math.min(88, Math.round(s.winProbability + macroImpact.scoreAdjustment * 0.45))
+        );
+
+        if (macroImpact.bias === 'SEVERE_HEADWIND') {
+          if (s.action === 'STRONG_BUY') {
+            s.action = 'BUY';
+            s.riskLevel = s.riskLevel === 'LOW' ? 'MEDIUM' : 'HIGH';
+          } else if (s.action === 'BUY' && s.score < 68) {
+            s.action = 'WAIT';
+            s.riskLevel = 'HIGH';
+          }
+          s.triggers.unshift(`[Cảnh báo Vĩ mô] ${primaryMacroNote}`);
+        } else if (macroImpact.bias === 'HEADWIND') {
+          if (s.action === 'STRONG_BUY' && s.score < 80) {
+            s.action = 'BUY';
+          }
+          if (s.riskLevel === 'LOW') s.riskLevel = 'MEDIUM';
+          s.triggers.unshift(`[Lưu ý Vĩ mô] ${primaryMacroNote}`);
+        } else if (macroImpact.bias === 'TAILWIND') {
+          s.triggers.unshift(`[Trợ lực Vĩ mô] ${primaryMacroNote}`);
+        }
+      } else if (s.action.includes('SELL')) {
+        s.score = Math.max(35, Math.min(98, s.score - macroImpact.scoreAdjustment));
+        if (macroImpact.bias === 'HEADWIND' || macroImpact.bias === 'SEVERE_HEADWIND') {
+          s.triggers.unshift(`[Đồng thuận Vĩ mô] ${primaryMacroNote}`);
+        }
+      }
+    }
+  }
+
   // Find Optimal Strategy (Highest Score with Clear Action)
   let bestStrategy = strategies.slice().sort((a, b) => b.score - a.score)[0];
   if (bestStrategy) {
@@ -669,6 +724,7 @@ export function generateStrategyHub(
     confluenceCount: { buy: buyCount, sell: sellCount, neutral: neutralCount },
     bestStrategy: bestStrategy || strategies[0],
     strategies,
+    macroImpact,
   };
 }
 
@@ -676,9 +732,11 @@ export function generateStrategyHub(
 export function generateTradeSetup(
   symbol: string,
   candles: Candle[],
-  timeframe: Timeframe = '1h'
+  timeframe: Timeframe = '1h',
+  macroSnapshot?: MacroIntelligenceSnapshot | null,
+  symbolObj?: MarketSymbol
 ): TradeSetup {
-  const hub = generateStrategyHub(symbol, candles, timeframe);
+  const hub = generateStrategyHub(symbol, candles, timeframe, macroSnapshot, symbolObj);
   const best = hub.bestStrategy;
 
   return {

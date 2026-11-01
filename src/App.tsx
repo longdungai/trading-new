@@ -3,8 +3,10 @@ import {
   AIPrediction,
   Candle,
   FibonacciLevel,
+  ForecastAuditEntry,
   IndicatorSettings,
   KronosConfig,
+  MacroIntelligenceSnapshot,
   MarketSentiment,
   MarketSymbol,
   OrderBlock,
@@ -44,6 +46,16 @@ import {
 } from './services/ai/kronosClient';
 import { generateTradeSetup, generateStrategyHub } from './services/ai/signalGenerator';
 import { analyzeAccumulationZone } from './services/ai/accumulationScanner';
+import {
+  evaluateSymbolMacroImpact,
+  fetchMacroIntelligenceSnapshot,
+} from './services/macro/macroIntelligence';
+import {
+  clearForecastAuditLog,
+  loadForecastAuditEntries,
+  reconcileForecastAuditLog,
+  recordKronosForecastCheckpoint,
+} from './services/ai/forecastAuditLog';
 import { formatPrice, formatPercent, formatVolume } from './utils/formatters';
 
 // Components
@@ -61,7 +73,8 @@ import { SentimentMeter } from './components/Market/SentimentMeter';
 import { MarketHeatmap } from './components/Market/MarketHeatmap';
 import { BacktestModal } from './components/Backtest/BacktestModal';
 import { AccumulationRadarModal } from './components/Market/AccumulationRadarModal';
-import { Sparkles, Layers, Shield, LineChart, Flame, Target, X } from 'lucide-react';
+import { MacroIntelligenceModal } from './components/Macro/MacroIntelligenceModal';
+import { AlertTriangle, Sparkles, Layers, Shield, LineChart, Flame, Globe2, Target, X } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Load persisted symbols or fallback to defaults
@@ -79,6 +92,13 @@ export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [isBacktestOpen, setIsBacktestOpen] = useState<boolean>(false);
   const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
+  const [isMacroModalOpen, setIsMacroModalOpen] = useState<boolean>(false);
+  const [isMacroRefreshing, setIsMacroRefreshing] = useState<boolean>(false);
+  const [macroSnapshot, setMacroSnapshot] = useState<MacroIntelligenceSnapshot | null>(null);
+  const [isMacroBannerDismissed, setIsMacroBannerDismissed] = useState<boolean>(false);
+  const [auditEntries, setAuditEntries] = useState<ForecastAuditEntry[]>(() =>
+    loadForecastAuditEntries()
+  );
   const [isGomBannerDismissed, setIsGomBannerDismissed] = useState<boolean>(false);
   const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'market' | 'risk'>('ai');
   const [mobileTab, setMobileTab] = useState<'chart' | 'ai' | 'market' | 'risk'>('chart');
@@ -559,6 +579,35 @@ export const App: React.FC = () => {
     };
   }, [currentSymbol.symbol]);
 
+  // Live Global & Vietnam Macro Intelligence Polling (DXY, USD/VND, US10Y, VIX, Brent, Nasdaq, BTC Funding)
+  const refreshMacroSnapshot = useCallback(async (force: boolean = false) => {
+    setIsMacroRefreshing(true);
+    try {
+      const snap = await fetchMacroIntelligenceSnapshot(force);
+      if (snap) setMacroSnapshot(snap);
+    } finally {
+      setIsMacroRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshMacroSnapshot(false);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshMacroSnapshot(false);
+      }
+    }, 45_000);
+    return () => clearInterval(interval);
+  }, [refreshMacroSnapshot]);
+
+  useEffect(() => {
+    setIsMacroBannerDismissed(false);
+  }, [currentSymbol.symbol]);
+
+  const currentMacroImpact = useMemo(() => {
+    return evaluateSymbolMacroImpact(currentSymbol, macroSnapshot);
+  }, [currentSymbol, macroSnapshot]);
+
   const aiPrediction: AIPrediction | null = useMemo(() => {
     return generateAIPrediction(
       currentSymbol.symbol,
@@ -567,21 +616,65 @@ export const App: React.FC = () => {
       kronosConfig,
       kronosCloudOutput,
       timeframe,
-      mtfCandlesMap
+      mtfCandlesMap,
+      macroSnapshot,
+      currentSymbol
     );
-  }, [currentSymbol.symbol, candles, kronosConfig, kronosCloudOutput, timeframe, mtfCandlesMap]);
+  }, [
+    currentSymbol,
+    candles,
+    kronosConfig,
+    kronosCloudOutput,
+    timeframe,
+    mtfCandlesMap,
+    macroSnapshot,
+  ]);
 
   const strategyHub: StrategyAnalysisHub = useMemo(() => {
-    return generateStrategyHub(currentSymbol.symbol, candles, timeframe);
-  }, [currentSymbol.symbol, candles, timeframe]);
+    return generateStrategyHub(
+      currentSymbol.symbol,
+      candles,
+      timeframe,
+      macroSnapshot,
+      currentSymbol
+    );
+  }, [currentSymbol, candles, timeframe, macroSnapshot]);
 
   const currentAccumulation = useMemo(() => {
     return analyzeAccumulationZone(currentSymbol, candles);
   }, [currentSymbol, candles]);
 
   const tradeSetup: TradeSetup | null = useMemo(() => {
-    return generateTradeSetup(currentSymbol.symbol, candles, timeframe);
-  }, [currentSymbol.symbol, candles, timeframe]);
+    return generateTradeSetup(
+      currentSymbol.symbol,
+      candles,
+      timeframe,
+      macroSnapshot,
+      currentSymbol
+    );
+  }, [currentSymbol, candles, timeframe, macroSnapshot]);
+
+  // Auto-record & reconcile Kronos P50 checkpoints strictly against REAL closed candles & live quotes
+  useEffect(() => {
+    if (!aiPrediction || candles.length < 30) return;
+    const lastCandleTime = candles[candles.length - 1]?.time || Math.floor(Date.now() / 1000);
+    const recorded = recordKronosForecastCheckpoint(aiPrediction, timeframe, lastCandleTime, false);
+    const reconciled = reconcileForecastAuditLog(currentSymbol.symbol, timeframe, candles, symbols);
+    setAuditEntries(reconciled.length > 0 ? reconciled : recorded);
+  }, [currentSymbol.symbol, timeframe, candles.length]);
+
+  useEffect(() => {
+    if (auditEntries.length === 0) return;
+    const reconciled = reconcileForecastAuditLog(currentSymbol.symbol, timeframe, candles, symbols);
+    setAuditEntries(reconciled);
+  }, [candles, symbols]);
+
+  const handlePinAuditCheckpoint = useCallback(() => {
+    if (!aiPrediction || candles.length === 0) return;
+    const lastCandleTime = candles[candles.length - 1].time;
+    const next = recordKronosForecastCheckpoint(aiPrediction, timeframe, lastCandleTime, true);
+    setAuditEntries(next);
+  }, [aiPrediction, candles, timeframe]);
 
   const [liveCryptoFng, setLiveCryptoFng] = useState<number | null>(null);
 
@@ -622,7 +715,8 @@ export const App: React.FC = () => {
         onOpenHeatmap={() => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap')}
         onOpenRadar={() => setIsRadarOpen(true)}
         onRefreshData={() => {
-          syncLivePrices();
+          syncLivePrices(true);
+          void refreshMacroSnapshot(true);
           loadData(currentSymbol, timeframe);
         }}
         isLiveLoading={isLiveLoading}
@@ -637,6 +731,8 @@ export const App: React.FC = () => {
         currentSymbol={currentSymbol}
         favorites={favorites}
         aiPrediction={aiPrediction}
+        macroSnapshot={macroSnapshot}
+        onOpenMacroModal={() => setIsMacroModalOpen(true)}
         onSelectSymbol={handleSelectSymbol}
       />
 
@@ -706,6 +802,60 @@ export const App: React.FC = () => {
               mobileTab === 'chart' ? 'flex' : 'hidden md:flex'
             }`}
           >
+            {/* Contextual Cross-Market Macro Shock / Headwind Alert Banner */}
+            {!isMacroBannerDismissed &&
+              currentMacroImpact &&
+              (currentMacroImpact.bias === 'SEVERE_HEADWIND' ||
+                currentMacroImpact.bias === 'HEADWIND' ||
+                currentMacroImpact.relevantAlerts.length > 0) && (
+                <div
+                  className={`border-b px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0 ${
+                    currentMacroImpact.bias === 'SEVERE_HEADWIND' ||
+                    currentMacroImpact.relevantAlerts.some(a => a.severity === 'CRITICAL')
+                      ? 'bg-gradient-to-r from-rose-950/80 via-[#18111d] to-rose-950/80 border-rose-500/40'
+                      : 'bg-gradient-to-r from-cyan-950/65 via-[#10192b] to-amber-950/60 border-amber-500/35'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertTriangle
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        currentMacroImpact.bias === 'SEVERE_HEADWIND'
+                          ? 'text-rose-400 animate-pulse'
+                          : 'text-amber-400'
+                      }`}
+                    />
+                    <span className="font-black uppercase font-mono tracking-wide shrink-0 text-amber-300">
+                      CẢNH BÁO VĨ MÔ:
+                    </span>
+                    <span className="text-slate-200 truncate">
+                      <strong className="text-white font-mono">{currentSymbol.symbol}</strong> •{' '}
+                      {currentMacroImpact.relevantAlerts[0]?.title ||
+                        currentMacroImpact.bullets[0] ||
+                        currentMacroImpact.headline}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsMacroModalOpen(true)}
+                      className="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-[11px] font-bold transition flex items-center gap-1"
+                    >
+                      <Globe2 className="w-3 h-3 text-cyan-300" />
+                      <span>Chi Tiết Vĩ Mô</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsMacroBannerDismissed(true)}
+                      className="text-slate-400 hover:text-white p-0.5"
+                      title="Ẩn cảnh báo vĩ mô"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
             {/* Real-time Accumulation Buy Zone Alert Banner */}
             {currentAccumulation?.isHot && !isGomBannerDismissed && currentAccumulation.entryZone && (
               <div className="bg-gradient-to-r from-amber-950/75 via-[#131d2e] to-amber-950/75 border-b border-amber-500/35 px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0">
@@ -839,6 +989,10 @@ export const App: React.FC = () => {
                       onToggleWalkForward={() => handleToggleIndicator('kronosWalkForward')}
                       activeTimeframe={timeframe}
                       onSelectTimeframe={setTimeframe}
+                      auditEntries={auditEntries}
+                      onPinAuditCheckpoint={handlePinAuditCheckpoint}
+                      onClearAuditLog={() => setAuditEntries(clearForecastAuditLog())}
+                      onOpenMacroModal={() => setIsMacroModalOpen(true)}
                     />
                     <TradeSetupCard
                       strategyHub={strategyHub}
@@ -862,6 +1016,7 @@ export const App: React.FC = () => {
                       quoteAsset={currentSymbol.quoteAsset}
                       aiPrediction={aiPrediction}
                       strategyHub={strategyHub}
+                      macroSnapshot={macroSnapshot}
                     />
                     <TradeSetupCard
                       strategyHub={strategyHub}
@@ -999,6 +1154,19 @@ export const App: React.FC = () => {
           symbols={symbols}
           onSelectSymbol={handleSelectSymbol}
           onClose={() => setIsRadarOpen(false)}
+        />
+      )}
+
+      {/* Cross-Market Macro Intelligence & VN30F1M Expiry Calendar Modal */}
+      {isMacroModalOpen && (
+        <MacroIntelligenceModal
+          snapshot={macroSnapshot}
+          currentSymbol={currentSymbol}
+          symbols={symbols}
+          isRefreshing={isMacroRefreshing}
+          onRefresh={() => void refreshMacroSnapshot(true)}
+          onSelectSymbol={handleSelectSymbol}
+          onClose={() => setIsMacroModalOpen(false)}
         />
       )}
     </div>

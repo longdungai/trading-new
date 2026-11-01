@@ -1,13 +1,15 @@
 import React, { useMemo } from 'react';
-import { AIPrediction, MarketSymbol } from '../../types';
+import { AIPrediction, MacroIntelligenceSnapshot, MarketSymbol } from '../../types';
 import { formatPercent, formatPrice } from '../../utils/formatters';
-import { Activity, Cpu, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, Cpu, Globe2, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface MarketTickerStripProps {
   symbols: MarketSymbol[];
   currentSymbol: MarketSymbol;
   favorites?: string[];
   aiPrediction?: AIPrediction | null;
+  macroSnapshot?: MacroIntelligenceSnapshot | null;
+  onOpenMacroModal?: () => void;
   onSelectSymbol: (symbol: MarketSymbol) => void;
 }
 
@@ -28,6 +30,8 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
   currentSymbol,
   favorites = [],
   aiPrediction,
+  macroSnapshot,
+  onOpenMacroModal,
   onSelectSymbol,
 }) => {
   const { breadth, quickSymbols } = useMemo(() => {
@@ -70,7 +74,51 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
 
   return (
     <div className="h-7 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
-      {/* Left: Market Breadth Pulse */}
+      {/* Left: Macro Shock Radar Trigger + Market Breadth Pulse */}
+      {onOpenMacroModal && (
+        <button
+          type="button"
+          onClick={onOpenMacroModal}
+          className={`px-2 py-0.5 rounded-md border text-[10px] font-mono flex items-center gap-1.5 shrink-0 transition ${
+            macroSnapshot?.regime === 'RISK_OFF'
+              ? 'bg-rose-500/15 border-rose-500/45 text-rose-200 hover:bg-rose-500/25'
+              : macroSnapshot?.regime === 'CAUTIOUS'
+              ? 'bg-amber-500/15 border-amber-500/45 text-amber-200 hover:bg-amber-500/25'
+              : macroSnapshot?.regime === 'RISK_ON'
+              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25'
+              : 'bg-cyan-500/10 border-cyan-500/35 text-cyan-200 hover:bg-cyan-500/20'
+          }`}
+          title="Mở Radar Vĩ Mô Liên Thị Trường, Cảnh Báo Nóng & Lịch Đáo Hạn VN30F1M"
+        >
+          <Globe2 className="w-3 h-3 text-cyan-400 shrink-0" />
+          <span className="font-sans font-bold">
+            Vĩ mô
+            <span className="hidden xl:inline">
+              :{' '}
+              {macroSnapshot?.regime === 'RISK_OFF'
+                ? 'Phòng thủ'
+                : macroSnapshot?.regime === 'CAUTIOUS'
+                ? 'Thận trọng'
+                : macroSnapshot?.regime === 'RISK_ON'
+                ? 'Risk-On'
+                : 'Trung lập'}
+            </span>
+          </span>
+          {macroSnapshot && macroSnapshot.globalAlerts.length > 0 && (
+            <span
+              className={`px-1 rounded text-[9px] font-bold flex items-center gap-0.5 ${
+                macroSnapshot.globalAlerts.some(a => a.severity === 'CRITICAL')
+                  ? 'bg-rose-500 text-white animate-pulse'
+                  : 'bg-amber-500 text-black'
+              }`}
+            >
+              <AlertTriangle className="w-2.5 h-2.5" />
+              {macroSnapshot.globalAlerts.length}
+            </span>
+          )}
+        </button>
+      )}
+
       <div className="hidden lg:flex items-center gap-2 pr-2.5 border-r border-slate-800/80 shrink-0 text-[10px] font-mono">
         <Activity className="w-3 h-3 text-cyan-400" />
         <span className="text-slate-400 font-sans font-medium">Độ rộng:</span>

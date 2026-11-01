@@ -186,6 +186,7 @@ export interface AIPrediction {
   volatilityForecast: number;
   aiReasoning: string[];
   keyDrivers: string[];
+  macroImpact?: SymbolMacroImpact;
 }
 
 // Trading Signals & Strategies
@@ -237,6 +238,7 @@ export interface StrategyAnalysisHub {
   confluenceCount: { buy: number; sell: number; neutral: number };
   bestStrategy: StrategyHubItem;
   strategies: StrategyHubItem[];
+  macroImpact?: SymbolMacroImpact;
 }
 
 // Backtesting Result
@@ -292,4 +294,89 @@ export interface MarketSentiment {
   decliners?: number;
   totalTracked?: number;
   rsi14?: number;
+}
+
+// ================= MACROECONOMIC INTELLIGENCE & LIVE AUDIT LOG =================
+export type MacroRegime = 'RISK_ON' | 'NEUTRAL' | 'CAUTIOUS' | 'RISK_OFF';
+export type MacroAlertSeverity = 'CRITICAL' | 'WARNING' | 'POSITIVE' | 'INFO';
+
+export interface MacroIndicatorItem {
+  id: 'DXY' | 'USDVND' | 'US10Y' | 'US3M' | 'VIX' | 'BRENT' | 'SP500' | 'NASDAQ' | 'BTC_FUNDING';
+  label: string;
+  shortLabel: string;
+  value: number;
+  displayValue: string;
+  changePercent: number;
+  status: 'NORMAL' | 'ELEVATED' | 'STRESS' | 'FAVORABLE';
+  impactSummary: string;
+  source: string;
+}
+
+export interface MacroAlertItem {
+  id: string;
+  severity: MacroAlertSeverity;
+  title: string;
+  message: string;
+  affectedAssets: string[];
+  metricBadge: string;
+}
+
+export interface MacroCalendarEvent {
+  id: string;
+  title: string;
+  market: 'VN' | 'GLOBAL' | 'CRYPTO';
+  dateISO: string;
+  dateLabel: string;
+  daysRemaining: number;
+  hoursRemaining: number;
+  impactLevel: 'HIGH' | 'MEDIUM';
+  guidance: string;
+}
+
+export interface MacroIntelligenceSnapshot {
+  updatedAt: number;
+  regime: MacroRegime;
+  regimeLabel: string;
+  regimeScore: number; // -100 .. +100
+  kellyDamper: number; // 0.45 .. 1.05 multiplier on Half-Kelly sizing
+  yieldCurveSpread: number; // US10Y - US3M percentage points
+  indicators: MacroIndicatorItem[];
+  globalAlerts: MacroAlertItem[];
+  upcomingEvents: MacroCalendarEvent[];
+}
+
+export interface SymbolMacroImpact {
+  bias: 'TAILWIND' | 'NEUTRAL' | 'HEADWIND' | 'SEVERE_HEADWIND';
+  scoreAdjustment: number; // -18 .. +12
+  headline: string;
+  bullets: string[];
+  relevantAlerts: MacroAlertItem[];
+}
+
+export interface ForecastAuditEntry {
+  id: string;
+  symbol: string;
+  timeframe: Timeframe;
+  createdAt: number; // unix sec
+  targetTimestamp: number; // unix sec
+  horizonBars: number;
+  entryPrice: number;
+  predictedPriceP50: number;
+  predictedChangePct: number;
+  predictedDirection: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  modelKey: string;
+  status: 'PENDING' | 'VERIFIED';
+  actualPrice?: number;
+  actualChangePct?: number;
+  absErrorPct?: number;
+  directionHit?: boolean;
+  verifiedAt?: number;
+}
+
+export interface ForecastAuditStats {
+  totalRecorded: number;
+  verifiedCount: number;
+  pendingCount: number;
+  directionalHitRate: number | null; // null if 0 verified
+  meanAbsErrorPct: number | null;
 }

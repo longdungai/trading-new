@@ -4,6 +4,8 @@ import {
   Candle,
   KronosConfig,
   KronosVolumeProfile,
+  MacroIntelligenceSnapshot,
+  MarketSymbol,
   Timeframe,
 } from '../../types';
 import { calculateEMA, calculateMACD, calculateRSI } from '../indicators';
@@ -15,6 +17,7 @@ import {
   loadKronosConfig,
   runKronosLocalEngine,
 } from './kronosClient';
+import { evaluateSymbolMacroImpact } from '../macro/macroIntelligence';
 
 export function generateAIPrediction(
   symbol: string,
@@ -23,7 +26,9 @@ export function generateAIPrediction(
   customKronosConfig?: KronosConfig,
   cloudOverride?: KronosPredictionOutput | null,
   activeTimeframe: Timeframe = '1h',
-  realMtfMap?: Partial<Record<Timeframe, Candle[]>>
+  realMtfMap?: Partial<Record<Timeframe, Candle[]>>,
+  macroSnapshot?: MacroIntelligenceSnapshot | null,
+  symbolObj?: MarketSymbol
 ): AIPrediction {
   const cfg = customKronosConfig || loadKronosConfig();
   const effectiveBars = cfg.predLen || forecastBars || 24;
@@ -129,10 +134,20 @@ export function generateAIPrediction(
       ? cloudOverride
       : runKronosLocalEngine(candles, { ...cfg, predLen: effectiveBars });
 
-  // Blend Kronos autoregressive probability with technical confluence
+  // 3.5 Cross-Market Macroeconomic Conditioning (Real-time DXY, USD/VND, US10Y, VIX, Brent, Nasdaq, Funding)
+  const macroImpact = evaluateSymbolMacroImpact(
+    symbolObj || { symbol, type: 'crypto', quoteAsset: 'USD' },
+    macroSnapshot
+  );
+
+  // Blend Kronos autoregressive probability with technical confluence + real macro factor
   const totalScore = bullishScore + bearishScore || 1;
   const techBullishProb = (bullishScore / totalScore) * 100;
-  const combinedBullProb = Math.round(kronosOut.bullProbability * 0.62 + techBullishProb * 0.38);
+  const macroProbShift = macroImpact ? macroImpact.scoreAdjustment * 0.65 : 0;
+  const combinedBullProb = Math.min(
+    94,
+    Math.max(6, Math.round(kronosOut.bullProbability * 0.62 + techBullishProb * 0.38 + macroProbShift))
+  );
 
   const bullTarget = kronosOut.p85[kronosOut.p85.length - 1] || currentPrice * 1.03;
   const baseTarget = kronosOut.p50[kronosOut.p50.length - 1] || currentPrice;
@@ -172,7 +187,24 @@ export function generateAIPrediction(
     aiReasoning.push('Phân phối xác suất Kronos cân bằng (Sideway tích lũy). Giao dịch tại hai biên hỗ trợ/kháng cự.');
   }
 
-  const confidenceScore = Math.min(97, Math.max(55, Math.round(Math.abs(combinedBullProb - 50) * 1.45 + 54)));
+  let rawConfidence = Math.round(Math.abs(combinedBullProb - 50) * 1.45 + 54);
+  if (macroImpact) {
+    const isBullTrend = trend === 'STRONG_BULLISH' || trend === 'BULLISH';
+    const isBearTrend = trend === 'STRONG_BEARISH' || trend === 'BEARISH';
+    if (isBullTrend && macroImpact.scoreAdjustment < 0) {
+      rawConfidence += Math.round(macroImpact.scoreAdjustment * 0.6); // Temper bullish overconfidence during macro headwind
+    } else if (isBullTrend && macroImpact.scoreAdjustment > 0) {
+      rawConfidence += Math.round(macroImpact.scoreAdjustment * 0.5);
+    } else if (isBearTrend && macroImpact.scoreAdjustment < 0) {
+      rawConfidence += Math.round(Math.abs(macroImpact.scoreAdjustment) * 0.45);
+    }
+
+    if (macroImpact.bullets.length > 0) {
+      aiReasoning.push(`[Vĩ mô Liên thị trường] ${macroImpact.bullets[0]}`);
+      keyDrivers.push(...macroImpact.bullets.slice(0, 2));
+    }
+  }
+  const confidenceScore = Math.min(97, Math.max(52, rawConfidence));
 
   // Build 3 Quantile Scenarios from Kronos P85, P50, P15
   const bullProb = Math.min(82, Math.max(12, Math.round(combinedBullProb * 0.72 + 12)));
@@ -316,6 +348,7 @@ export function generateAIPrediction(
     walkForward,
     volumeProfile,
     mtfConfluence,
+    macroImpact,
     scenarios,
     volatilityForecast: volForecast,
     aiReasoning,

@@ -34,6 +34,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/binance/, '/api/v3'),
         secure: false,
       },
+      '/api/fapi': {
+        target: 'https://fapi.binance.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/fapi/, ''),
+        secure: false,
+      },
       '/api/yahoo': {
         target: 'https://query1.finance.yahoo.com',
         changeOrigin: true,

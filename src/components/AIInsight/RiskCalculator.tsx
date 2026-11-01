@@ -6,8 +6,9 @@ import {
   BrainCircuit,
   AlertTriangle,
   Sparkles,
+  Globe2,
 } from 'lucide-react';
-import { AIPrediction, StrategyAnalysisHub } from '../../types';
+import { AIPrediction, MacroIntelligenceSnapshot, StrategyAnalysisHub } from '../../types';
 import { calculatePositionSize } from '../../services/ai/signalGenerator';
 import { formatPrice } from '../../utils/formatters';
 
@@ -17,6 +18,7 @@ interface RiskCalculatorProps {
   quoteAsset?: string;
   aiPrediction?: AIPrediction | null;
   strategyHub?: StrategyAnalysisHub | null;
+  macroSnapshot?: MacroIntelligenceSnapshot | null;
 }
 
 export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
@@ -25,6 +27,7 @@ export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
   quoteAsset = 'USD',
   aiPrediction,
   strategyHub,
+  macroSnapshot,
 }) => {
   const [capital, setCapital] = useState<number>(5000);
   const [riskPercent, setRiskPercent] = useState<number>(1.5);
@@ -64,27 +67,36 @@ export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
     const p = Math.min(0.78, Math.max(0.42, winProbRaw / 100));
     const b = Math.max(1.2, strategyHub?.bestStrategy?.riskRewardRatio ?? 2.2);
 
-    // Kelly fraction f* = p - (1 - p) / b
+    // Kelly fraction f* = p - (1 - p) / b + Cross-Market Macro Volatility Damper (VIX & Regime)
     const fullKelly = Math.max(0.03, p - (1 - p) / b);
     const entropyDamper = Math.max(0.55, 1.12 - entropy * 0.35);
+    const macroDamper = macroSnapshot?.kellyDamper ?? 1.0;
+    const combinedDamper = entropyDamper * macroDamper;
 
     const halfKellyMarginPct = parseFloat(
-      Math.min(35, Math.max(5, fullKelly * 0.5 * entropyDamper * 100)).toFixed(1)
+      Math.min(35, Math.max(4, fullKelly * 0.5 * combinedDamper * 100)).toFixed(1)
     );
     const optimalRiskPct = parseFloat(
-      Math.min(2.5, Math.max(0.5, fullKelly * 5.2 * entropyDamper)).toFixed(1)
+      Math.min(2.5, Math.max(0.4, fullKelly * 5.2 * combinedDamper)).toFixed(1)
     );
 
-    // Safe leverage ensures 95% tail excursion stays well away from liquidation
+    // Safe leverage ensures 95% tail excursion + macro VIX shock stays well away from liquidation
     const maxSafeLeverage = isVND
       ? 1
       : Math.max(
           1,
-          Math.min(20, Math.floor(55 / Math.max(2.0, var95Pct * (1 + entropy * 0.45))))
+          Math.min(
+            20,
+            Math.floor((55 * macroDamper) / Math.max(2.0, var95Pct * (1 + entropy * 0.45)))
+          )
         );
+
+    const vixIndicator = macroSnapshot?.indicators.find(i => i.id === 'VIX');
 
     return {
       entropy,
+      macroDamper,
+      vixIndicator,
       var95Price,
       var95Pct,
       halfKellyMarginPct,
@@ -93,7 +105,7 @@ export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
       winProbPct: Math.round(p * 100),
       rrRatio: b,
     };
-  }, [aiPrediction, strategyHub, entry, isShortSetup, isVND]);
+  }, [aiPrediction, strategyHub, macroSnapshot, entry, isShortSetup, isVND]);
 
   const positionVar95USD = parseFloat(
     ((result.positionSizeUSD ?? 0) * (kronosRiskMetrics.var95Pct / 100)).toFixed(2)
@@ -211,6 +223,32 @@ export const RiskCalculator: React.FC<RiskCalculatorProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Real-Time Macro Kelly Damper Strip */}
+        {macroSnapshot && (
+          <div
+            className={`px-2 py-1.5 rounded-lg border flex items-center justify-between gap-2 text-[10px] font-sans ${
+              kronosRiskMetrics.macroDamper < 0.8
+                ? 'bg-rose-950/35 border-rose-500/35 text-rose-200'
+                : kronosRiskMetrics.macroDamper < 1.0
+                ? 'bg-amber-950/35 border-amber-500/35 text-amber-200'
+                : 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              <Globe2 className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+              <span className="truncate">
+                Điều tiết Vĩ mô: <strong>{macroSnapshot.regimeLabel}</strong>
+                {kronosRiskMetrics.vixIndicator
+                  ? ` (VIX ${kronosRiskMetrics.vixIndicator.displayValue})`
+                  : ''}
+              </span>
+            </div>
+            <span className="font-mono font-bold shrink-0">
+              ×{kronosRiskMetrics.macroDamper.toFixed(2)} Kelly
+            </span>
+          </div>
+        )}
 
         {isOverLeveraged && (
           <div className="px-2 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-200 text-[10px] font-sans flex items-start gap-1.5">

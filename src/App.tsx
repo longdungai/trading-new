@@ -16,9 +16,9 @@ import {
 } from './types';
 import {
   DEFAULT_SYMBOLS,
+  fetchAllLiveMarketQuotes,
   fetchMarketData,
   getMarketSentiment,
-  updateAllLiveMarketPrices,
 } from './services/api/marketData';
 import {
   loadSymbolsFromStorage,
@@ -26,7 +26,11 @@ import {
   loadFavoritesFromStorage,
   saveFavoritesToStorage,
 } from './services/api/symbolCatalog';
-import { BinanceWebSocket, fetchBinanceOrderBook } from './services/api/binance';
+import {
+  BinanceWatchlistSocket,
+  BinanceWebSocket,
+  fetchBinanceOrderBook,
+} from './services/api/binance';
 import { calculateSupportResistance } from './services/analysis/supportResistance';
 import { calculateFibonacciLevels } from './services/analysis/fibonacci';
 import { detectOrderBlocks } from './services/analysis/smartMoney';
@@ -134,6 +138,9 @@ export const App: React.FC = () => {
   }, []);
 
   const wsRef = useRef<BinanceWebSocket | null>(null);
+  const watchlistWsRef = useRef<BinanceWatchlistSocket | null>(null);
+  const isSyncingPricesRef = useRef<boolean>(false);
+  const lastStoragePersistRef = useRef<number>(0);
 
   // Toggle Indicator Setting
   const handleToggleIndicator = (key: keyof IndicatorSettings) => {
@@ -147,11 +154,78 @@ export const App: React.FC = () => {
     saveSymbolsToStorage(newSymbols);
   };
 
-  // Add new symbol
+  // Continuous Real-Time Multi-Market Price Sync (Binance Crypto/Gold + Yahoo Commodities/Stocks + Entrade VNINDEX/VN30/HNX)
+  const syncLivePrices = useCallback(async (forceMacroRefresh: boolean = false) => {
+    if (isSyncingPricesRef.current && !forceMacroRefresh) return;
+    isSyncingPricesRef.current = true;
+    try {
+      const quotes = await fetchAllLiveMarketQuotes(symbolsRef.current, { forceMacroRefresh });
+      if (quotes.size === 0) return;
+
+      setSymbols(prev => {
+        let hasChanges = false;
+        const next = prev.map(s => {
+          const q = quotes.get(s.symbol);
+          if (!q) return s;
+          const nextHigh = q.high24h ?? Math.max(s.high24h, q.price);
+          const nextLow = q.low24h ?? Math.min(s.low24h, q.price);
+          const nextVol = q.volume24h ?? s.volume24h;
+          if (
+            s.price === q.price &&
+            s.change24h === q.change24h &&
+            s.high24h === nextHigh &&
+            s.low24h === nextLow &&
+            s.volume24h === nextVol
+          ) {
+            return s;
+          }
+          hasChanges = true;
+          return {
+            ...s,
+            price: q.price,
+            change24h: q.change24h,
+            high24h: nextHigh,
+            low24h: nextLow,
+            volume24h: nextVol,
+          };
+        });
+
+        if (hasChanges) {
+          symbolsRef.current = next;
+          const now = Date.now();
+          if (forceMacroRefresh || now - lastStoragePersistRef.current >= 15_000) {
+            lastStoragePersistRef.current = now;
+            saveSymbolsToStorage(next);
+          }
+          return next;
+        }
+        return prev;
+      });
+
+      const activeQuote = quotes.get(currentSymbolRef.current.symbol);
+      if (activeQuote) {
+        setCurrentSymbol(prev => ({
+          ...prev,
+          price: activeQuote.price,
+          change24h: activeQuote.change24h,
+          high24h: activeQuote.high24h ?? Math.max(prev.high24h, activeQuote.price),
+          low24h: activeQuote.low24h ?? Math.min(prev.low24h, activeQuote.price),
+          volume24h: activeQuote.volume24h ?? prev.volume24h,
+        }));
+      }
+    } catch (e) {
+      console.warn('Error syncing live prices', e);
+    } finally {
+      isSyncingPricesRef.current = false;
+    }
+  }, []);
+
+  // Add new symbol & immediately fetch live market price
   const handleAddSymbol = (newSymbol: MarketSymbol) => {
     const updated = [newSymbol, ...symbols];
     updateSymbolsAndPersist(updated);
     handleSelectSymbol(newSymbol);
+    void syncLivePrices(true);
   };
 
   // Edit existing symbol
@@ -187,47 +261,109 @@ export const App: React.FC = () => {
     });
   };
 
-  // Reset to default symbols
+  // Reset to default symbols & immediately refresh live market prices
   const handleResetDefaults = () => {
     if (confirm('Khôi phục danh sách theo dõi về mặc định ban đầu?')) {
       updateSymbolsAndPersist(DEFAULT_SYMBOLS);
       handleSelectSymbol(DEFAULT_SYMBOLS[0]);
+      void syncLivePrices(true);
     }
   };
 
-  // Continuous Real-Time Price Sync (2.0 seconds rapid poll)
-  const syncLivePrices = useCallback(async () => {
-    try {
-      const currentList = symbolsRef.current;
-      const updated = await updateAllLiveMarketPrices(currentList);
-      setSymbols(updated);
-      symbolsRef.current = updated;
-
-      // Keep current symbol updated with latest price & change
-      const activeKey = currentSymbolRef.current.symbol;
-      const currentUpdated = updated.find(s => s.symbol === activeKey);
-      if (currentUpdated) {
-        setCurrentSymbol(prev => ({
-          ...prev,
-          price: currentUpdated.price,
-          change24h: currentUpdated.change24h,
-          high24h: currentUpdated.high24h,
-          low24h: currentUpdated.low24h,
-          volume24h: currentUpdated.volume24h,
-        }));
+  // Real-time Watchlist WebSocket stream for all Crypto + Gold (PAXGUSDT) symbols
+  const binanceWatchlistKey = useMemo(() => {
+    const list = ['PAXGUSDT'];
+    for (const s of symbols) {
+      if (s.type === 'crypto') {
+        list.push(s.symbol.replace(/[/_-]/g, '').toUpperCase());
       }
-    } catch (e) {
-      console.warn('Error syncing live prices', e);
     }
-  }, []);
+    return Array.from(new Set(list)).sort().join(',');
+  }, [symbols]);
 
   useEffect(() => {
-    syncLivePrices();
-    const interval = setInterval(() => {
-      syncLivePrices();
-    }, 2000);
+    if (!watchlistWsRef.current) {
+      watchlistWsRef.current = new BinanceWatchlistSocket();
+    }
+    const streamSymbols = binanceWatchlistKey.split(',').filter(Boolean);
 
-    return () => clearInterval(interval);
+    watchlistWsRef.current.connect(streamSymbols, (batch) => {
+      const paxg = batch.get('PAXGUSDT');
+
+      setSymbols(prev => {
+        let changed = false;
+        const next = prev.map(s => {
+          const upper = s.symbol.toUpperCase();
+          const tick =
+            upper === 'XAUUSD' || upper === 'GOLD' || upper === 'PAXGUSDT'
+              ? paxg
+              : s.type === 'crypto'
+              ? batch.get(upper.replace(/[/_-]/g, ''))
+              : undefined;
+          if (!tick || (s.price === tick.price && s.change24h === tick.change24h)) {
+            return s;
+          }
+          changed = true;
+          return {
+            ...s,
+            price: tick.price,
+            change24h: tick.change24h,
+            high24h: tick.high24h,
+            low24h: tick.low24h,
+            volume24h: tick.volume24h || s.volume24h,
+          };
+        });
+        if (changed) {
+          symbolsRef.current = next;
+          return next;
+        }
+        return prev;
+      });
+
+      const curUpper = currentSymbolRef.current.symbol.toUpperCase();
+      const activeTick =
+        curUpper === 'XAUUSD' || curUpper === 'GOLD' || curUpper === 'PAXGUSDT'
+          ? paxg
+          : currentSymbolRef.current.type === 'crypto'
+          ? batch.get(curUpper.replace(/[/_-]/g, ''))
+          : undefined;
+      if (activeTick) {
+        setCurrentSymbol(prev => ({
+          ...prev,
+          price: activeTick.price,
+          change24h: activeTick.change24h,
+          high24h: activeTick.high24h,
+          low24h: activeTick.low24h,
+          volume24h: activeTick.volume24h || prev.volume24h,
+        }));
+      }
+    });
+
+    return () => {
+      if (watchlistWsRef.current) {
+        watchlistWsRef.current.disconnect();
+      }
+    };
+  }, [binanceWatchlistKey]);
+
+  // Single non-overlapping background sync loop + tab focus instant refresh
+  useEffect(() => {
+    void syncLivePrices(true);
+    const interval = setInterval(() => {
+      void syncLivePrices(false);
+    }, 3000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncLivePrices(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [syncLivePrices]);
 
   // Load Klines and Depth
@@ -235,33 +371,36 @@ export const App: React.FC = () => {
     setIsLiveLoading(true);
     try {
       const data = await fetchMarketData(symbolObj, tf);
-      setCandles(data);
 
-      // Synchronize currentSymbol's price and 24h stats immediately with latest candle
       if (data && data.length > 0) {
         const lastCandle = data[data.length - 1];
-        const firstCandle = data[0];
-        const change24h = firstCandle.open > 0 ? ((lastCandle.close - firstCandle.open) / firstCandle.open) * 100 : 0;
-        const maxHigh = Math.max(...data.map(d => d.high));
-        const minLow = Math.min(...data.map(d => d.low));
 
-        setCurrentSymbol(prev => ({
-          ...prev,
-          price: lastCandle.close,
-          change24h: parseFloat(change24h.toFixed(2)),
-          high24h: maxHigh,
-          low24h: minLow,
-        }));
+        // Update Watchlist entry with latest candle close while preserving true 24h % change
+        setSymbols(prev => {
+          const next = prev.map(s =>
+            s.symbol === symbolObj.symbol
+              ? {
+                  ...s,
+                  price: lastCandle.close,
+                  high24h: Math.max(s.high24h, lastCandle.close),
+                  low24h: s.low24h > 0 ? Math.min(s.low24h, lastCandle.close) : lastCandle.low,
+                }
+              : s
+          );
+          symbolsRef.current = next;
+          return next;
+        });
 
-        setSymbols(prev =>
-          prev.map(s => (s.symbol === symbolObj.symbol ? {
-            ...s,
+        // Guard against stale async responses if user already switched to another symbol
+        if (currentSymbolRef.current.symbol === symbolObj.symbol) {
+          setCandles(data);
+          setCurrentSymbol(prev => ({
+            ...prev,
             price: lastCandle.close,
-            change24h: parseFloat(change24h.toFixed(2)),
-            high24h: maxHigh,
-            low24h: minLow
-          } : s))
-        );
+            high24h: Math.max(prev.high24h, lastCandle.close),
+            low24h: prev.low24h > 0 ? Math.min(prev.low24h, lastCandle.close) : lastCandle.low,
+          }));
+        }
       }
 
       const isDepthSupported =
@@ -270,11 +409,13 @@ export const App: React.FC = () => {
         symbolObj.symbol === 'XAUUSD' ||
         symbolObj.symbol === 'GOLD';
 
-      if (isDepthSupported) {
+      if (isDepthSupported && currentSymbolRef.current.symbol === symbolObj.symbol) {
         try {
           const depthSymbol = symbolObj.symbol === 'XAUUSD' || symbolObj.symbol === 'GOLD' ? 'PAXGUSDT' : symbolObj.symbol;
           const depth = await fetchBinanceOrderBook(depthSymbol, 12);
-          setOrderBook(depth);
+          if (currentSymbolRef.current.symbol === symbolObj.symbol) {
+            setOrderBook(depth);
+          }
         } catch (e) {
           console.warn('Depth fetch error', e);
         }
@@ -282,13 +423,15 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error('Error fetching market data', e);
     } finally {
-      setIsLiveLoading(false);
+      if (currentSymbolRef.current.symbol === symbolObj.symbol) {
+        setIsLiveLoading(false);
+      }
     }
   };
 
   // Instant Symbol Selector Handler: immediately loads fresh data and updates price
   const handleSelectSymbol = (sym: MarketSymbol) => {
-    const fresh = symbols.find(s => s.symbol === sym.symbol) || sym;
+    const fresh = symbolsRef.current.find(s => s.symbol === sym.symbol) || sym;
     setCurrentSymbol(fresh);
     currentSymbolRef.current = fresh;
     setOrderBook(null);
@@ -335,9 +478,11 @@ export const App: React.FC = () => {
           price: newCandle.close,
         }));
 
-        setSymbols(prev =>
-          prev.map(s => (s.symbol === currentSymbol.symbol ? { ...s, price: newCandle.close } : s))
-        );
+        setSymbols(prev => {
+          const next = prev.map(s => (s.symbol === currentSymbol.symbol ? { ...s, price: newCandle.close } : s));
+          symbolsRef.current = next;
+          return next;
+        });
       });
     }
 
@@ -347,14 +492,6 @@ export const App: React.FC = () => {
       }
     };
   }, [currentSymbol.symbol, timeframe]);
-
-  // Continuous background polling
-  useEffect(() => {
-    const interval = setInterval(() => {
-      syncLivePrices();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [syncLivePrices]);
 
   // Derived Analytics & Calculations
   const srLevels: SupportResistanceLevel[] = useMemo(() => {

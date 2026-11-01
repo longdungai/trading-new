@@ -40,6 +40,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/yahoo/, ''),
         secure: false,
       },
+      '/api/entrade': {
+        target: 'https://services.entrade.com.vn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/entrade/, ''),
+        secure: false,
+      },
     },
   },
 });

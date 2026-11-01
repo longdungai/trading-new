@@ -9,6 +9,10 @@
       "destination": "https://query1.finance.yahoo.com/:path*"
     },
     {
+      "source": "/api/entrade/:path*",
+      "destination": "https://services.entrade.com.vn/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

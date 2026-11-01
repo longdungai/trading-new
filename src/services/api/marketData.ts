@@ -1,5 +1,5 @@
 import { Candle, MarketSentiment, MarketSymbol, Timeframe } from '../../types';
-import { fetchBinanceKlines, fetchAllBinance24hTickers } from './binance';
+import { fetchBinanceKlines, fetchBinance24hTickersForSymbols } from './binance';
 
 export const DEFAULT_SYMBOLS: MarketSymbol[] = [
   // ===================== HÀNG HÓA: VÀNG & DẦU MỎ (COMMODITIES) =====================
@@ -830,27 +830,117 @@ export const DEFAULT_SYMBOLS: MarketSymbol[] = [
   },
 ];
 
-// Helper to map symbols to Yahoo Finance symbols
-export function mapToYahooSymbol(symbol: string, type: string): string {
-  if (type === 'vn30' || (type === 'stock' && !['NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'AMD', 'SPY', 'QQQ'].includes(symbol))) {
-    if (!symbol.includes('.VN') && !symbol.includes('=')) {
-      return `${symbol}.VN`;
-    }
-  }
-  if (symbol === 'XAUUSD' || symbol === 'GOLD') return 'GC=F';
-  if (symbol === 'OIL_WTI' || symbol === 'WTI') return 'CL=F';
-  if (symbol === 'OIL_BRENT' || symbol === 'BRENT') return 'BZ=F';
-  if (symbol === 'SILVER') return 'SI=F';
-  return symbol;
+const US_EQUITY_SYMBOLS = new Set([
+  'NVDA', 'TSLA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'AMD', 'SPY', 'QQQ',
+]);
+
+export function isVietnamSymbol(
+  item: Pick<MarketSymbol, 'symbol' | 'type' | 'quoteAsset'>
+): boolean {
+  const sym = item.symbol.toUpperCase();
+  if (sym === 'VNINDEX' || sym === 'VN30') return true;
+  if (US_EQUITY_SYMBOLS.has(sym)) return false;
+  return item.quoteAsset === 'VND' || item.type === 'vn30';
 }
 
-// Fetch Real Historical Candlesticks for VN Stocks, Commodities, or US Stocks via Yahoo Finance Proxy
+// Helper to map symbols to Yahoo Finance symbols
+export function mapToYahooSymbol(symbol: string, type: string, quoteAsset?: string): string {
+  const clean = symbol.trim().toUpperCase();
+  if (clean === 'XAUUSD' || clean === 'GOLD') return 'GC=F';
+  if (clean === 'OIL_WTI' || clean === 'WTI') return 'CL=F';
+  if (clean === 'OIL_BRENT' || clean === 'BRENT') return 'BZ=F';
+  if (clean === 'SILVER') return 'SI=F';
+
+  const isVNStock =
+    clean !== 'VNINDEX' &&
+    clean !== 'VN30' &&
+    !US_EQUITY_SYMBOLS.has(clean) &&
+    (type === 'vn30' || quoteAsset === 'VND');
+
+  if (isVNStock && !clean.includes('.VN') && !clean.includes('=')) {
+    return `${clean}.VN`;
+  }
+  return clean;
+}
+
+const ENTRADE_BASES = ['/api/entrade', 'https://services.entrade.com.vn'];
+const YAHOO_BASES = ['/api/yahoo', 'https://query1.finance.yahoo.com'];
+
+// Fetch Real Historical Candlesticks from DNSE Entrade for VNINDEX, VN30, and HNX/UPCOM VN Stocks
+export async function fetchEntradeKlines(
+  symbol: string,
+  timeframe: Timeframe = '1h',
+  isIndex: boolean = false
+): Promise<Candle[]> {
+  const cleanSym = symbol.replace(/\.VN$/i, '').toUpperCase();
+  const now = Math.floor(Date.now() / 1000);
+  let resolution = '1H';
+  let lookbackSec = 86400 * 45;
+
+  if (timeframe === '1m' || timeframe === '5m' || timeframe === '15m') {
+    resolution = '15';
+    lookbackSec = 86400 * 14;
+  } else if (timeframe === '1h' || timeframe === '4h') {
+    resolution = '1H';
+    lookbackSec = 86400 * 60;
+  } else if (timeframe === '1D') {
+    resolution = '1D';
+    lookbackSec = 86400 * 240;
+  } else if (timeframe === '1W' || timeframe === '1M') {
+    resolution = '1W';
+    lookbackSec = 86400 * 730;
+  }
+
+  const endpointKind = isIndex || cleanSym === 'VNINDEX' || cleanSym === 'VN30' ? 'index' : 'stock';
+  const query = `/chart-api/v2/ohlcs/${endpointKind}?symbol=${encodeURIComponent(cleanSym)}&resolution=${resolution}&from=${now - lookbackSec}&to=${now}`;
+
+  for (const base of ENTRADE_BASES) {
+    try {
+      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data?.t) || data.t.length === 0) continue;
+
+      const candles: Candle[] = [];
+      for (let i = 0; i < data.t.length; i++) {
+        const o = data.o?.[i];
+        const h = data.h?.[i];
+        const l = data.l?.[i];
+        const c = data.c?.[i];
+        const v = data.v?.[i] || 0;
+        if (o != null && h != null && l != null && c != null) {
+          candles.push({
+            time: Number(data.t[i]),
+            open: parseFloat(Number(o).toFixed(2)),
+            high: parseFloat(Number(h).toFixed(2)),
+            low: parseFloat(Number(l).toFixed(2)),
+            close: parseFloat(Number(c).toFixed(2)),
+            volume: Number(v),
+          });
+        }
+      }
+      if (candles.length > 0) return candles;
+    } catch {
+      // try next base
+    }
+  }
+  throw new Error(`Failed Entrade klines for ${symbol}`);
+}
+
+// Fetch Real Historical Candlesticks for VN Stocks, Commodities, or US Stocks via Yahoo Finance (+ Entrade fallback)
 export async function fetchStockKlines(
   symbol: string,
   timeframe: Timeframe = '1h',
   isVN: boolean = true
 ): Promise<Candle[]> {
-  const yahooSymbol = mapToYahooSymbol(symbol, isVN ? 'vn30' : 'commodity');
+  const cleanUpper = symbol.trim().toUpperCase();
+
+  // VNINDEX & VN30 are served directly by DNSE Entrade
+  if (cleanUpper === 'VNINDEX' || cleanUpper === 'VN30') {
+    return fetchEntradeKlines(cleanUpper, timeframe, true);
+  }
+
+  const yahooSymbol = mapToYahooSymbol(cleanUpper, isVN ? 'vn30' : 'stock', isVN ? 'VND' : 'USD');
   let interval = '1d';
   let range = '3mo';
 
@@ -872,16 +962,13 @@ export async function fetchStockKlines(
   }
 
   const encodedSymbol = encodeURIComponent(yahooSymbol);
-  const paths = [
-    `/api/yahoo/v8/finance/chart/${encodedSymbol}?interval=${interval}&range=${range}`,
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodedSymbol}?interval=${interval}&range=${range}`,
-  ];
 
-  for (const path of paths) {
+  for (const base of YAHOO_BASES) {
     try {
-      const res = await fetch(path, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      });
+      const res = await fetch(
+        `${base}/v8/finance/chart/${encodedSymbol}?interval=${interval}&range=${range}`,
+        { headers: { Accept: 'application/json' } }
+      );
       if (!res.ok) continue;
 
       const data = await res.json();
@@ -890,7 +977,7 @@ export async function fetchStockKlines(
 
       const timestamps: number[] = result.timestamp;
       const quote = result.indicators.quote[0];
-      const divisor = isVN && yahooSymbol.endsWith('.VN') ? 1000 : 1;
+      const divisor = yahooSymbol.endsWith('.VN') ? 1000 : 1;
 
       const candles: Candle[] = [];
       for (let i = 0; i < timestamps.length; i++) {
@@ -915,79 +1002,311 @@ export async function fetchStockKlines(
       if (candles.length > 0) {
         return candles;
       }
-    } catch (e) {
-      console.warn(`Failed Yahoo fetch on ${path}:`, e);
+    } catch {
+      // try fallback base
     }
+  }
+
+  // Fallback to DNSE Entrade for HNX / UPCOM Vietnam equities (e.g. PVS, BSR) not listed as .VN on Yahoo
+  if (isVN) {
+    return fetchEntradeKlines(cleanUpper, timeframe, false);
   }
 
   throw new Error(`Failed to fetch stock klines for ${symbol}`);
 }
 
-// Rapid Multi-Market Real-Time Price Sync (Crypto + Commodities + Stocks)
-export async function updateAllLiveMarketPrices(symbols: MarketSymbol[]): Promise<MarketSymbol[]> {
-  try {
-    const tickerList = await fetchAllBinance24hTickers();
-    const tickerMap = new Map<string, { price: number; change: number; high: number; low: number; volume: number }>();
+export interface LiveQuoteUpdate {
+  price: number;
+  change24h: number;
+  high24h?: number;
+  low24h?: number;
+  volume24h?: number;
+  source: 'binance' | 'yahoo' | 'entrade';
+  updatedAt: number;
+}
 
-    if (tickerList && Array.isArray(tickerList)) {
-      for (const t of tickerList) {
-        tickerMap.set(t.symbol, {
-          price: parseFloat(t.lastPrice),
-          change: parseFloat(t.priceChangePercent),
-          high: parseFloat(t.highPrice),
-          low: parseFloat(t.lowPrice),
-          volume: parseFloat(t.quoteVolume),
-        });
+// In-memory cache for Macro / Stock quotes (12s TTL) so 3s Binance polls don't spam Yahoo/Entrade
+const macroQuoteCache = new Map<string, LiveQuoteUpdate>();
+let lastMacroSyncTs = 0;
+let macroSyncInFlight: Promise<void> | null = null;
+const MACRO_CACHE_TTL_MS = 12_000;
+
+async function fetchYahooSparkBatch(yahooSymbols: string[]): Promise<Record<string, any>> {
+  if (yahooSymbols.length === 0) return {};
+  const query = `/v8/finance/spark?symbols=${encodeURIComponent(yahooSymbols.join(','))}&range=5d&interval=1d`;
+  for (const base of YAHOO_BASES) {
+    try {
+      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // try next base
+    }
+  }
+  return {};
+}
+
+async function fetchSingleEntradeQuote(sym: string, isIndex: boolean): Promise<LiveQuoteUpdate | null> {
+  const now = Math.floor(Date.now() / 1000);
+  const kind = isIndex ? 'index' : 'stock';
+  const query = `/chart-api/v2/ohlcs/${kind}?symbol=${encodeURIComponent(sym)}&resolution=1D&from=${now - 86400 * 14}&to=${now}`;
+
+  for (const base of ENTRADE_BASES) {
+    try {
+      const res = await fetch(`${base}${query}`, { headers: { Accept: 'application/json' } });
+      if (!res.ok) continue;
+      const d = await res.json();
+      if (!Array.isArray(d?.c) || d.c.length === 0) continue;
+
+      const idx = d.c.length - 1;
+      const lastClose = Number(d.c[idx]);
+      if (!(lastClose > 0)) continue;
+
+      let prevClose = idx >= 1 ? Number(d.c[idx - 1]) : Number(d.o?.[idx] || lastClose);
+      for (let k = idx - 1; k >= 0; k--) {
+        if (Number(d.c[k]) > 0 && Number(d.c[k]) !== lastClose) {
+          prevClose = Number(d.c[k]);
+          break;
+        }
+      }
+      const changePct = prevClose > 0 ? ((lastClose - prevClose) / prevClose) * 100 : 0;
+      const high = Number(d.h?.[idx]) || lastClose;
+      const low = Number(d.l?.[idx]) || lastClose;
+      const volRaw = Number(d.v?.[idx]) || 0;
+      // Convert share volume to VND turnover estimate for VN equities so Watchlist volume unit stays consistent
+      const volume24h = isIndex ? volRaw * 25000 : volRaw * lastClose * 1000;
+
+      return {
+        price: parseFloat(lastClose.toFixed(2)),
+        change24h: parseFloat(changePct.toFixed(2)),
+        high24h: parseFloat(high.toFixed(2)),
+        low24h: parseFloat(low.toFixed(2)),
+        volume24h,
+        source: 'entrade',
+        updatedAt: Date.now(),
+      };
+    } catch {
+      // try next base
+    }
+  }
+  return null;
+}
+
+async function refreshMacroAndStockQuotes(symbols: MarketSymbol[]): Promise<void> {
+  const nonBinanceItems = symbols.filter(s => {
+    const upper = s.symbol.toUpperCase();
+    const isBinanceGoldOrCrypto =
+      s.type === 'crypto' || upper === 'PAXGUSDT' || upper === 'XAUUSD' || upper === 'GOLD';
+    return !isBinanceGoldOrCrypto;
+  });
+
+  if (nonBinanceItems.length === 0) return;
+
+  const yahooMapToAppSymbols = new Map<string, MarketSymbol[]>();
+  const directEntradeItems: MarketSymbol[] = [];
+
+  for (const item of nonBinanceItems) {
+    const upper = item.symbol.toUpperCase();
+    if (upper === 'VNINDEX' || upper === 'VN30') {
+      directEntradeItems.push(item);
+      continue;
+    }
+    const ySym = mapToYahooSymbol(upper, item.type, item.quoteAsset);
+    const list = yahooMapToAppSymbols.get(ySym) || [];
+    list.push(item);
+    yahooMapToAppSymbols.set(ySym, list);
+  }
+
+  // Yahoo /v8/finance/spark enforces <= 20 symbols per batch
+  const allYahooSyms = Array.from(yahooMapToAppSymbols.keys());
+  const chunks: string[][] = [];
+  for (let i = 0; i < allYahooSyms.length; i += 20) {
+    chunks.push(allYahooSyms.slice(i, i + 20));
+  }
+
+  const missingVNStocks: MarketSymbol[] = [];
+
+  const sparkResults = await Promise.all(chunks.map(chunk => fetchYahooSparkBatch(chunk)));
+  const mergedSpark: Record<string, any> = Object.assign({}, ...sparkResults);
+
+  for (const [ySym, appItems] of yahooMapToAppSymbols.entries()) {
+    const entry = mergedSpark[ySym];
+    const validCloses: number[] = Array.isArray(entry?.close)
+      ? entry.close.filter((v: any): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
+      : [];
+
+    if (validCloses.length === 0) {
+      for (const appSym of appItems) {
+        if (isVietnamSymbol(appSym)) {
+          missingVNStocks.push(appSym);
+        }
+      }
+      continue;
+    }
+
+    const divisor = ySym.endsWith('.VN') ? 1000 : 1;
+    const rawLast = validCloses[validCloses.length - 1];
+    const price = parseFloat((rawLast / divisor).toFixed(2));
+
+    let change24h = 0;
+    if (typeof entry.fulldayChangePercent === 'number' && Number.isFinite(entry.fulldayChangePercent) && entry.fulldayChangePercent !== 0) {
+      change24h = parseFloat(entry.fulldayChangePercent.toFixed(2));
+    } else {
+      let prevRaw = typeof entry.chartPreviousClose === 'number' && entry.chartPreviousClose > 0
+        ? entry.chartPreviousClose
+        : rawLast;
+      for (let i = validCloses.length - 2; i >= 0; i--) {
+        if (validCloses[i] !== rawLast) {
+          prevRaw = validCloses[i];
+          break;
+        }
+      }
+      if (prevRaw > 0) {
+        change24h = parseFloat((((rawLast - prevRaw) / prevRaw) * 100).toFixed(2));
       }
     }
 
-    const paxg = tickerMap.get('PAXGUSDT');
+    const recentWindow = validCloses.slice(-2);
+    const high24h = parseFloat((Math.max(...recentWindow) / divisor).toFixed(2));
+    const low24h = parseFloat((Math.min(...recentWindow) / divisor).toFixed(2));
+
+    const quoteUpdate: LiveQuoteUpdate = {
+      price,
+      change24h,
+      high24h,
+      low24h,
+      source: 'yahoo',
+      updatedAt: Date.now(),
+    };
+
+    for (const appSym of appItems) {
+      macroQuoteCache.set(appSym.symbol, quoteUpdate);
+    }
+  }
+
+  // Fetch VNINDEX, VN30, and any HNX/UPCOM VN stocks (e.g. PVS) from DNSE Entrade in parallel
+  const entradeTargets = [...directEntradeItems, ...missingVNStocks];
+  if (entradeTargets.length > 0) {
+    await Promise.all(
+      entradeTargets.map(async (item) => {
+        const isIdx = item.symbol.toUpperCase() === 'VNINDEX' || item.symbol.toUpperCase() === 'VN30' || item.type === 'index';
+        const q = await fetchSingleEntradeQuote(item.symbol, isIdx);
+        if (q) {
+          macroQuoteCache.set(item.symbol, q);
+        }
+      })
+    );
+  }
+
+  lastMacroSyncTs = Date.now();
+}
+
+// Fetch real-time quotes across ALL Watchlist markets (Binance Crypto/Gold + Yahoo Commodities/US/HOSE + Entrade VNINDEX/VN30/HNX)
+export async function fetchAllLiveMarketQuotes(
+  symbols: MarketSymbol[],
+  options?: { forceMacroRefresh?: boolean }
+): Promise<Map<string, LiveQuoteUpdate>> {
+  const quotes = new Map<string, LiveQuoteUpdate>();
+
+  // 1. Collect Binance symbols (Crypto + PAXGUSDT for Gold)
+  const binanceQuerySymbols = new Set<string>(['PAXGUSDT']);
+  for (const s of symbols) {
+    if (s.type === 'crypto') {
+      binanceQuerySymbols.add(s.symbol.replace(/[/_-]/g, '').toUpperCase());
+    }
+  }
+
+  // 2. Check whether Macro / Stock quotes need an initial or periodic refresh
+  const hasUncachedNonCrypto = symbols.some(s => {
+    const upper = s.symbol.toUpperCase();
+    const isBinance = s.type === 'crypto' || upper === 'PAXGUSDT' || upper === 'XAUUSD' || upper === 'GOLD';
+    return !isBinance && !macroQuoteCache.has(s.symbol) && upper !== 'SJC';
+  });
+
+  const shouldRefreshMacro =
+    Boolean(options?.forceMacroRefresh) ||
+    lastMacroSyncTs === 0 ||
+    hasUncachedNonCrypto ||
+    Date.now() - lastMacroSyncTs >= MACRO_CACHE_TTL_MS;
+
+  const macroTask = shouldRefreshMacro
+    ? (macroSyncInFlight ??= refreshMacroAndStockQuotes(symbols).finally(() => {
+        macroSyncInFlight = null;
+      }))
+    : Promise.resolve();
+
+  const [tickerList] = await Promise.all([
+    fetchBinance24hTickersForSymbols(Array.from(binanceQuerySymbols)),
+    macroTask,
+  ]);
+
+  // Populate Macro / Stock quotes from freshly updated cache
+  for (const [sym, q] of macroQuoteCache.entries()) {
+    quotes.set(sym, q);
+  }
+
+  // Populate Crypto & Gold quotes from Binance
+  const binanceMap = new Map<string, LiveQuoteUpdate>();
+  if (Array.isArray(tickerList)) {
+    const now = Date.now();
+    for (const t of tickerList) {
+      const price = parseFloat(t.lastPrice);
+      if (price > 0) {
+        binanceMap.set(t.symbol, {
+          price,
+          change24h: parseFloat(parseFloat(t.priceChangePercent).toFixed(2)),
+          high24h: parseFloat(t.highPrice),
+          low24h: parseFloat(t.lowPrice),
+          volume24h: parseFloat(t.quoteVolume),
+          source: 'binance',
+          updatedAt: now,
+        });
+      }
+    }
+  }
+
+  const paxgQuote = binanceMap.get('PAXGUSDT');
+  for (const s of symbols) {
+    const upper = s.symbol.toUpperCase();
+    if (upper === 'XAUUSD' || upper === 'GOLD' || upper === 'PAXGUSDT') {
+      if (paxgQuote) {
+        quotes.set(s.symbol, paxgQuote);
+      }
+      continue;
+    }
+    if (s.type === 'crypto') {
+      const binKey = upper.replace(/[/_-]/g, '');
+      const live = binanceMap.get(binKey);
+      if (live) {
+        quotes.set(s.symbol, live);
+      }
+    }
+  }
+
+  return quotes;
+}
+
+// Backward-compatible helper that returns updated MarketSymbol[] with real live prices across all markets
+export async function updateAllLiveMarketPrices(
+  symbols: MarketSymbol[],
+  forceMacroRefresh: boolean = false
+): Promise<MarketSymbol[]> {
+  try {
+    const quotes = await fetchAllLiveMarketQuotes(symbols, { forceMacroRefresh });
+    if (quotes.size === 0) return symbols;
 
     return symbols.map(s => {
-      // 1. Gold (XAUUSD & PAXGUSDT) -> Live Binance PAXG
-      if (s.symbol === 'XAUUSD' || s.symbol === 'GOLD' || s.symbol === 'PAXGUSDT') {
-        if (paxg) {
-          return {
-            ...s,
-            price: paxg.price,
-            change24h: paxg.change,
-            high24h: paxg.high,
-            low24h: paxg.low,
-            volume24h: paxg.volume,
-          };
-        }
-      }
-
-      // 2. Crypto -> Live Binance Ticker
-      if (s.type === 'crypto') {
-        const binanceKey = s.symbol.replace(/[/_-]/g, '').toUpperCase();
-        const live = tickerMap.get(binanceKey);
-        if (live) {
-          return {
-            ...s,
-            price: live.price,
-            change24h: live.change,
-            high24h: live.high,
-            low24h: live.low,
-            volume24h: live.volume,
-          };
-        }
-      }
-
-      // 3. Micro Real-Time Simulation Ticks for Commodities, VN30 and Stocks
-      if (s.type === 'commodity' || s.type === 'vn30' || s.type === 'stock' || s.type === 'index') {
-        const volatility = s.type === 'vn30' ? 0.0002 : s.type === 'commodity' ? 0.0003 : 0.0004;
-        const tickDrift = (Math.random() - 0.49) * (s.price * volatility);
-        const newPrice = Math.max(0.01, s.price + tickDrift);
-        const changeDrift = (Math.random() - 0.5) * 0.02;
-        return {
-          ...s,
-          price: s.quoteAsset === 'VND' ? parseFloat(newPrice.toFixed(2)) : parseFloat(newPrice.toFixed(2)),
-          change24h: parseFloat((s.change24h + changeDrift).toFixed(2)),
-        };
-      }
-
-      return s;
+      const q = quotes.get(s.symbol);
+      if (!q) return s;
+      return {
+        ...s,
+        price: q.price,
+        change24h: q.change24h,
+        high24h: q.high24h ?? Math.max(s.high24h, q.price),
+        low24h: q.low24h ?? Math.min(s.low24h, q.price),
+        volume24h: q.volume24h ?? s.volume24h,
+      };
     });
   } catch (e) {
     console.warn('Failed to update bulk live market prices:', e);
@@ -1019,10 +1338,15 @@ export async function fetchMarketData(
     }
   }
 
-  // 2. Vietnam Stock (VN30), Commodities (Oil/Silver), or US Stock -> Live Yahoo Finance API
-  if (symbolObj.type === 'vn30' || symbolObj.type === 'stock' || symbolObj.type === 'commodity') {
+  // 2. Vietnam Stocks/Indices (VNINDEX, VN30, HOSE/HNX), Commodities (Oil/Silver), or US Stocks -> Yahoo Finance / DNSE Entrade
+  if (
+    symbolObj.type === 'vn30' ||
+    symbolObj.type === 'stock' ||
+    symbolObj.type === 'commodity' ||
+    symbolObj.type === 'index'
+  ) {
     try {
-      const isVN = symbolObj.type === 'vn30' || symbolObj.symbol === 'SJC';
+      const isVN = isVietnamSymbol(symbolObj);
       const klines = await fetchStockKlines(symbolObj.symbol, timeframe, isVN);
       if (klines && klines.length > 0) {
         return klines;

@@ -13,13 +13,16 @@ const timeframeMap: Record<Timeframe, string> = {
 };
 
 const BASE_URLS = [
-  '/api/binance', // Vite local proxy (bypass CORS & ISP blocks)
-  'https://data-api.binance.vision/api/v3', // Official Binance mirror (always accessible in VN)
+  '/api/binance', // Vite / Vercel / Nginx same-origin proxy (bypass CORS & ISP blocks)
+  'https://data-api.binance.vision/api/v3', // Official Binance mirror (accessible globally)
   'https://api.binance.com/api/v3',
   'https://api1.binance.com/api/v3',
   'https://api2.binance.com/api/v3',
   'https://api3.binance.com/api/v3',
 ];
+
+// Cache symbols known not to exist on Binance Spot so filtered batch queries stay fast (~5 KB)
+const invalidBinanceSymbols = new Set<string>();
 
 async function fetchWithFallbacks(path: string): Promise<any> {
   let lastError: any = null;
@@ -30,8 +33,15 @@ async function fetchWithFallbacks(path: string): Promise<any> {
       if (res.ok) {
         return await res.json();
       }
-    } catch (err) {
+      // 400 Bad Request (e.g. invalid symbol in batch) is deterministic across mirrors; stop retrying mirrors
+      if (res.status === 400) {
+        throw new Error(`HTTP 400 on ${path}`);
+      }
+    } catch (err: any) {
       lastError = err;
+      if (err?.message?.startsWith('HTTP 400')) {
+        break;
+      }
     }
   }
   throw lastError || new Error(`Failed to fetch ${path} from all endpoints`);
@@ -116,7 +126,7 @@ export async function fetchBinanceOrderBook(symbol: string, limit = 15): Promise
   }
 }
 
-// Bulk fetch all 24h tickers
+// Bulk fetch all 24h tickers (full exchange fallback)
 export async function fetchAllBinance24hTickers(): Promise<any[]> {
   const path = '/ticker/24hr';
   try {
@@ -127,7 +137,175 @@ export async function fetchAllBinance24hTickers(): Promise<any[]> {
   }
 }
 
-// WebSocket live feed manager with automatic mirror fallback
+// Fast targeted batch fetch (~5 KB instead of 1.92 MB) for Watchlist symbols
+export async function fetchBinance24hTickersForSymbols(rawSymbols: string[]): Promise<any[]> {
+  const candidates = Array.from(
+    new Set(
+      rawSymbols
+        .map(s => s.replace(/[/_-]/g, '').toUpperCase())
+        .filter(s => /^[A-Z0-9]{4,20}$/.test(s) && !invalidBinanceSymbols.has(s))
+    )
+  );
+
+  if (candidates.length === 0) return [];
+
+  const encoded = encodeURIComponent(JSON.stringify(candidates));
+  try {
+    const res = await fetchWithFallbacks(`/ticker/24hr?symbols=${encoded}`);
+    if (Array.isArray(res)) return res;
+  } catch {
+    // One or more custom symbols may not exist on Binance Spot; fallback once and prune invalid symbols
+    const all = await fetchAllBinance24hTickers();
+    if (Array.isArray(all) && all.length > 0) {
+      const validSet = new Set(all.map((t: any) => t.symbol));
+      for (const c of candidates) {
+        if (!validSet.has(c)) {
+          invalidBinanceSymbols.add(c);
+        }
+      }
+      return all.filter((t: any) => candidates.includes(t.symbol));
+    }
+  }
+  return [];
+}
+
+export interface BinanceMiniTickerItem {
+  symbol: string;
+  price: number;
+  change24h: number;
+  high24h: number;
+  low24h: number;
+  volume24h: number;
+}
+
+// Multiplex WebSocket stream for instant Watchlist Crypto + Gold (PAXGUSDT) live ticks
+export class BinanceWatchlistSocket {
+  private ws: WebSocket | null = null;
+  private flushTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pending = new Map<string, BinanceMiniTickerItem>();
+  private activeKey = '';
+  private isManuallyClosed = false;
+
+  connect(
+    rawSymbols: string[],
+    onBatchUpdate: (updates: Map<string, BinanceMiniTickerItem>) => void
+  ) {
+    const streams = Array.from(
+      new Set(
+        rawSymbols
+          .map(s => s.replace(/[/_-]/g, '').toUpperCase())
+          .filter(s => /^[A-Z0-9]{4,20}$/.test(s) && !invalidBinanceSymbols.has(s))
+          .map(s => `${s.toLowerCase()}@miniTicker`)
+      )
+    ).sort();
+
+    if (streams.length === 0) {
+      this.disconnect();
+      return;
+    }
+
+    const nextKey = streams.join('/');
+    if (this.ws && this.activeKey === nextKey && this.ws.readyState <= WebSocket.OPEN) {
+      return;
+    }
+
+    this.disconnect();
+    this.isManuallyClosed = false;
+    this.activeKey = nextKey;
+
+    const wsUrls = [
+      `wss://data-stream.binance.vision/stream?streams=${nextKey}`,
+      `wss://stream.binance.com:9443/stream?streams=${nextKey}`,
+    ];
+    let urlIdx = 0;
+
+    const openSocket = () => {
+      if (this.isManuallyClosed || urlIdx >= wsUrls.length) return;
+      try {
+        this.ws = new WebSocket(wsUrls[urlIdx]);
+
+        this.ws.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            const d = payload?.data || payload;
+            if (d && d.s && d.c) {
+              const close = parseFloat(d.c);
+              const open = parseFloat(d.o);
+              const high = parseFloat(d.h);
+              const low = parseFloat(d.l);
+              const quoteVol = parseFloat(d.q);
+              if (close > 0) {
+                const change24h = open > 0 ? parseFloat((((close - open) / open) * 100).toFixed(2)) : 0;
+                this.pending.set(d.s, {
+                  symbol: d.s,
+                  price: close,
+                  change24h,
+                  high24h: high > 0 ? high : close,
+                  low24h: low > 0 ? low : close,
+                  volume24h: quoteVol > 0 ? quoteVol : 0,
+                });
+              }
+            }
+          } catch {
+            // ignore malformed frame
+          }
+        };
+
+        this.ws.onerror = () => {
+          urlIdx++;
+          if (!this.isManuallyClosed && urlIdx < wsUrls.length) {
+            openSocket();
+          }
+        };
+
+        this.ws.onclose = () => {
+          if (!this.isManuallyClosed) {
+            this.reconnectTimer = setTimeout(() => {
+              urlIdx = 0;
+              openSocket();
+            }, 4000);
+          }
+        };
+      } catch {
+        urlIdx++;
+        if (!this.isManuallyClosed && urlIdx < wsUrls.length) {
+          openSocket();
+        }
+      }
+    };
+
+    openSocket();
+
+    this.flushTimer = setInterval(() => {
+      if (this.pending.size > 0) {
+        const snapshot = new Map(this.pending);
+        this.pending.clear();
+        onBatchUpdate(snapshot);
+      }
+    }, 600);
+  }
+
+  disconnect() {
+    this.isManuallyClosed = true;
+    this.activeKey = '';
+    this.pending.clear();
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
+
+// Single-symbol Klines WebSocket live feed manager with automatic mirror fallback
 export class BinanceWebSocket {
   private ws: WebSocket | null = null;
   private onMessageCallback: ((candle: Candle) => void) | null = null;

@@ -12,6 +12,7 @@ import {
   SymbolMacroImpact,
 } from '../../types';
 import { isVietnamMarketSymbol } from '../../utils/marketHours';
+import { fetchFedPivotIntelligenceV2 } from './fedPivot';
 
 const YAHOO_BASES = ['/api/yahoo', 'https://query1.finance.yahoo.com'];
 const FAPI_BASES = ['/api/fapi', 'https://fapi.binance.com'];
@@ -333,10 +334,11 @@ export async function fetchMacroIntelligenceSnapshot(
       const zq3mSym = getForwardZqContract(nowDate, 3);
       const zq6mSym = getForwardZqContract(nowDate, 6);
 
-      const [spark, btcFunding, nyFedEffr] = await Promise.all([
+      const [spark, btcFunding, nyFedEffr, fedPivotV2] = await Promise.all([
         fetchYahooMacroSpark([zq1mSym, zq3mSym, zq6mSym]),
         fetchRealBinanceBtcFunding(),
         fetchOfficialNyFedEffr(),
+        fetchFedPivotIntelligenceV2(forceRefresh).catch(() => undefined),
       ]);
 
       const indicators: MacroIndicatorItem[] = [];
@@ -914,7 +916,7 @@ export async function fetchMacroIntelligenceSnapshot(
         kellyDamper = Math.max(kellyDamper, 1.0);
       }
 
-      if (indicators.length === 0) return cachedMacroSnapshot;
+      if (indicators.length === 0 && !fedPivotV2) return cachedMacroSnapshot;
 
       const snapshot: MacroIntelligenceSnapshot = {
         updatedAt: Date.now(),
@@ -924,6 +926,7 @@ export async function fetchMacroIntelligenceSnapshot(
         kellyDamper: parseFloat(kellyDamper.toFixed(2)),
         yieldCurveSpread,
         fedPivot,
+        fedPivotV2,
         indicators,
         globalAlerts: alerts,
         upcomingEvents,

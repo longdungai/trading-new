@@ -1,4 +1,7 @@
 // Core Market Data Types
+import { FedPivotIntelligenceV2 } from './fedPivotV2';
+export * from './fedPivotV2';
+
 export interface Candle {
   time: number; // Unix timestamp in seconds
   open: number;
@@ -403,6 +406,7 @@ export interface MacroIntelligenceSnapshot {
   kellyDamper: number; // 0.45 .. 1.05 multiplier on Half-Kelly sizing
   yieldCurveSpread: number; // US10Y - US3M percentage points
   fedPivot?: FedPivotWatchSnapshot;
+  fedPivotV2?: FedPivotIntelligenceV2;
   indicators: MacroIndicatorItem[];
   globalAlerts: MacroAlertItem[];
   upcomingEvents: MacroCalendarEvent[];

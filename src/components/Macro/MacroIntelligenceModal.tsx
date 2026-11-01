@@ -1,12 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   ArrowUpRight,
   CalendarClock,
   CheckCircle2,
-  Clock,
-  Gauge,
   Globe2,
   Landmark,
   RefreshCw,
@@ -21,6 +19,7 @@ import {
   SymbolMacroImpact,
 } from '../../types';
 import { evaluateSymbolMacroImpact } from '../../services/macro/macroIntelligence';
+import { FedPivotIntelligenceView } from './FedPivotIntelligenceView';
 
 export type MacroModalTab = 'indicators' | 'fed_pivot' | 'alerts' | 'calendar';
 
@@ -47,6 +46,21 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<MacroModalTab>(initialTab);
 
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const symbolImpact: SymbolMacroImpact | undefined = useMemo(() => {
     return evaluateSymbolMacroImpact(currentSymbol, snapshot);
   }, [currentSymbol, snapshot]);
@@ -69,30 +83,52 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 select-none animate-in fade-in">
-      <div className="bg-[#080d18] border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 select-none animate-in fade-in"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={activeTab === 'fed_pivot' ? 'Fed Pivot Intelligence' : 'Radar Vĩ Mô Liên Thị Trường'}
+    >
+      <div className="bg-[#080d18] border border-slate-800 rounded-2xl w-full max-w-6xl max-h-[92vh] shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-4 py-3.5 bg-[#0c1322] border-b border-slate-800/90 flex items-center justify-between gap-3 shrink-0">
+        <div className="px-3.5 sm:px-4 py-3 bg-[#0c1322] border-b border-slate-800/90 flex items-center justify-between gap-2.5 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/35 text-cyan-400 shrink-0">
-              <Globe2 className="w-5 h-5" />
+              {activeTab === 'fed_pivot' ? (
+                <Landmark className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <Globe2 className="w-5 h-5" />
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
-                  Radar Vĩ Mô Liên Thị Trường & Cảnh Báo Rủi Ro
+                  {activeTab === 'fed_pivot'
+                    ? 'Fed Pivot Intelligence'
+                    : 'Radar Vĩ Mô Liên Thị Trường & Cảnh Báo Rủi Ro'}
                 </h2>
-                {snapshot && (
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${regimeBadgeClass}`}
-                  >
-                    {snapshot.regimeLabel} ({snapshot.regimeScore >= 0 ? '+' : ''}
-                    {snapshot.regimeScore}đ)
+                {activeTab === 'fed_pivot' && snapshot?.fedPivotV2 ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
+                    Score {snapshot.fedPivotV2.pivotScore.toFixed(2)}/7 • {snapshot.fedPivotV2.statusLabel}
                   </span>
+                ) : (
+                  snapshot && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${regimeBadgeClass}`}
+                    >
+                      {snapshot.regimeLabel} ({snapshot.regimeScore >= 0 ? '+' : ''}
+                      {snapshot.regimeScore}đ)
+                    </span>
+                  )
                 )}
               </div>
               <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                Dữ liệu thời gian thực từ Yahoo Finance & Binance Futures • Tự động điều tiết tín hiệu AI Kronos & tỷ trọng vốn Kelly
+                {activeTab === 'fed_pivot'
+                  ? 'Hệ thống phân tích hội tụ 7 tín hiệu vĩ mô chính thức (FRED • BEA • BLS • NY Fed • CBOT ZQ)'
+                  : 'Dữ liệu thời gian thực từ Yahoo Finance & Binance Futures • Tự động điều tiết tín hiệu AI Kronos & tỷ trọng vốn Kelly'}
               </p>
             </div>
           </div>
@@ -145,21 +181,27 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
               }`}
             >
               <Landmark className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Fed Pivot Watch</span>
-              {snapshot?.fedPivot && (
-                <span
-                  className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
-                    snapshot.fedPivot.stance === 'DOVISH_PIVOT'
-                      ? 'bg-emerald-500 text-black'
-                      : snapshot.fedPivot.stance === 'HAWKISH_TIGHTENING'
-                      ? 'bg-rose-500/25 text-rose-300 border border-rose-500/40'
-                      : 'bg-cyan-500/20 text-cyan-300'
-                  }`}
-                >
-                  {snapshot.fedPivot.stance === 'DOVISH_PIVOT'
-                    ? 'PIVOT!'
-                    : `${snapshot.fedPivot.passedConditionsCount}/${snapshot.fedPivot.totalConditionsCount}`}
+              <span>Fed Pivot Intelligence</span>
+              {snapshot?.fedPivotV2 ? (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35">
+                  {snapshot.fedPivotV2.pivotScore.toFixed(1)}/7
                 </span>
+              ) : (
+                snapshot?.fedPivot && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                      snapshot.fedPivot.stance === 'DOVISH_PIVOT'
+                        ? 'bg-emerald-500 text-black'
+                        : snapshot.fedPivot.stance === 'HAWKISH_TIGHTENING'
+                        ? 'bg-rose-500/25 text-rose-300 border border-rose-500/40'
+                        : 'bg-cyan-500/20 text-cyan-300'
+                    }`}
+                  >
+                    {snapshot.fedPivot.stance === 'DOVISH_PIVOT'
+                      ? 'PIVOT!'
+                      : `${snapshot.fedPivot.passedConditionsCount}/${snapshot.fedPivot.totalConditionsCount}`}
+                  </span>
+                )
               )}
             </button>
 
@@ -210,7 +252,7 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-4">
           {!snapshot ? (
             <div className="py-12 text-center text-slate-400 text-xs space-y-2">
               <RefreshCw className="w-6 h-6 text-cyan-400 animate-spin mx-auto" />
@@ -406,248 +448,13 @@ export const MacroIntelligenceModal: React.FC<MacroIntelligenceModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 1.5: DEDICATED FED PIVOT WATCH GAUGE & 5-FACTOR CHECKLIST */}
+              {/* TAB 1.5: FED PIVOT INTELLIGENCE V2 (AREAS A - F) */}
               {activeTab === 'fed_pivot' && (
-                <div className="space-y-3.5">
-                  {!snapshot.fedPivot ? (
-                    <div className="p-6 rounded-xl bg-[#0e1626] border border-slate-800 text-center text-xs text-slate-400">
-                      Đang đồng bộ dữ liệu lãi suất điều hành NY Fed (EFFR) và hợp đồng tương lai CBOT 30-Day Fed Funds (ZQ)...
-                    </div>
-                  ) : (
-                    <>
-                      {/* Top Status & FOMC Countdown Card */}
-                      <div
-                        className={`p-3.5 rounded-xl border space-y-2.5 ${
-                          snapshot.fedPivot.stance === 'DOVISH_PIVOT'
-                            ? 'bg-emerald-950/30 border-emerald-500/45'
-                            : snapshot.fedPivot.stance === 'HAWKISH_TIGHTENING'
-                            ? 'bg-rose-950/25 border-rose-500/45'
-                            : snapshot.fedPivot.stance === 'EMERGENCY_EASING'
-                            ? 'bg-amber-950/30 border-amber-500/45'
-                            : 'bg-[#0e1626] border-cyan-500/35'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Gauge className="w-4 h-4 text-cyan-400 shrink-0" />
-                            <h3 className="text-xs sm:text-sm font-black uppercase text-white">
-                              {snapshot.fedPivot.stanceLabel}
-                            </h3>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900/90 text-cyan-300 border border-slate-700">
-                              Đạt {snapshot.fedPivot.passedConditionsCount}/{snapshot.fedPivot.totalConditionsCount} tiêu chí Pivot
-                            </span>
-                          </div>
-
-                          {snapshot.fedPivot.nextFomc && (
-                            <div className="px-2.5 py-1 rounded-lg bg-[#111b2e] border border-slate-700/80 flex items-center gap-1.5 text-[10px] font-mono text-amber-300 shrink-0">
-                              <Clock className="w-3 h-3 text-amber-400" />
-                              <span>
-                                {snapshot.fedPivot.nextFomc.title}: còn{' '}
-                                <strong>
-                                  {snapshot.fedPivot.nextFomc.daysRemaining > 0
-                                    ? `${snapshot.fedPivot.nextFomc.daysRemaining} ngày`
-                                    : `${snapshot.fedPivot.nextFomc.hoursRemaining}h`}
-                                </strong>
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-slate-200 leading-relaxed">
-                          {snapshot.fedPivot.summary}
-                        </p>
-
-                        {/* Key Official Rate Pills */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono">
-                          <div className="p-2 rounded-lg bg-[#0b1220] border border-slate-800">
-                            <div className="text-[9px] text-slate-400 font-sans">Biên mục tiêu FOMC</div>
-                            <div className="text-sm font-black text-white mt-0.5">
-                              {snapshot.fedPivot.targetRangeLow.toFixed(2)}% –{' '}
-                              {snapshot.fedPivot.targetRangeHigh.toFixed(2)}%
-                            </div>
-                            <div className="text-[9px] text-slate-500">Federal Reserve</div>
-                          </div>
-
-                          <div className="p-2 rounded-lg bg-[#0b1220] border border-slate-800">
-                            <div className="text-[9px] text-slate-400 font-sans">Lãi suất thực EFFR</div>
-                            <div className="text-sm font-black text-cyan-300 mt-0.5">
-                              {snapshot.fedPivot.effectiveRate.toFixed(2)}%
-                            </div>
-                            <div className="text-[9px] text-slate-500">
-                              Ngày {snapshot.fedPivot.effectiveDate}
-                            </div>
-                          </div>
-
-                          <div className="p-2 rounded-lg bg-[#0b1220] border border-slate-800">
-                            <div className="text-[9px] text-slate-400 font-sans">Định giá ZQ +3 Tháng</div>
-                            <div className="text-sm font-black text-white mt-0.5">
-                              {snapshot.fedPivot.implied3mRate.toFixed(2)}%
-                            </div>
-                            <div
-                              className={`text-[9px] font-bold ${
-                                snapshot.fedPivot.delta3mBps < 0
-                                  ? 'text-emerald-400'
-                                  : snapshot.fedPivot.delta3mBps > 0
-                                  ? 'text-rose-400'
-                                  : 'text-slate-400'
-                              }`}
-                            >
-                              {snapshot.fedPivot.delta3mBps >= 0 ? '+' : ''}
-                              {snapshot.fedPivot.delta3mBps} bps vs EFFR
-                            </div>
-                          </div>
-
-                          <div className="p-2 rounded-lg bg-[#0b1220] border border-slate-800">
-                            <div className="text-[9px] text-slate-400 font-sans">Định giá ZQ +6 Tháng</div>
-                            <div className="text-sm font-black text-white mt-0.5">
-                              {snapshot.fedPivot.implied6mRate.toFixed(2)}%
-                            </div>
-                            <div
-                              className={`text-[9px] font-bold ${
-                                snapshot.fedPivot.delta6mBps < 0
-                                  ? 'text-emerald-400'
-                                  : snapshot.fedPivot.delta6mBps > 0
-                                  ? 'text-rose-400'
-                                  : 'text-slate-400'
-                              }`}
-                            >
-                              {snapshot.fedPivot.pricedMoves6m >= 0 ? '+' : ''}
-                              {snapshot.fedPivot.pricedMoves6m} đợt (25bps)
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* CME FedWatch 3M Probability Bar & Forward ZQ Rate Curve */}
-                      <div className="p-3.5 rounded-xl bg-[#0e1626] border border-slate-800 space-y-3">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="text-xs font-bold text-white">
-                            Xác Suất Hành Động Lãi Suất Ngầm Định 3 Tháng Tới (CME Fed Funds Futures)
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400">
-                            {snapshot.fedPivot.sourceLabel}
-                          </span>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <div className="h-3 w-full rounded-full bg-slate-900 overflow-hidden flex border border-slate-800">
-                            {snapshot.fedPivot.cutProb3mPct > 0 && (
-                              <div
-                                className="h-full bg-emerald-500 transition-all duration-500"
-                                style={{ width: `${snapshot.fedPivot.cutProb3mPct}%` }}
-                              />
-                            )}
-                            {snapshot.fedPivot.holdProb3mPct > 0 && (
-                              <div
-                                className="h-full bg-cyan-500/80 transition-all duration-500"
-                                style={{ width: `${snapshot.fedPivot.holdProb3mPct}%` }}
-                              />
-                            )}
-                            {snapshot.fedPivot.hikeProb3mPct > 0 && (
-                              <div
-                                className="h-full bg-rose-500 transition-all duration-500"
-                                style={{ width: `${snapshot.fedPivot.hikeProb3mPct}%` }}
-                              />
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between text-[11px] font-mono">
-                            <span className="text-emerald-400 font-bold">
-                              ▼ Cắt giảm (-25bps): {snapshot.fedPivot.cutProb3mPct}%
-                            </span>
-                            <span className="text-cyan-300 font-bold">
-                              • Giữ nguyên: {snapshot.fedPivot.holdProb3mPct}%
-                            </span>
-                            <span className="text-rose-400 font-bold">
-                              ▲ Tăng thêm (+25bps): {snapshot.fedPivot.hikeProb3mPct}%
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Forward ZQ Curve Strip */}
-                        <div className="grid grid-cols-4 gap-2 pt-1 font-mono">
-                          {snapshot.fedPivot.rateCurve.map((pt, idx) => (
-                            <div
-                              key={idx}
-                              className="p-2 rounded-lg bg-[#0a101d] border border-slate-800/90 text-center"
-                            >
-                              <div className="text-[9px] text-slate-400 font-sans truncate">
-                                {pt.horizonLabel}
-                              </div>
-                              <div className="text-xs sm:text-sm font-black text-white mt-0.5">
-                                {pt.impliedRate.toFixed(2)}%
-                              </div>
-                              <div
-                                className={`text-[9px] font-bold ${
-                                  pt.deltaBps < 0
-                                    ? 'text-emerald-400'
-                                    : pt.deltaBps > 0
-                                    ? 'text-rose-400'
-                                    : 'text-slate-500'
-                                }`}
-                              >
-                                {pt.contractSymbol} ({pt.deltaBps >= 0 ? '+' : ''}
-                                {pt.deltaBps}bps)
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 5-Factor Fed Pivot Activation Checklist */}
-                      <div className="space-y-2">
-                        <div className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                          5 Chỉ Số Kiểm Định Thời Điểm Xuất Hiện Fed Pivot:
-                        </div>
-
-                        {snapshot.fedPivot.checklist.map(chk => {
-                          const isPass = chk.state === 'PASSED';
-                          const isBlock = chk.state === 'BLOCKED';
-                          return (
-                            <div
-                              key={chk.id}
-                              className={`p-3 rounded-xl border space-y-1 ${
-                                isPass
-                                  ? 'bg-emerald-950/20 border-emerald-500/40'
-                                  : isBlock
-                                  ? 'bg-rose-950/20 border-rose-500/35'
-                                  : 'bg-[#0e1626] border-slate-800'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <span className="text-xs font-bold text-white">{chk.label}</span>
-                                <div className="flex items-center gap-2 font-mono">
-                                  <span className="text-[11px] font-bold text-cyan-300">
-                                    {chk.metricValue}
-                                  </span>
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${
-                                      isPass
-                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                        : isBlock
-                                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                        : 'bg-amber-500/15 text-amber-300 border-amber-500/35'
-                                    }`}
-                                  >
-                                    {isPass
-                                      ? '✓ ĐẠT PIVOT'
-                                      : isBlock
-                                      ? '✕ CHƯA ĐẠT (DIỀU HÂU)'
-                                      : '⏳ ĐANG THEO DÕI'}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="text-[10px] font-mono text-slate-400">
-                                Điều kiện kích hoạt: {chk.thresholdRule}
-                              </div>
-                              <p className="text-[11px] text-slate-300">{chk.detail}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-                </div>
+                <FedPivotIntelligenceView
+                  data={snapshot.fedPivotV2}
+                  symbols={symbols}
+                  onJumpToSymbol={handleJumpToAsset}
+                />
               )}
 
               {/* TAB 2: CROSS-MARKET ALERTS */}

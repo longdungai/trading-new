@@ -52,6 +52,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/entrade/, ''),
         secure: false,
       },
+      '/api/fred': {
+        target: 'https://fred.stlouisfed.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/fred/, ''),
+        secure: false,
+      },
     },
   },
 });

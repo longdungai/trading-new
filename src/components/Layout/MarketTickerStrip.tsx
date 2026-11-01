@@ -120,36 +120,41 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             )}
           </button>
 
-          {macroSnapshot?.fedPivot && (
+          {(macroSnapshot?.fedPivotV2 || macroSnapshot?.fedPivot) && (
             <button
               type="button"
               onClick={() => onOpenMacroModal('fed_pivot')}
-              className={`hidden sm:flex px-2 py-0.5 rounded-md border text-[10px] font-mono items-center gap-1 shrink-0 transition ${
-                macroSnapshot.fedPivot.stance === 'DOVISH_PIVOT'
+              className={`flex px-2 py-0.5 rounded-md border text-[10px] font-mono items-center gap-1 shrink-0 transition ${
+                macroSnapshot.fedPivotV2
+                  ? macroSnapshot.fedPivotV2.pivotScore >= 4.25
+                    ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/30'
+                    : macroSnapshot.fedPivotV2.pivotScore >= 2.75
+                    ? 'bg-cyan-500/15 border-cyan-400/50 text-cyan-200 hover:bg-cyan-500/25'
+                    : 'bg-[#121928] border-slate-700/80 text-slate-200 hover:border-cyan-400/50'
+                  : macroSnapshot.fedPivot?.stance === 'DOVISH_PIVOT'
                   ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/30 animate-pulse'
-                  : macroSnapshot.fedPivot.stance === 'HAWKISH_TIGHTENING'
-                  ? 'bg-[#121928] border-rose-500/40 text-slate-200 hover:border-rose-400'
                   : 'bg-[#121928] border-slate-700/80 text-slate-200 hover:border-cyan-400/50'
               }`}
-              title="Mở Đồng Hồ Fed Pivot Watch (NY Fed EFFR + CME/CBOT Fed Funds Futures ZQ + Lịch FOMC)"
+              title="Mở cửa sổ chuyên sâu Fed Pivot Intelligence (7 Tín hiệu FRED/BLS/BEA + Lịch sử + 3 Kịch bản)"
             >
               <Landmark className="w-3 h-3 text-emerald-400 shrink-0" />
               <span className="font-bold text-cyan-300">
-                Fed {macroSnapshot.fedPivot.effectiveRate.toFixed(2)}%
+                Fed Pivot
               </span>
-              <span
-                className={`text-[9px] font-bold ${
-                  macroSnapshot.fedPivot.stance === 'DOVISH_PIVOT'
-                    ? 'text-emerald-400'
-                    : macroSnapshot.fedPivot.delta6mBps > 0
-                    ? 'text-rose-400'
-                    : 'text-slate-400'
-                }`}
-              >
-                {macroSnapshot.fedPivot.stance === 'DOVISH_PIVOT'
-                  ? '• PIVOT!'
-                  : `(${macroSnapshot.fedPivot.delta6mBps >= 0 ? '+' : ''}${macroSnapshot.fedPivot.delta6mBps}bps)`}
-              </span>
+              {macroSnapshot.fedPivotV2 ? (
+                <span className="text-[9px] font-bold text-emerald-300">
+                  {macroSnapshot.fedPivotV2.pivotScore.toFixed(1)}/7
+                  <span className="hidden md:inline text-slate-400">
+                    {' '}• {macroSnapshot.fedPivotV2.statusLabel}
+                  </span>
+                </span>
+              ) : (
+                macroSnapshot.fedPivot && (
+                  <span className="text-[9px] font-bold text-slate-300">
+                    {macroSnapshot.fedPivot.effectiveRate.toFixed(2)}%
+                  </span>
+                )
+              )}
             </button>
           )}
         </div>

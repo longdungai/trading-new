@@ -17,6 +17,10 @@
       "destination": "https://services.entrade.com.vn/:path*"
     },
     {
+      "source": "/api/fred/:path*",
+      "destination": "https://fred.stlouisfed.org/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

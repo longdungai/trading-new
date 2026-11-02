@@ -283,7 +283,7 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
           )}
         </button>
 
-        {/* Vietnam Selloff Radar & Bottom-Fishing Pill */}
+        {/* Vietnam Spot Cash, Selloff Radar & Bottom-Fishing Pill */}
         {verdict.vnTacticalSummary && (
           <button
             type="button"
@@ -298,11 +298,12 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
                 ? 'bg-emerald-950/60 text-emerald-200 border-emerald-500/50'
                 : 'bg-teal-950/45 text-teal-200 border-teal-500/40'
             }`}
-            title="Radar Bán tháo / Giải chấp CTCK & Lệnh chờ Rải Đinh Bắt Đáy 3 bậc"
+            title="Điểm Mua Spot Tiền Mặt Hàng Ngày, Lướt T+0 Không Vay Margin, Radar Bán Tháo & Rải Đinh 3 Bậc"
           >
             <span>
-              🛡️ PP {verdict.vnTacticalSummary.panicAndForceSell.totalDistributionCluster}/5 •
-              Force-Sell {verdict.vnTacticalSummary.panicAndForceSell.forceSellProbabilityPct}%
+              💵 Spot {verdict.vnTacticalSummary.spotDailyCash.dailySpotScanner.activeSymbolCandidate.dailySpotScore}/100 (RS{' '}
+              {verdict.vnTacticalSummary.spotDailyCash.dailySpotScanner.activeSymbolCandidate.rsRatingScore}) • 🛡️ PP{' '}
+              {verdict.vnTacticalSummary.panicAndForceSell.totalDistributionCluster}/5
             </span>
             {verdict.vnTacticalSummary.bottomFishingPlan.board !== 'INDEX' && (
               <span>
@@ -616,7 +617,7 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
             </div>
           </div>
 
-          {/* Vietnam Tactical Selloff, Bottom-Fishing & T+2.5 Strip inside Expanded Overlay */}
+          {/* Vietnam Tactical Spot Cash, Selloff, Bottom-Fishing & T+2.5 Strip inside Expanded Overlay */}
           {verdict.vnTacticalSummary && (
             <div className="p-2 rounded-xl bg-teal-950/25 border border-teal-500/35 space-y-1.5">
               <div className="flex items-center justify-between gap-2 flex-wrap text-[10.5px]">
@@ -627,6 +628,39 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
                   {verdict.vnTacticalSummary.capitulationMeter.phaseBadgeVi}
                 </span>
               </div>
+
+              {/* Daily Spot Cash & Zero-Leverage T+0 Summary Row */}
+              {verdict.vnTacticalSummary.bottomFishingPlan.board !== 'INDEX' && (
+                <div className="p-1.5 rounded-lg bg-[#081322] border border-emerald-500/30 space-y-1 text-[10px]">
+                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                    <span className="font-bold text-emerald-300">
+                      💵 {verdict.vnTacticalSummary.spotDailyCash.dailySpotScanner.activeSymbolCandidate.setupBadgeVi}
+                    </span>
+                    <span className="font-mono text-cyan-300 font-bold">
+                      Spot {verdict.vnTacticalSummary.spotDailyCash.dailySpotScanner.activeSymbolCandidate.dailySpotScore}/100 • RS{' '}
+                      {verdict.vnTacticalSummary.spotDailyCash.dailySpotScanner.activeSymbolCandidate.rsRatingScore}/99
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 font-mono text-[9.5px] text-slate-300 flex-wrap">
+                    <span>
+                      Ngăn tiền mặt hôm nay:{' '}
+                      <strong className="text-amber-300">
+                        {verdict.vnTacticalSummary.spotDailyCash.rollingCashCarousel.recommendedTodaySymbolBudgetMillionVnd} Tr (
+                        {verdict.vnTacticalSummary.spotDailyCash.rollingCashCarousel.recommendedTodaySymbolLots.toLocaleString('en-US')} CP)
+                      </strong>
+                    </span>
+                    <span>
+                      Lướt T+0 (0% Margin):{' '}
+                      <strong className="text-emerald-300">
+                        Mua {verdict.vnTacticalSummary.spotDailyCash.zeroLeverageT0Plan.intradayBuyPrice}k → Bán{' '}
+                        {verdict.vnTacticalSummary.spotDailyCash.zeroLeverageT0Plan.intradaySellPrice}k (+
+                        {verdict.vnTacticalSummary.spotDailyCash.zeroLeverageT0Plan.netDailyProfitThousandVnd.toLocaleString('en-US')}k)
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {verdict.vnTacticalSummary.bottomFishingPlan.board !== 'INDEX' && (
                 <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
                   {verdict.vnTacticalSummary.bottomFishingPlan.rungs.map((r) => (

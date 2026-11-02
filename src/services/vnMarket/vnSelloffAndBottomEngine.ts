@@ -16,6 +16,10 @@ import {
 import { VnActiveOrderFlowSummary, computeVnActiveOrderFlow } from './vnExecutionEngines';
 import { VnStockInsightsPayload } from './vnStockInsightsClient';
 import { UserHoldingItem } from '../portfolio/holdingsRecoveryEngine';
+import {
+  evaluateVnDailySpotTradingReport,
+  VnDailySpotTradingReport,
+} from './vnSpotDailyCashEngine';
 
 // ============================================================================
 // 1. PANIC SELLOFF, O'NEIL DISTRIBUTION DAYS & 13:45-14:15 FORCE-SELL RADAR
@@ -227,6 +231,7 @@ export interface VnComprehensiveTacticalReport {
   atcDistortion: VnAtcDistortionAnalysis;
   capitulationMeter: VnCapitulationCycleMeter;
   postCrashAndHedge: VnPostCrashAndHedgeSummary;
+  spotDailyCash: VnDailySpotTradingReport;
 }
 
 // ============================================================================
@@ -1420,6 +1425,16 @@ export function evaluateVnComprehensiveTacticalReport(params: {
     panicRadar: panicAndForceSell,
   });
 
+  const spotDailyCash = evaluateVnDailySpotTradingReport({
+    symbolObj,
+    allSymbols,
+    candles,
+    vnInsights,
+    userHoldingsMap,
+    totalSpotCapitalMillionVnd: Math.max(90, bottomBudgetMillionVnd * 1.5),
+    now,
+  });
+
   return {
     symbol: symbolObj.symbol.toUpperCase(),
     panicAndForceSell,
@@ -1428,5 +1443,6 @@ export function evaluateVnComprehensiveTacticalReport(params: {
     atcDistortion,
     capitulationMeter,
     postCrashAndHedge,
+    spotDailyCash,
   };
 }

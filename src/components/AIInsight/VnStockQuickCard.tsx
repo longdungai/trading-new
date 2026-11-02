@@ -70,9 +70,9 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
 
   const [insights, setInsights] = useState<VnStockInsightsPayload | null>(null);
   const [nowClock, setNowClock] = useState<Date>(() => new Date());
-  const [activeTacticalTab, setActiveTacticalTab] = useState<'selloff' | 'bottom' | 't2_atc'>(
-    'bottom'
-  );
+  const [activeTacticalTab, setActiveTacticalTab] = useState<
+    'spot_cash' | 'bottom' | 'selloff' | 't2_atc'
+  >('spot_cash');
   const [bottomBudgetInput, setBottomBudgetInput] = useState<string>('100');
   const [holdingsMap, setHoldingsMap] = useState<Record<string, UserHoldingItem>>(() =>
     loadUserHoldings()
@@ -195,6 +195,7 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
     atcDistortion,
     capitulationMeter,
     postCrashAndHedge,
+    spotDailyCash,
   } = tacticalReport;
 
   return (
@@ -280,12 +281,25 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
       )}
 
       {/* ==========================================================================
-          NEW: 3-TAB VIETNAM INSTITUTIONAL TACTICAL COMMAND CENTER
-          (1. Dự Đoán Bán Tháo & Chu Kỳ Đáy | 2. Rải Đinh Bắt Đáy 3 Bậc | 3. Hàng T+2.5 & ATC)
+          NEW: 4-TAB VIETNAM INSTITUTIONAL & DAILY SPOT CASH COMMAND CENTER
+          (1. Spot Tiền Mặt Hàng Ngày | 2. Rải Đinh Đáy | 3. Dự Đoán Bán Tháo | 4. T+2.5 & ATC)
          ========================================================================== */}
       <div className="p-2.5 rounded-xl bg-[#09101d] border border-teal-500/35 space-y-2.5 min-w-0">
         {/* Segmented Tactical Switcher */}
-        <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-[#060a13] border border-slate-800 text-[10px] font-bold">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 rounded-lg bg-[#060a13] border border-slate-800 text-[10px] font-bold">
+          <button
+            type="button"
+            onClick={() => setActiveTacticalTab('spot_cash')}
+            className={`py-1.5 px-1.5 rounded-md transition flex items-center justify-center gap-1 truncate ${
+              activeTacticalTab === 'spot_cash'
+                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/50 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Flame className="w-3 h-3 shrink-0 text-emerald-400" />
+            <span className="truncate">Spot Tiền Mặt</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTacticalTab('bottom')}
@@ -327,6 +341,236 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
             <span className="truncate">T+2.5 &amp; ATC</span>
           </button>
         </div>
+
+        {/* TAB 0: DAILY SPOT CASH TRADING ENGINE (100% CASH, ZERO LEVERAGE) */}
+        {activeTacticalTab === 'spot_cash' && (
+          <div className="space-y-2 text-[10.5px]">
+            {/* 1. Active Symbol Daily Spot Pocket-Pivot & RS Alpha Evaluation */}
+            <div
+              className={`p-2 rounded-lg border space-y-1.5 ${
+                spotDailyCash.dailySpotScanner.activeSymbolCandidate.setupStatus ===
+                  'SWEET_SPOT_POCKET_PIVOT' ||
+                spotDailyCash.dailySpotScanner.activeSymbolCandidate.setupStatus ===
+                  'RS_LEADER_PULLBACK_BUY'
+                  ? 'bg-emerald-950/40 border-emerald-500/45 text-emerald-100'
+                  : spotDailyCash.dailySpotScanner.activeSymbolCandidate.setupStatus ===
+                    'CHASING_CEILING_TRAP_AVOID'
+                  ? 'bg-rose-950/45 border-rose-500/50 text-rose-100'
+                  : 'bg-[#0c1628] border-slate-800 text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <span className="font-extrabold text-[10px] tracking-wide">
+                  {spotDailyCash.dailySpotScanner.activeSymbolCandidate.setupBadgeVi}
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-700 font-mono text-[9.5px] font-bold text-cyan-300">
+                  Điểm Spot: {spotDailyCash.dailySpotScanner.activeSymbolCandidate.dailySpotScore}/100 • RS{' '}
+                  {spotDailyCash.dailySpotScanner.activeSymbolCandidate.rsRatingScore}/99
+                </span>
+              </div>
+
+              <div className="text-[10px] text-slate-300 leading-snug">
+                {spotDailyCash.dailySpotScanner.activeSymbolCandidate.rationaleVi}
+              </div>
+
+              {!isIndex && !isDeriv && (
+                <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px] pt-1">
+                  <div className="p-1.5 rounded bg-[#070d18] border border-cyan-500/30">
+                    <div className="text-[8.5px] text-slate-400 font-sans">Vùng Mua Spot</div>
+                    <div className="font-bold text-cyan-300">
+                      {formatPrice(spotDailyCash.dailySpotScanner.activeSymbolCandidate.spotBuyZone[0])}–
+                      {formatPrice(spotDailyCash.dailySpotScanner.activeSymbolCandidate.spotBuyZone[1])}
+                      {unitSuffix}
+                    </div>
+                  </div>
+                  <div className="p-1.5 rounded bg-[#070d18] border border-emerald-500/30">
+                    <div className="text-[8.5px] text-slate-400 font-sans">Chốt Tiền Mặt T+2.5</div>
+                    <div className="font-bold text-emerald-300">
+                      {formatPrice(spotDailyCash.dailySpotScanner.activeSymbolCandidate.spotTargetT2Price)}
+                      {unitSuffix} (+
+                      {spotDailyCash.dailySpotScanner.activeSymbolCandidate.expectedNetProfitPct}%)
+                    </div>
+                  </div>
+                  <div className="p-1.5 rounded bg-[#070d18] border border-rose-500/30">
+                    <div className="text-[8.5px] text-slate-400 font-sans">Cắt Lỗ Bảo Toàn</div>
+                    <div className="font-bold text-rose-300">
+                      {formatPrice(spotDailyCash.dailySpotScanner.activeSymbolCandidate.spotHardStopPrice)}
+                      {unitSuffix}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Afternoon T+2.5 Settlement Advantage Window (13h45 - 14h25) */}
+            <div className="p-2 rounded-lg bg-[#0c1628] border border-amber-500/35 space-y-1">
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <span className="font-bold text-amber-200 text-[10px]">
+                  {spotDailyCash.afternoonT2Window.windowBadgeVi}
+                </span>
+                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-[9px] font-bold">
+                  Giải ngân tối đa: {spotDailyCash.afternoonT2Window.maxCashDeploymentNowPct}% ngăn hôm nay
+                </span>
+              </div>
+              <div className="text-[9.5px] text-slate-300 leading-snug">
+                {spotDailyCash.afternoonT2Window.tacticalAdviceVi}
+              </div>
+            </div>
+
+            {/* 3. 3-Bucket Rolling Cash Carousel (33% - 33% - 34% Zero-Leverage) */}
+            <div className="p-2 rounded-lg bg-[#070d18] border border-indigo-500/35 space-y-1.5">
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <span className="font-bold text-indigo-200 text-[10px]">
+                  🔄 Vòng Quay Vốn 3 Ngăn T+2.5 (100% Tiền Mặt • 0% Margin)
+                </span>
+                <span className="font-mono text-[9.5px] text-emerald-300 font-bold">
+                  Tổng vốn: {spotDailyCash.rollingCashCarousel.totalSpotCapitalMillionVnd} Tr VNĐ
+                </span>
+              </div>
+              <div className="text-[9.5px] text-cyan-200 font-semibold leading-snug">
+                {spotDailyCash.rollingCashCarousel.carouselHeadlineVi}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-0.5">
+                {spotDailyCash.rollingCashCarousel.buckets.map((b) => (
+                  <div
+                    key={b.bucketId}
+                    className="p-1.5 rounded bg-[#0c1526] border border-slate-800 space-y-0.5"
+                  >
+                    <div className="text-[9px] font-bold text-slate-200 flex items-center justify-between">
+                      <span>{b.labelVi}</span>
+                      <span className="font-mono text-amber-300">{b.allocatedMillionVnd} Tr</span>
+                    </div>
+                    <div className="text-[9px] font-mono text-cyan-300 truncate">
+                      {b.statusBadgeVi}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 4. Zero-Leverage Inventory T+0 Cash Harvester */}
+            {!isIndex && !isDeriv && (
+              <div className="p-2 rounded-lg bg-[#0b1526] border border-cyan-500/35 space-y-1.5">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="font-bold text-cyan-200 text-[10px]">
+                    {spotDailyCash.zeroLeverageT0Plan.modeBadgeVi}
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-[9.5px] font-bold">
+                    Lãi ngay trong ngày: +
+                    {spotDailyCash.zeroLeverageT0Plan.netDailyProfitThousandVnd.toLocaleString('en-US')}k (+
+                    {spotDailyCash.zeroLeverageT0Plan.netSpreadAfterFeeTaxPct}%)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 font-mono text-[10px] text-slate-300 flex-wrap">
+                  <span>
+                    Kho khả dụng:{' '}
+                    <strong className="text-white">
+                      {spotDailyCash.zeroLeverageT0Plan.settledSharesAvailable.toLocaleString('en-US')} CP
+                    </strong>
+                    {spotDailyCash.zeroLeverageT0Plan.isTemplateSimulation && ' (Mô phỏng chuẩn)'}
+                  </span>
+                  <span>
+                    Lô lướt T+0:{' '}
+                    <strong className="text-amber-300">
+                      {spotDailyCash.zeroLeverageT0Plan.surfLotShares.toLocaleString('en-US')} CP
+                    </strong>
+                  </span>
+                  <span>
+                    Mua <strong className="text-emerald-300">{spotDailyCash.zeroLeverageT0Plan.intradayBuyPrice}k</strong> → Bán{' '}
+                    <strong className="text-amber-300">{spotDailyCash.zeroLeverageT0Plan.intradaySellPrice}k</strong>
+                  </span>
+                </div>
+                <div className="space-y-0.5 text-[9.5px] text-slate-300 leading-snug">
+                  {spotDailyCash.zeroLeverageT0Plan.executionStepsVi.map((step, i) => (
+                    <div key={i}>• {step}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 5. Top Daily Spot Candidates & RS Leaders Across Market */}
+            {spotDailyCash.dailySpotScanner.topDailySpotCandidates.length > 0 && (
+              <div className="p-2 rounded-lg bg-[#070d18] border border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="font-bold text-white text-[10px]">
+                    🏆 Top Cổ Phiếu Điểm Nổ Spot &amp; Kháng Đỏ Hôm Nay
+                  </span>
+                  <span className="font-mono text-[9px] text-slate-400">
+                    VN-Index: {spotDailyCash.dailySpotScanner.vnIndexChangePct >= 0 ? '+' : ''}
+                    {spotDailyCash.dailySpotScanner.vnIndexChangePct.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {spotDailyCash.dailySpotScanner.topDailySpotCandidates.map((cand) => {
+                    const matched = symbols.find(
+                      (s) => s.symbol.toUpperCase() === cand.symbol.toUpperCase()
+                    );
+                    return (
+                      <button
+                        key={cand.symbol}
+                        type="button"
+                        onClick={() => matched && onSelectSymbol(matched)}
+                        className="p-1.5 rounded bg-[#0d172a] hover:bg-[#13223d] border border-slate-800 hover:border-emerald-500/40 text-left transition space-y-0.5"
+                      >
+                        <div className="flex items-center justify-between font-mono text-[10px]">
+                          <span className="font-black text-white">{cand.symbol}</span>
+                          <span className="text-emerald-300 font-bold">
+                            {cand.dailySpotScore}đ • RS {cand.rsRatingScore}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between font-mono text-[9px] text-slate-300">
+                          <span>
+                            Mua: {formatPrice(cand.spotBuyZone[0])}–{formatPrice(cand.spotBuyZone[1])}k
+                          </span>
+                          <span
+                            className={
+                              cand.rsAlphaVsVnIndexPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                            }
+                          >
+                            Alpha {cand.rsAlphaVsVnIndexPct >= 0 ? '+' : ''}
+                            {cand.rsAlphaVsVnIndexPct}%
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 6. Spot Cash-Lock Exit Ladder & Compounding Projection */}
+            {!isIndex && !isDeriv && (
+              <div className="p-2 rounded-lg bg-[#0a1322] border border-emerald-500/30 space-y-1">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap font-bold text-[10px] text-emerald-200">
+                  <span>🔒 Kỷ Luật Khóa Lãi Tiền Mặt T+3 &amp; Lãi Kép Spot</span>
+                  <span className="font-mono text-[9.5px] text-amber-300">
+                    Hòa vốn thực: {formatPrice(spotDailyCash.spotCashLockPlan.trueBreakEvenPrice)}k
+                  </span>
+                </div>
+                <div className="text-[9.5px] text-slate-300 leading-snug">
+                  {spotDailyCash.spotCashLockPlan.disciplineRuleVi}
+                </div>
+                <div className="flex items-center justify-between gap-2 font-mono text-[9.5px] text-cyan-200 pt-0.5 flex-wrap">
+                  <span>
+                    📈 5 vòng T+3 (~1 tháng):{' '}
+                    <strong className="text-emerald-300">
+                      +{spotDailyCash.spotCashLockPlan.compounding5CyclesPct}% (+
+                      {spotDailyCash.spotCashLockPlan.compounding5CyclesProfitMillionVnd} Tr)
+                    </strong>
+                  </span>
+                  <span>
+                    12 vòng (~1 quý):{' '}
+                    <strong className="text-amber-300">
+                      +{spotDailyCash.spotCashLockPlan.compounding12CyclesPct}% (+
+                      {spotDailyCash.spotCashLockPlan.compounding12CyclesProfitMillionVnd} Tr)
+                    </strong>
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* TAB 1: SMART 3-RUNG BOTTOM-FISHING LIMIT LADDER ("RẢI ĐINH BẮT ĐÁY") */}
         {activeTacticalTab === 'bottom' && (

@@ -1005,7 +1005,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       )}
 
       {/* Top-Left Unified HUD Stack (OHLCV + 6-Pillar Action Verdict + Walk-Forward) */}
-      <div className="absolute top-2 left-2.5 right-[68px] z-[18] pointer-events-none flex flex-col items-start gap-1.5">
+      <div className="absolute top-1.5 left-1.5 right-[54px] sm:top-2 sm:left-2.5 sm:right-[68px] z-[18] pointer-events-none flex flex-col items-start gap-1 sm:gap-1.5">
         <div className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded-md bg-[#080d18]/80 backdrop-blur-sm border border-slate-800/80 text-[10px] font-mono tabular-nums text-slate-300 shadow max-w-full">
           {symbolName && (
             <span className="font-bold text-white shrink-0">
@@ -1023,8 +1023,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           )}
         </div>
 
-        {/* Sub-stack shifted right (pl-9 sm:pl-10) to completely clear the left Drawing Tool Rail */}
-        <div className="w-full pl-9 sm:pl-10 flex flex-col items-start gap-1.5">
+        {/* Sub-stack: full-width on mobile (< 640px) since drawing rail is collapsed to bottom-left, shifted right on sm+ */}
+        <div className="w-full pl-0 sm:pl-10 flex flex-col items-start gap-1 sm:gap-1.5">
           {chartVerdict && (
             <ChartVerdictOverlay
               verdict={chartVerdict}
@@ -1038,7 +1038,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           )}
 
           {(settings.kronosWalkForward || settings.kronosGhostCandles) && aiPrediction && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="hidden sm:flex flex-wrap items-center gap-1.5">
               {settings.kronosWalkForward && wf && (
                 <div className="px-2 py-0.5 rounded-md bg-[#0b111d]/85 backdrop-blur-sm border border-amber-500/35 text-[10px] font-mono flex items-center gap-1.5 shadow">
                   <span className="w-2 h-0.5 bg-amber-400 inline-block" />

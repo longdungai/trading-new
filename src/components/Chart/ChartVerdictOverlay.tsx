@@ -160,8 +160,8 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
 
   return (
     <div className="w-full select-none flex flex-col items-start">
-      {/* COMPACT HUD PILL ROW (Always visible, 0 overlap with drawing rail, OHLCV, or price axis) */}
-      <div className="pointer-events-auto max-w-full flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#070d19]/92 backdrop-blur-md border border-slate-700/80 shadow-xl">
+      {/* COMPACT HUD PILL ROW (Single-line touch scroll on mobile, wraps cleanly on sm+ desktop) */}
+      <div className="pointer-events-auto max-w-full flex flex-nowrap sm:flex-wrap items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-[#070d19]/92 backdrop-blur-md border border-slate-700/80 shadow-xl overflow-x-auto no-scrollbar">
         {/* Verdict Badge */}
         <button
           type="button"
@@ -326,7 +326,7 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
 
       {/* INLINE QUICK HOLDING INPUT & RECOVERY POPOVER ON CHART */}
       {isHoldingPopoverOpen && (
-        <div className="pointer-events-auto mt-1.5 w-full max-w-[490px] rounded-2xl bg-[#070d19]/96 backdrop-blur-xl border border-amber-500/50 shadow-2xl p-3 space-y-2.5 text-xs">
+        <div className="pointer-events-auto mt-1.5 w-full max-w-[490px] max-h-[58dvh] overflow-y-auto rounded-2xl bg-[#070d19]/96 backdrop-blur-xl border border-amber-500/50 shadow-2xl p-2.5 sm:p-3 space-y-2.5 text-xs">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="font-bold text-amber-200 flex items-center gap-1.5 text-[11px]">
               <Briefcase className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -448,7 +448,7 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
 
       {/* EXPANDED 6-PILLAR INSTITUTIONAL VERDICT PANEL */}
       {isExpanded && (
-        <div className="pointer-events-auto mt-1.5 w-full max-w-[560px] max-h-[calc(100vh-230px)] overflow-y-auto rounded-2xl bg-[#070d19]/95 backdrop-blur-xl border border-slate-700/90 shadow-2xl p-3 space-y-2.5 text-xs">
+        <div className="pointer-events-auto mt-1.5 w-full max-w-[560px] max-h-[60dvh] sm:max-h-[calc(100vh-230px)] overflow-y-auto rounded-2xl bg-[#070d19]/95 backdrop-blur-xl border border-slate-700/90 shadow-2xl p-2.5 sm:p-3 space-y-2.5 text-xs">
           {/* Strategy Guidance & Capital Allocation */}
           <div className="p-2.5 rounded-xl bg-[#0c1526] border border-slate-800 space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-1.5">

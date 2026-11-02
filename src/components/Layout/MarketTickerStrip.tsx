@@ -85,7 +85,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
     aiPrediction?.trend === 'STRONG_BEARISH' || aiPrediction?.trend === 'BEARISH';
 
   return (
-    <div className="h-7 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-2 sm:px-3 flex items-center justify-between gap-2 select-none shrink-0 overflow-hidden z-20">
+    <div className="h-6 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-1.5 sm:px-3 flex items-center justify-between gap-1.5 sm:gap-2 select-none shrink-0 overflow-x-auto no-scrollbar z-20">
       {/* Left: Macro Shock Radar Trigger + Fed Pivot Watch Pill + VN Gold Parity Pill */}
       {onOpenMacroModal && (
         <div className="flex items-center gap-1 shrink-0">
@@ -185,7 +185,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
           <button
             type="button"
             onClick={() => onOpenMacroModal('vn_market')}
-            className="hidden sm:flex px-2 py-0.5 rounded-md border border-rose-500/40 bg-rose-500/12 hover:bg-rose-500/25 text-[10px] font-mono items-center gap-1 shrink-0 text-rose-200 transition whitespace-nowrap"
+            className="flex px-2 py-0.5 rounded-md border border-rose-500/40 bg-rose-500/12 hover:bg-rose-500/25 text-[10px] font-mono items-center gap-1 shrink-0 text-rose-200 transition whitespace-nowrap"
             title="Mở Chuyên Trang TTCK Việt Nam: Phái sinh VN30F1M Basis, Khối Ngoại Thời Gian Thực & Sóng 10 Ngành"
           >
             <span className="shrink-0">🇻🇳</span>

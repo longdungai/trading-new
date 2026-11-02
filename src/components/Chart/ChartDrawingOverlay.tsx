@@ -10,6 +10,8 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Trash2,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { AIPrediction, Candle, Timeframe } from '../../types';
 import { formatPrice } from '../../utils/formatters';
@@ -81,6 +83,7 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
   onQuickCreatePriceAlert,
 }) => {
   const [activeTool, setActiveTool] = useState<DrawingToolType>('CURSOR');
+  const [isMobileRailOpen, setIsMobileRailOpen] = useState<boolean>(false);
   const [drawings, setDrawings] = useState<ChartDrawingItem[]>(() =>
     loadDrawingsForSymbol(symbolName)
   );
@@ -195,9 +198,9 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
     saveDrawingsForSymbol(symbolName, next);
   };
 
-  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+  const placeDrawingPointAt = (clientX: number, clientY: number) => {
     if (activeTool === 'CURSOR') return;
-    const pt = resolveTimeAndPrice(e.clientX, e.clientY);
+    const pt = resolveTimeAndPrice(clientX, clientY);
     if (!pt) return;
 
     if (activeTool === 'HLINE') {
@@ -210,6 +213,7 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
       };
       persistAndSet([...drawings, item]);
       setActiveTool('CURSOR');
+      setIsMobileRailOpen(false);
       return;
     }
 
@@ -233,6 +237,7 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
       };
       persistAndSet([...drawings, item]);
       setActiveTool('CURSOR');
+      setIsMobileRailOpen(false);
       return;
     }
 
@@ -252,7 +257,20 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
       persistAndSet([...drawings, item]);
       setDraftAnchor(null);
       setActiveTool('CURSOR');
+      setIsMobileRailOpen(false);
     }
+  };
+
+  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    placeDrawingPointAt(e.clientX, e.clientY);
+  };
+
+  const handleSvgTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (activeTool === 'CURSOR') return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    e.preventDefault();
+    placeDrawingPointAt(touch.clientX, touch.clientY);
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -331,8 +349,31 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
 
   return (
     <>
-      {/* Compact Floating Left-Side Drawing Tool Rail */}
-      <div className="absolute left-2 top-14 z-20 flex flex-col gap-1 p-1 rounded-xl bg-[#090f1c]/90 backdrop-blur-md border border-slate-800/90 shadow-xl select-none">
+      {/* Mobile Compact Floating Drawing Toggle Button (< 640px) */}
+      <button
+        type="button"
+        onClick={() => setIsMobileRailOpen(v => !v)}
+        title="Bật/Tắt Thanh công cụ Vẽ kỹ thuật & Chụp ảnh biểu đồ"
+        className={`sm:hidden absolute left-1.5 bottom-7 z-20 w-7 h-7 rounded-lg flex items-center justify-center border shadow-lg transition select-none ${
+          isMobileRailOpen || activeTool !== 'CURSOR'
+            ? 'bg-cyan-600 text-white border-cyan-400'
+            : 'bg-[#090f1c]/90 backdrop-blur-md text-slate-300 border-slate-700/90'
+        }`}
+      >
+        {isMobileRailOpen ? <X className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+        {drawings.length > 0 && !isMobileRailOpen && (
+          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-cyan-500 text-slate-950 text-[8px] font-mono font-black flex items-center justify-center">
+            {drawings.length}
+          </span>
+        )}
+      </button>
+
+      {/* Compact Floating Left-Side Drawing Tool Rail (Collapsible on < 640px, Always visible on >= 640px) */}
+      <div
+        className={`${
+          isMobileRailOpen ? 'flex' : 'hidden sm:flex'
+        } absolute left-1.5 sm:left-2 bottom-16 sm:bottom-auto sm:top-14 z-20 flex-col gap-1 p-1 rounded-xl bg-[#090f1c]/95 backdrop-blur-md border border-slate-800/90 shadow-xl select-none`}
+      >
         {(
           [
             { id: 'CURSOR', icon: MousePointer, tip: 'Con trỏ xem & kéo biểu đồ' },
@@ -390,15 +431,15 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
 
       {/* Active Drawing Helper Pill */}
       {activeTool !== 'CURSOR' && (
-        <div className="absolute top-2 right-16 z-20 px-2.5 py-1 rounded-lg bg-cyan-950/90 border border-cyan-400/50 text-[10.5px] font-mono text-cyan-200 shadow flex items-center gap-2 pointer-events-none">
+        <div className="absolute bottom-7 left-10 sm:bottom-auto sm:left-auto sm:top-2 sm:right-16 z-20 px-2.5 py-1 rounded-lg bg-cyan-950/90 border border-cyan-400/50 text-[10px] sm:text-[10.5px] font-mono text-cyan-200 shadow flex items-center gap-2 pointer-events-none">
           <span>
             {draftAnchor
-              ? 'Nhấp điểm thứ 2 trên biểu đồ để hoàn tất'
+              ? 'Chạm điểm thứ 2 trên biểu đồ để hoàn tất'
               : activeTool === 'HLINE'
-              ? 'Nhấp vào mức giá cần kẻ đường ngang'
+              ? 'Chạm vào mức giá cần kẻ đường ngang'
               : activeTool === 'RR_LONG' || activeTool === 'RR_SHORT'
-              ? 'Nhấp vào điểm Entry để đặt thước đo R:R'
-              : 'Nhấp điểm bắt đầu trên biểu đồ'}
+              ? 'Chạm vào điểm Entry để đặt thước đo R:R'
+              : 'Chạm điểm bắt đầu trên biểu đồ'}
           </span>
         </div>
       )}
@@ -407,6 +448,7 @@ export const ChartDrawingOverlay: React.FC<ChartDrawingOverlayProps> = ({
       <svg
         ref={svgRef}
         onClick={handleSvgClick}
+        onTouchStart={handleSvgTouchStart}
         onMouseMove={handleMouseMove}
         className={`absolute inset-0 w-full h-full z-[12] ${
           activeTool === 'CURSOR' ? 'pointer-events-none' : 'pointer-events-auto cursor-crosshair'

@@ -98,3 +98,19 @@ body {
 .glow-red {
   animation: pulse-glow-red 2.2s infinite;
 }
+
+/* Mobile Dynamic Viewport & iOS/Android Safe-Area Utilities */
+.h-dvh-safe {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.pb-safe-nav {
+  padding-bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+.bottom-nav-safe {
+  height: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+

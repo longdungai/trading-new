@@ -152,6 +152,9 @@ export const App: React.FC = () => {
   const [isGomBannerDismissed, setIsGomBannerDismissed] = useState<boolean>(false);
   const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'market' | 'risk'>('ai');
   const [mobileTab, setMobileTab] = useState<'chart' | 'ai' | 'market' | 'risk'>('chart');
+  const [mobileMarketSubTab, setMobileMarketSubTab] = useState<'watchlist' | 'orderbook'>(
+    'watchlist'
+  );
   const [showLeftDock, setShowLeftDock] = useState<boolean>(true);
   const [isZenMode, setIsZenMode] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
@@ -1095,7 +1098,7 @@ export const App: React.FC = () => {
     isLeftDockActive && rightPanelTab === 'market' ? 'ai' : rightPanelTab;
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#06090f] text-slate-100 overflow-hidden select-none font-sans">
+    <div className="flex flex-col h-dvh-safe w-full max-w-[100vw] bg-[#06090f] text-slate-100 overflow-hidden select-none font-sans">
       {/* 1. Institutional Top Header */}
       <Header
         currentSymbol={currentSymbol}
@@ -1126,49 +1129,59 @@ export const App: React.FC = () => {
         activeView={activeView}
         setActiveView={setActiveView}
         signalAction={strategyHub?.bestStrategy?.action}
+        isZenMode={isZenMode}
+        onToggleZenMode={() => setIsZenMode(prev => !prev)}
       />
 
-      {/* 2. Macro Benchmark & Market Breadth Ribbon */}
-      <MarketTickerStrip
-        symbols={symbols}
-        currentSymbol={currentSymbol}
-        favorites={favorites}
-        aiPrediction={aiPrediction}
-        macroSnapshot={macroSnapshot}
-        onOpenMacroModal={(tab = 'indicators') => {
-          setMacroModalTab(tab);
-          setIsMacroModalOpen(true);
-        }}
-        onSelectSymbol={handleSelectSymbol}
-      />
-
-      {/* 3. Indicator & Workspace Control Toolbar (Rendered on chart view) */}
-      {activeView === 'chart' && (
-        <IndicatorToolbar
-          settings={settings}
-          onToggle={handleToggleIndicator}
-          showLeftDock={showLeftDock}
-          onToggleLeftDock={() => {
-            setShowLeftDock(prev => {
-              const next = !prev;
-              if (next && rightPanelTab === 'market') {
-                setRightPanelTab('ai');
-              }
-              return next;
-            });
+      {/* 2. Macro Benchmark & Market Breadth Ribbon (Hidden on mobile when Zen Mode active) */}
+      <div className={isZenMode ? 'hidden md:block shrink-0' : 'block shrink-0'}>
+        <MarketTickerStrip
+          symbols={symbols}
+          currentSymbol={currentSymbol}
+          favorites={favorites}
+          aiPrediction={aiPrediction}
+          macroSnapshot={macroSnapshot}
+          onOpenMacroModal={(tab = 'indicators') => {
+            setMacroModalTab(tab);
+            setIsMacroModalOpen(true);
           }}
-          isZenMode={isZenMode}
-          onToggleZenMode={() => setIsZenMode(prev => !prev)}
-          isReplayMode={isReplayMode}
-          onToggleReplayMode={handleToggleReplayMode}
-          compareSymbol={compareSymbol}
-          onChangeCompareSymbol={setCompareSymbol}
-          isVnAsset={isVnStockOrIndexSymbol(currentSymbol)}
+          onSelectSymbol={handleSelectSymbol}
         />
+      </div>
+
+      {/* 3. Indicator & Workspace Control Toolbar (Hidden on mobile when viewing non-chart tabs or Zen Mode) */}
+      {activeView === 'chart' && (
+        <div
+          className={
+            mobileTab !== 'chart' || isZenMode ? 'hidden md:block shrink-0' : 'block shrink-0'
+          }
+        >
+          <IndicatorToolbar
+            settings={settings}
+            onToggle={handleToggleIndicator}
+            showLeftDock={showLeftDock}
+            onToggleLeftDock={() => {
+              setShowLeftDock(prev => {
+                const next = !prev;
+                if (next && rightPanelTab === 'market') {
+                  setRightPanelTab('ai');
+                }
+                return next;
+              });
+            }}
+            isZenMode={isZenMode}
+            onToggleZenMode={() => setIsZenMode(prev => !prev)}
+            isReplayMode={isReplayMode}
+            onToggleReplayMode={handleToggleReplayMode}
+            compareSymbol={compareSymbol}
+            onChangeCompareSymbol={setCompareSymbol}
+            isVnAsset={isVnStockOrIndexSymbol(currentSymbol)}
+          />
+        </div>
       )}
 
       {/* 4. Main Pro Workstation Body */}
-      <div className="flex-1 flex overflow-hidden relative pb-14 md:pb-0">
+      <div className="flex-1 flex overflow-hidden relative pb-safe-nav md:pb-0">
         {/* Heatmap View */}
         <div className={`flex-1 flex flex-col ${activeView === 'heatmap' ? 'flex' : 'hidden'}`}>
           <MarketHeatmap
@@ -1584,12 +1597,47 @@ export const App: React.FC = () => {
                 {((!isLeftDockActive && effectiveRightTab === 'market' && mobileTab === 'chart') ||
                   mobileTab === 'market') && (
                   <div className="flex flex-col h-full -m-2.5 sm:-m-3">
-                    <div className="flex-1 overflow-hidden">
+                    {/* Mobile Segmented Sub-Tab Switcher (Watchlist vs OrderBook/Shark Tape) */}
+                    <div className="md:hidden flex items-center gap-1 p-1.5 bg-[#070b13] border-b border-slate-800/80 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setMobileMarketSubTab('watchlist')}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition ${
+                          mobileMarketSubTab === 'watchlist'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : 'text-slate-400 hover:text-white bg-[#0d1422]'
+                        }`}
+                      >
+                        📋 Danh Mục ({symbols.length} mã)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMobileMarketSubTab('orderbook')}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition ${
+                          mobileMarketSubTab === 'orderbook'
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                            : 'text-slate-400 hover:text-white bg-[#0d1422]'
+                        }`}
+                      >
+                        📊 Sổ Lệnh &amp; Cá Mập ({currentSymbol.symbol})
+                      </button>
+                    </div>
+
+                    <div
+                      className={`flex-1 overflow-hidden ${
+                        mobileMarketSubTab === 'watchlist' ? 'block' : 'hidden md:block'
+                      }`}
+                    >
                       <Watchlist
                         symbols={symbols}
                         currentSymbol={currentSymbol}
                         favorites={favorites}
-                        onSelectSymbol={handleSelectSymbol}
+                        onSelectSymbol={sym => {
+                          handleSelectSymbol(sym);
+                          if (window.innerWidth < 768) {
+                            setMobileTab('chart');
+                          }
+                        }}
                         onAddSymbol={handleAddSymbol}
                         onEditSymbol={handleEditSymbol}
                         onDeleteSymbol={handleDeleteSymbol}
@@ -1597,13 +1645,22 @@ export const App: React.FC = () => {
                         onResetDefaults={handleResetDefaults}
                       />
                     </div>
-                    <OrderBook
-                      orderBook={orderBook}
-                      currentPrice={currentSymbol.price}
-                      symbol={currentSymbol.symbol}
-                      quoteAsset={currentSymbol.quoteAsset}
-                      marketSymbol={currentSymbol}
-                    />
+                    <div
+                      className={
+                        mobileMarketSubTab === 'orderbook'
+                          ? 'flex-1 overflow-y-auto md:flex-none'
+                          : 'hidden md:block'
+                      }
+                    >
+                      <OrderBook
+                        orderBook={orderBook}
+                        currentPrice={currentSymbol.price}
+                        symbol={currentSymbol.symbol}
+                        quoteAsset={currentSymbol.quoteAsset}
+                        marketSymbol={currentSymbol}
+                        candles={effectiveCandles}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1613,7 +1670,7 @@ export const App: React.FC = () => {
       </div>
 
       {/* ================= MOBILE BOTTOM NAVIGATION BAR (< 768px) ================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-14 bg-[#070b13]/95 border-t border-slate-800/90 flex items-center justify-around z-40 px-1 backdrop-blur-xl">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bottom-nav-safe bg-[#070b13]/95 border-t border-slate-800/90 flex items-center justify-around z-40 px-1 backdrop-blur-xl">
         {[
           {
             id: 'chart',
@@ -1622,6 +1679,7 @@ export const App: React.FC = () => {
             active: activeView === 'chart' && mobileTab === 'chart',
             color: 'text-cyan-400',
             bar: 'bg-cyan-400',
+            badgeDot: null as string | null,
             onClick: () => {
               setActiveView('chart');
               setMobileTab('chart');
@@ -1634,6 +1692,7 @@ export const App: React.FC = () => {
             active: activeView === 'chart' && mobileTab === 'ai',
             color: 'text-blue-400',
             bar: 'bg-blue-400',
+            badgeDot: null as string | null,
             onClick: () => {
               setActiveView('chart');
               setMobileTab('ai');
@@ -1646,6 +1705,7 @@ export const App: React.FC = () => {
             active: activeView === 'chart' && mobileTab === 'market',
             color: 'text-emerald-400',
             bar: 'bg-emerald-400',
+            badgeDot: null as string | null,
             onClick: () => {
               setActiveView('chart');
               setMobileTab('market');
@@ -1653,11 +1713,16 @@ export const App: React.FC = () => {
           },
           {
             id: 'risk',
-            label: 'Vốn & VaR',
+            label: 'Vốn & Về Bờ',
             icon: Shield,
             active: activeView === 'chart' && mobileTab === 'risk',
             color: 'text-indigo-400',
             bar: 'bg-indigo-400',
+            badgeDot: activeRecoveryPlan
+              ? activeRecoveryPlan.netUnrealizedPnlPct >= 0
+                ? 'bg-emerald-400'
+                : 'bg-rose-400 animate-pulse'
+              : null,
             onClick: () => {
               setActiveView('chart');
               setMobileTab('risk');
@@ -1670,6 +1735,7 @@ export const App: React.FC = () => {
             active: activeView === 'heatmap',
             color: 'text-amber-400',
             bar: 'bg-amber-400',
+            badgeDot: null as string | null,
             onClick: () => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap'),
           },
         ].map(item => {
@@ -1685,7 +1751,14 @@ export const App: React.FC = () => {
               {item.active && (
                 <span className={`absolute top-0 w-7 h-0.5 rounded-b-full ${item.bar}`} />
               )}
-              <Icon className="w-4 h-4" />
+              <div className="relative">
+                <Icon className="w-4 h-4" />
+                {item.badgeDot && (
+                  <span
+                    className={`absolute -top-0.5 -right-1.5 w-1.5 h-1.5 rounded-full ${item.badgeDot}`}
+                  />
+                )}
+              </div>
               <span className="text-[10px] font-semibold mt-0.5">{item.label}</span>
             </button>
           );

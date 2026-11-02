@@ -11,6 +11,8 @@ import {
   Target,
   LineChart,
   Command,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { MarketSymbol, SignalAction, Timeframe } from '../../types';
 import { formatPercent, formatPrice, formatVolume } from '../../utils/formatters';
@@ -35,6 +37,8 @@ interface HeaderProps {
   activeView: 'chart' | 'heatmap';
   setActiveView: (view: 'chart' | 'heatmap') => void;
   signalAction?: SignalAction;
+  isZenMode?: boolean;
+  onToggleZenMode?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -54,6 +58,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeView,
   setActiveView,
   signalAction,
+  isZenMode = false,
+  onToggleZenMode,
 }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'commodity' | 'crypto' | 'vn30' | 'stock'>('all');
@@ -127,15 +133,15 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="h-14 sm:h-[58px] bg-[#080c14]/95 backdrop-blur-xl border-b border-slate-800/80 px-2.5 sm:px-4 flex items-center justify-between gap-2 z-30 select-none shrink-0 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.6)]">
+      <header className="h-12 sm:h-[58px] bg-[#080c14]/95 backdrop-blur-xl border-b border-slate-800/80 px-2 sm:px-4 flex items-center justify-between gap-1.5 sm:gap-2 z-30 select-none shrink-0 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.6)]">
         {/* Left: Brand + Symbol Command Selector + Live Quote & 24h Stats */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {/* Brand Logo */}
           <div
             onClick={() => setActiveView('chart')}
             className="flex items-center gap-2 shrink-0 cursor-pointer group"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-cyan-500 to-teal-400 p-[1px] shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/35 transition">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-cyan-500 to-teal-400 p-[1px] shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/35 transition">
               <div className="w-full h-full rounded-[11px] bg-[#080d17] flex items-center justify-center">
                 <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
               </div>
@@ -171,16 +177,16 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Symbol Command Selector Button */}
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#101725] hover:bg-[#162033] border border-slate-700/70 hover:border-cyan-500/50 transition text-left shadow-inner"
+            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-[#101725] hover:bg-[#162033] border border-slate-700/70 hover:border-cyan-500/50 transition text-left shadow-inner"
             title="Tìm kiếm mã nhanh (Ctrl + K)"
           >
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5">
                 <span className="font-extrabold text-xs sm:text-sm text-white font-mono tracking-tight">
                   {currentSymbol.symbol}
                 </span>
                 <span
-                  className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-bold ${
+                  className={`text-[8.5px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded uppercase font-bold ${
                     isCommodity
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/35'
                       : isVnDerivativeSymbol(currentSymbol.symbol)
@@ -199,11 +205,11 @@ export const Header: React.FC<HeaderProps> = ({
                     : currentSymbol.type === 'vn30'
                     ? 'VN30'
                     : isVND
-                    ? 'CỔ PHIẾU VN'
+                    ? 'CP VN'
                     : currentSymbol.type}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 block truncate max-w-[85px] sm:max-w-[135px]">
+              <span className="hidden sm:block text-[10px] text-slate-400 truncate max-w-[135px]">
                 {currentSymbol.name}
               </span>
             </div>
@@ -221,15 +227,15 @@ export const Header: React.FC<HeaderProps> = ({
               <Command className="w-2.5 h-2.5" />
               <span>K</span>
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
           </button>
 
           {/* Real-Time Price & Official Session Metrics */}
-          <div className="flex items-center gap-3 font-mono tabular-nums pl-0.5">
+          <div className="flex items-center gap-2 sm:gap-3 font-mono tabular-nums pl-0.5">
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5">
                 <span
-                  className={`text-sm sm:text-base font-extrabold leading-tight ${
+                  className={`text-xs sm:text-base font-extrabold leading-tight ${
                     isPositive ? 'text-emerald-400' : 'text-rose-400'
                   }`}
                 >
@@ -425,13 +431,13 @@ export const Header: React.FC<HeaderProps> = ({
       </header>
 
       {/* Sub-Header Timeframe Bar on Mobile (< 768px) */}
-      <div className="md:hidden flex items-center justify-between px-2 py-1 bg-[#080c14] border-b border-slate-800/80 overflow-x-auto no-scrollbar gap-1 shrink-0">
+      <div className="md:hidden flex items-center justify-between px-1.5 py-0.5 bg-[#080c14] border-b border-slate-800/80 overflow-x-auto no-scrollbar gap-1 shrink-0">
         <div className="flex items-center gap-1 w-full justify-around">
           {timeframes.map(tf => (
             <button
               key={tf}
               onClick={() => onChangeTimeframe(tf)}
-              className={`flex-1 py-1 text-center text-[11px] font-mono font-bold rounded-lg transition ${
+              className={`flex-1 py-0.5 text-center text-[10.5px] font-mono font-bold rounded-md transition ${
                 timeframe === tf
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-400 hover:text-white bg-[#101725]'
@@ -440,6 +446,25 @@ export const Header: React.FC<HeaderProps> = ({
               {tf}
             </button>
           ))}
+          {onToggleZenMode && (
+            <button
+              type="button"
+              onClick={onToggleZenMode}
+              title="Chế độ Zen: Ẩn/Hiện thanh công cụ để phóng đại Biểu đồ trên di động"
+              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold flex items-center gap-0.5 shrink-0 border transition ${
+                isZenMode
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-400/50'
+                  : 'bg-[#101725] text-slate-400 border-slate-800 hover:text-white'
+              }`}
+            >
+              {isZenMode ? (
+                <Minimize2 className="w-2.5 h-2.5" />
+              ) : (
+                <Maximize2 className="w-2.5 h-2.5" />
+              )}
+              <span>Zen</span>
+            </button>
+          )}
         </div>
       </div>
 

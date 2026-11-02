@@ -115,18 +115,44 @@ import {
   SMART_ALERTS_UPDATED_EVENT,
 } from './services/alerts/smartAlertCenter';
 import { checkAndPullCloudWorkspace } from './services/storage/cloudSyncClient';
+import {
+  loadActiveUserProfile,
+  loadAllUserProfiles,
+  loadPersistedActiveSymbolKey,
+  LocalUserProfile,
+  syncActiveUserProfilePatch,
+} from './services/storage/userProfileManager';
 import { AlertTriangle, Sparkles, Layers, Shield, LineChart, Flame, Globe2, Target, X } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // Load persisted symbols or fallback to defaults
-  const [symbols, setSymbols] = useState<MarketSymbol[]>(() => loadSymbolsFromStorage());
-  const [currentSymbol, setCurrentSymbol] = useState<MarketSymbol>(() => {
-    const initial = loadSymbolsFromStorage();
-    return initial[0] || DEFAULT_SYMBOLS[0];
-  });
-  const [favorites, setFavorites] = useState<string[]>(() => loadFavoritesFromStorage());
+  // Load Local User Profiles & Active Profile (Persists across F5 / Reloads)
+  const [userProfiles, setUserProfiles] = useState<LocalUserProfile[]>(() => loadAllUserProfiles());
+  const [activeUserProfile, setActiveUserProfile] = useState<LocalUserProfile>(() =>
+    loadActiveUserProfile()
+  );
 
-  const [timeframe, setTimeframe] = useState<Timeframe>('1h');
+  // Load persisted symbols & restore exact last viewed symbol on F5
+  const [symbols, setSymbols] = useState<MarketSymbol[]>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.symbols && prof.symbols.length > 0 ? prof.symbols : loadSymbolsFromStorage();
+  });
+  const [currentSymbol, setCurrentSymbol] = useState<MarketSymbol>(() => {
+    const prof = loadActiveUserProfile();
+    const initialList =
+      prof.symbols && prof.symbols.length > 0 ? prof.symbols : loadSymbolsFromStorage();
+    const targetKey = (prof.activeSymbol || loadPersistedActiveSymbolKey(initialList)).toUpperCase();
+    const matched = initialList.find(s => s.symbol.toUpperCase() === targetKey);
+    return matched || initialList[0] || DEFAULT_SYMBOLS[0];
+  });
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    const prof = loadActiveUserProfile();
+    return Array.isArray(prof.favorites) ? prof.favorites : loadFavoritesFromStorage();
+  });
+
+  const [timeframe, setTimeframe] = useState<Timeframe>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.timeframe || '1h';
+  });
   const [candles, setCandles] = useState<Candle[]>([]);
   const [orderBook, setOrderBook] = useState<OrderBookType | null>(null);
   const [isLiveLoading, setIsLiveLoading] = useState<boolean>(false);
@@ -150,15 +176,27 @@ export const App: React.FC = () => {
     loadForecastAuditEntries()
   );
   const [isGomBannerDismissed, setIsGomBannerDismissed] = useState<boolean>(false);
-  const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'market' | 'risk'>('ai');
+  const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'market' | 'risk'>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.layoutPrefs?.rightPanelTab || 'ai';
+  });
   const [mobileTab, setMobileTab] = useState<'chart' | 'ai' | 'market' | 'risk'>('chart');
   const [mobileMarketSubTab, setMobileMarketSubTab] = useState<'watchlist' | 'orderbook'>(
     'watchlist'
   );
-  const [showLeftDock, setShowLeftDock] = useState<boolean>(true);
-  const [isZenMode, setIsZenMode] = useState<boolean>(false);
+  const [showLeftDock, setShowLeftDock] = useState<boolean>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.layoutPrefs?.showLeftDock ?? true;
+  });
+  const [isZenMode, setIsZenMode] = useState<boolean>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.layoutPrefs?.isZenMode ?? false;
+  });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
-  const [compareSymbol, setCompareSymbol] = useState<string | null>(null);
+  const [compareSymbol, setCompareSymbol] = useState<string | null>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.layoutPrefs?.compareSymbol ?? null;
+  });
   const [compareCandles, setCompareCandles] = useState<Candle[]>([]);
 
   // On-Chart Historical Bar Replay State (Zero Look-Ahead Bias)
@@ -192,35 +230,17 @@ export const App: React.FC = () => {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  // Indicator Settings (Mặc định bật RSI, MACD, Hỗ trợ/Kháng cự, BB, và Nến AI Kronos)
-  const [settings, setSettings] = useState<IndicatorSettings>({
-    rsi: true,
-    macd: true,
-    autoSupportResistance: true,
-    bollingerBands: true,
-    ema20: false,
-    ema50: false,
-    ema200: false,
-    supertrend: false,
-    ichimoku: false,
-    stochastic: false,
-    vwap: false,
-    volumeProfile: false,
-    autoFibonacci: false,
-    smartMoneyConcepts: false,
-    aiForecast: true,
-    monteCarloPaths: false,
-    kronosGhostCandles: true,
-    kronosWalkForward: true,
-    vnPriceLimits: true,
-    globalOptionsAndLiqLines: true,
-    recommendedPlanLines: true,
-    holdingCostLines: true,
-    vnBottomFishingLines: true,
+  // Indicator Settings (Restored from active User Profile on F5)
+  const [settings, setSettings] = useState<IndicatorSettings>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.indicatorSettings;
   });
 
   // Kronos Foundation Model Configuration & Optional Cloud Override
-  const [kronosConfig, setKronosConfig] = useState<KronosConfig>(() => loadKronosConfig());
+  const [kronosConfig, setKronosConfig] = useState<KronosConfig>(() => {
+    const prof = loadActiveUserProfile();
+    return prof.kronosConfig || loadKronosConfig();
+  });
   const [kronosCloudOutput, setKronosCloudOutput] = useState<KronosPredictionOutput | null>(null);
   const [mtfCandlesMap, setMtfCandlesMap] = useState<Partial<Record<Timeframe, Candle[]>>>({});
   const mtfCacheRef = useRef<Map<string, { ts: number; map: Partial<Record<Timeframe, Candle[]>> }>>(new Map());
@@ -228,6 +248,9 @@ export const App: React.FC = () => {
   const handleUpdateKronosConfig = useCallback((nextCfg: KronosConfig) => {
     setKronosConfig(nextCfg);
     saveKronosConfig(nextCfg);
+    const updatedProf = syncActiveUserProfilePatch({ kronosConfig: nextCfg });
+    setActiveUserProfile(updatedProf);
+    setUserProfiles(loadAllUserProfiles());
   }, []);
 
   const wsRef = useRef<BinanceWebSocket | null>(null);
@@ -236,6 +259,77 @@ export const App: React.FC = () => {
   const watchlistWsRef = useRef<BinanceWatchlistSocket | null>(null);
   const isSyncingPricesRef = useRef<boolean>(false);
   const lastStoragePersistRef = useRef<number>(0);
+
+  // Auto-persist active symbol, timeframe, indicator settings, favorites & layout preferences to Active User Profile
+  useEffect(() => {
+    const updatedProf = syncActiveUserProfilePatch({
+      activeSymbol: currentSymbol.symbol,
+      timeframe,
+      indicatorSettings: settings,
+      favorites,
+      layoutPrefs: {
+        showLeftDock,
+        isZenMode,
+        rightPanelTab,
+        compareSymbol,
+      },
+    });
+    setActiveUserProfile(updatedProf);
+    setUserProfiles(loadAllUserProfiles());
+  }, [
+    currentSymbol.symbol,
+    timeframe,
+    settings,
+    favorites,
+    showLeftDock,
+    isZenMode,
+    rightPanelTab,
+    compareSymbol,
+  ]);
+
+  const handleProfileSwitched = useCallback(
+    (nextProf: LocalUserProfile, allProfs: LocalUserProfile[]) => {
+      const nextSymbols =
+        nextProf.symbols && nextProf.symbols.length > 0
+          ? nextProf.symbols
+          : loadSymbolsFromStorage();
+      setSymbols(nextSymbols);
+      symbolsRef.current = nextSymbols;
+
+      const targetSym =
+        nextSymbols.find(s => s.symbol.toUpperCase() === nextProf.activeSymbol.toUpperCase()) ||
+        nextSymbols[0] ||
+        DEFAULT_SYMBOLS[0];
+      setCurrentSymbol(targetSym);
+      currentSymbolRef.current = targetSym;
+
+      setTimeframe(nextProf.timeframe || '1h');
+      timeframeRef.current = nextProf.timeframe || '1h';
+      setSettings(nextProf.indicatorSettings);
+      setFavorites(nextProf.favorites);
+      if (nextProf.kronosConfig) {
+        setKronosConfig(nextProf.kronosConfig);
+      }
+      if (nextProf.layoutPrefs) {
+        setShowLeftDock(nextProf.layoutPrefs.showLeftDock);
+        setIsZenMode(nextProf.layoutPrefs.isZenMode);
+        setRightPanelTab(nextProf.layoutPrefs.rightPanelTab);
+        setCompareSymbol(nextProf.layoutPrefs.compareSymbol);
+      }
+      setActiveUserProfile(nextProf);
+      setUserProfiles(allProfs);
+      setHoldingsRevision(r => r + 1);
+    },
+    []
+  );
+
+  const handleProfilesUpdated = useCallback(
+    (allProfs: LocalUserProfile[], active: LocalUserProfile) => {
+      setUserProfiles(allProfs);
+      setActiveUserProfile(active);
+    },
+    []
+  );
 
   // Toggle Indicator Setting
   const handleToggleIndicator = (key: keyof IndicatorSettings) => {
@@ -247,6 +341,9 @@ export const App: React.FC = () => {
     setSymbols(newSymbols);
     symbolsRef.current = newSymbols;
     saveSymbolsToStorage(newSymbols);
+    const updatedProf = syncActiveUserProfilePatch({ symbols: newSymbols });
+    setActiveUserProfile(updatedProf);
+    setUserProfiles(loadAllUserProfiles());
   };
 
   // Continuous Real-Time Multi-Market Price Sync (Binance Crypto/Gold + Yahoo Commodities/Stocks + Entrade VNINDEX/VN30/HNX)
@@ -849,7 +946,12 @@ export const App: React.FC = () => {
   // (works even in Zen Mode or Mobile Chart-only view) and re-evaluate verdict on cache updates
   useEffect(() => {
     const bump = () => setInsightsRevision(r => r + 1);
-    const bumpHoldings = () => setHoldingsRevision(r => r + 1);
+    const bumpHoldings = () => {
+      setHoldingsRevision(r => r + 1);
+      const updatedProf = syncActiveUserProfilePatch({});
+      setActiveUserProfile(updatedProf);
+      setUserProfiles(loadAllUserProfiles());
+    };
     window.addEventListener(VN_INSIGHTS_UPDATED_EVENT, bump);
     window.addEventListener(GLOBAL_INSIGHTS_UPDATED_EVENT, bump);
     window.addEventListener(USER_HOLDINGS_UPDATED_EVENT, bumpHoldings);
@@ -1103,6 +1205,7 @@ export const App: React.FC = () => {
       <Header
         currentSymbol={currentSymbol}
         symbols={symbols}
+        favorites={favorites}
         timeframe={timeframe}
         onSelectSymbol={handleSelectSymbol}
         onChangeTimeframe={setTimeframe}
@@ -1131,6 +1234,10 @@ export const App: React.FC = () => {
         signalAction={strategyHub?.bestStrategy?.action}
         isZenMode={isZenMode}
         onToggleZenMode={() => setIsZenMode(prev => !prev)}
+        activeProfile={activeUserProfile}
+        profiles={userProfiles}
+        onProfileSwitched={handleProfileSwitched}
+        onProfilesUpdated={handleProfilesUpdated}
       />
 
       {/* 2. Macro Benchmark & Market Breadth Ribbon (Hidden on mobile when Zen Mode active) */}

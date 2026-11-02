@@ -31,6 +31,7 @@ import {
   USER_HOLDINGS_UPDATED_EVENT,
   UserHoldingItem,
 } from '../../services/portfolio/holdingsRecoveryEngine';
+import { sortSymbolsWithFavoritesFirst } from '../../services/storage/userProfileManager';
 
 interface WatchlistProps {
   symbols: MarketSymbol[];
@@ -112,9 +113,14 @@ export const Watchlist: React.FC<WatchlistProps> = ({
     return symbols.filter(s => Boolean(holdingsMap[s.symbol.toUpperCase()])).length;
   }, [symbols, holdingsMap]);
 
-  // Filter existing symbols in Watchlist
+  const favUpperSet = useMemo(
+    () => new Set(favorites.map(f => String(f || '').toUpperCase())),
+    [favorites]
+  );
+
+  // Filter existing symbols in Watchlist — starred (favorite) symbols are ALWAYS pinned to the top
   const filteredSymbols = useMemo(() => {
-    return symbols.filter(s => {
+    const baseFiltered = symbols.filter(s => {
       const matchesSearch =
         s.symbol.toLowerCase().includes(search.toLowerCase()) ||
         s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -122,7 +128,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
 
       if (!matchesSearch) return false;
       if (filter === 'holdings') return Boolean(holdingsMap[s.symbol.toUpperCase()]);
-      if (filter === 'favorite') return favorites.includes(s.symbol);
+      if (filter === 'favorite') return favUpperSet.has(s.symbol.toUpperCase());
       if (filter === 'accumulation') {
         const acc = accumulationMap.get(s.symbol);
         return acc && acc.score >= 64;
@@ -132,15 +138,22 @@ export const Watchlist: React.FC<WatchlistProps> = ({
       if (filter === 'vn30') return s.type === 'vn30' || s.quoteAsset === 'VND' || s.symbol === 'VNINDEX';
       if (filter === 'stock') return (s.type === 'stock' || s.type === 'index') && s.quoteAsset !== 'VND' && s.symbol !== 'VNINDEX';
       return true;
-    }).sort((a, b) => {
-      if (filter === 'accumulation') {
+    });
+
+    if (filter === 'accumulation') {
+      baseFiltered.sort((a, b) => {
+        const aFav = favUpperSet.has(a.symbol.toUpperCase()) ? 1 : 0;
+        const bFav = favUpperSet.has(b.symbol.toUpperCase()) ? 1 : 0;
+        if (aFav !== bFav) return bFav - aFav;
         const scoreA = accumulationMap.get(a.symbol)?.score || 0;
         const scoreB = accumulationMap.get(b.symbol)?.score || 0;
         return scoreB - scoreA;
-      }
-      return 0;
-    });
-  }, [symbols, search, filter, favorites, accumulationMap, holdingsMap]);
+      });
+      return baseFiltered;
+    }
+
+    return sortSymbolsWithFavoritesFirst(baseFiltered, favorites);
+  }, [symbols, search, filter, favorites, favUpperSet, accumulationMap, holdingsMap]);
 
   // Handle Pick Suggestion or Custom Input
   const handleSelectSuggestion = (item: CatalogItem) => {
@@ -330,7 +343,7 @@ export const Watchlist: React.FC<WatchlistProps> = ({
         ) : (
           filteredSymbols.map(s => {
             const isSelected = s.symbol === currentSymbol.symbol;
-            const isFav = favorites.includes(s.symbol);
+            const isFav = favUpperSet.has(s.symbol.toUpperCase());
             const isPos = s.change24h >= 0;
             const isVND = s.quoteAsset === 'VND';
             const isCommodity = s.type === 'commodity' || s.symbol.includes('XAU') || s.symbol.includes('OIL') || s.symbol.includes('PAXG');

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MarketSymbol, Timeframe } from '../../types';
 import { formatPercent, formatPrice } from '../../utils/formatters';
+import { loadFavoritesFromStorage } from '../../services/api/symbolCatalog';
+import { sortSymbolsWithFavoritesFirst } from '../../services/storage/userProfileManager';
 import {
   Search,
   Zap,
@@ -253,7 +255,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       },
     ];
 
-    const symbolItems: CommandActionItem[] = symbols
+    const favList = loadFavoritesFromStorage();
+    const favUpperSet = new Set(favList.map(f => String(f || '').toUpperCase()));
+    const sortedSymbols = sortSymbolsWithFavoritesFirst(symbols, favList);
+
+    const symbolItems: CommandActionItem[] = sortedSymbols
       .filter(s => {
         if (!symbolQuery) return true;
         return (
@@ -266,9 +272,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         const targetTf = tfToken?.tf;
         const prefix = s.quoteAsset === 'VND' ? '' : '$';
         const suffix = s.quoteAsset === 'VND' ? 'k' : '';
+        const starPrefix = favUpperSet.has(s.symbol.toUpperCase()) ? '⭐ ' : '';
         return {
           id: `sym_${s.symbol}_${targetTf || timeframe}`,
-          title: `${s.symbol} — ${s.name}${targetTf ? ` • Khung ${targetTf}` : ''}`,
+          title: `${starPrefix}${s.symbol} — ${s.name}${targetTf ? ` • Khung ${targetTf}` : ''}`,
           subtitle: `Giá: ${prefix}${formatPrice(s.price)}${suffix} (${formatPercent(s.change24h)})`,
           badge: targetTf ? `${s.type.toUpperCase()} • ${targetTf}` : s.type.toUpperCase(),
           keywords: `${s.symbol} ${s.name}`,

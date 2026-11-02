@@ -13,15 +13,22 @@ import {
   Command,
   Maximize2,
   Minimize2,
+  Star,
 } from 'lucide-react';
 import { MarketSymbol, SignalAction, Timeframe } from '../../types';
 import { formatPercent, formatPrice, formatVolume } from '../../utils/formatters';
 import { getMarketSessionInfo } from '../../utils/marketHours';
 import { isVnDerivativeSymbol } from '../../services/vnMarket/vnStockMicrostructure';
+import {
+  LocalUserProfile,
+  sortSymbolsWithFavoritesFirst,
+} from '../../services/storage/userProfileManager';
+import { UserProfileMenu } from './UserProfileMenu';
 
 interface HeaderProps {
   currentSymbol: MarketSymbol;
   symbols: MarketSymbol[];
+  favorites?: string[];
   timeframe: Timeframe;
   onSelectSymbol: (symbol: MarketSymbol) => void;
   onChangeTimeframe: (tf: Timeframe) => void;
@@ -39,11 +46,16 @@ interface HeaderProps {
   signalAction?: SignalAction;
   isZenMode?: boolean;
   onToggleZenMode?: () => void;
+  activeProfile?: LocalUserProfile;
+  profiles?: LocalUserProfile[];
+  onProfileSwitched?: (profile: LocalUserProfile, allProfiles: LocalUserProfile[]) => void;
+  onProfilesUpdated?: (allProfiles: LocalUserProfile[], active: LocalUserProfile) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentSymbol,
   symbols,
+  favorites = [],
   timeframe,
   onSelectSymbol,
   onChangeTimeframe,
@@ -60,6 +72,10 @@ export const Header: React.FC<HeaderProps> = ({
   signalAction,
   isZenMode = false,
   onToggleZenMode,
+  activeProfile,
+  profiles = [],
+  onProfileSwitched,
+  onProfilesUpdated,
 }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'commodity' | 'crypto' | 'vn30' | 'stock'>('all');
@@ -93,29 +109,34 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [searchOpen, onOpenCommandPalette]);
 
-  const filteredSymbols = symbols.filter(s => {
-    const matchesType =
-      filterType === 'all' ||
-      (filterType === 'commodity' &&
-        (s.type === 'commodity' ||
-          s.symbol.includes('XAU') ||
-          s.symbol.includes('OIL') ||
-          s.symbol.includes('PAXG'))) ||
-      (filterType === 'crypto' && s.type === 'crypto') ||
-      (filterType === 'vn30' &&
-        (s.type === 'vn30' || s.quoteAsset === 'VND' || s.symbol === 'VNINDEX')) ||
-      (filterType === 'stock' &&
-        (s.type === 'stock' || s.type === 'index') &&
-        s.quoteAsset !== 'VND' &&
-        s.symbol !== 'VNINDEX');
+  const favUpperSet = new Set(favorites.map(f => String(f || '').toUpperCase()));
 
-    const matchesSearch =
-      s.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.category && s.category.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredSymbols = sortSymbolsWithFavoritesFirst(
+    symbols.filter(s => {
+      const matchesType =
+        filterType === 'all' ||
+        (filterType === 'commodity' &&
+          (s.type === 'commodity' ||
+            s.symbol.includes('XAU') ||
+            s.symbol.includes('OIL') ||
+            s.symbol.includes('PAXG'))) ||
+        (filterType === 'crypto' && s.type === 'crypto') ||
+        (filterType === 'vn30' &&
+          (s.type === 'vn30' || s.quoteAsset === 'VND' || s.symbol === 'VNINDEX')) ||
+        (filterType === 'stock' &&
+          (s.type === 'stock' || s.type === 'index') &&
+          s.quoteAsset !== 'VND' &&
+          s.symbol !== 'VNINDEX');
 
-    return matchesType && matchesSearch;
-  });
+      const matchesSearch =
+        s.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.category && s.category.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      return matchesType && matchesSearch;
+    }),
+    favorites
+  );
 
   const isPositive = currentSymbol.change24h >= 0;
   const isVND = currentSymbol.quoteAsset === 'VND';
@@ -419,6 +440,15 @@ export const Header: React.FC<HeaderProps> = ({
             />
           </button>
 
+          {activeProfile && onProfileSwitched && onProfilesUpdated && (
+            <UserProfileMenu
+              activeProfile={activeProfile}
+              profiles={profiles}
+              onProfileSwitched={onProfileSwitched}
+              onProfilesUpdated={onProfilesUpdated}
+            />
+          )}
+
           <button
             onClick={onOpenBacktest}
             className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-600/25 border border-cyan-400/30 transition"
@@ -557,6 +587,9 @@ export const Header: React.FC<HeaderProps> = ({
                   >
                     <div>
                       <div className="flex items-center gap-1.5">
+                        {favUpperSet.has(s.symbol.toUpperCase()) && (
+                          <Star className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />
+                        )}
                         <span className="font-bold text-xs text-white font-mono">{s.symbol}</span>
                         <span
                           className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-semibold ${

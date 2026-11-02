@@ -213,6 +213,7 @@ export const App: React.FC = () => {
     globalOptionsAndLiqLines: true,
     recommendedPlanLines: true,
     holdingCostLines: true,
+    vnBottomFishingLines: true,
   });
 
   // Kronos Foundation Model Configuration & Optional Cloud Override
@@ -1469,6 +1470,15 @@ export const App: React.FC = () => {
                         currentSymbol={currentSymbol}
                         symbols={symbols}
                         candles={effectiveCandles}
+                        mtfCandlesMap={effectiveMtfMap}
+                        showBottomFishingLines={settings.vnBottomFishingLines !== false}
+                        onToggleBottomFishingLines={() =>
+                          handleToggleIndicator('vnBottomFishingLines')
+                        }
+                        onQuickCreatePriceAlert={(price) => {
+                          setPresetAlertPrice(price);
+                          setIsAlertModalOpen(true);
+                        }}
                         onSelectSymbol={handleSelectSymbol}
                         onOpenVnMacroTab={() => {
                           setMacroModalTab('vn_market');

@@ -283,6 +283,36 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
           )}
         </button>
 
+        {/* Vietnam Selloff Radar & Bottom-Fishing Pill */}
+        {verdict.vnTacticalSummary && (
+          <button
+            type="button"
+            onClick={toggleExpand}
+            className={`hidden xl:flex px-2 py-0.5 rounded-lg border text-[10px] font-mono font-bold items-center gap-1 shrink-0 whitespace-nowrap transition ${
+              verdict.vnTacticalSummary.panicAndForceSell.selloffRiskLevel ===
+                'ACTIVE_FORCE_SELL_WAVE' ||
+              verdict.vnTacticalSummary.panicAndForceSell.selloffRiskLevel === 'HIGH_SELLOFF_RISK'
+                ? 'bg-rose-950/60 text-rose-200 border-rose-500/50'
+                : verdict.vnTacticalSummary.bottomFishingPlan.floorAbsorptionState ===
+                  'FLOOR_RESCUE_ABSORPTION'
+                ? 'bg-emerald-950/60 text-emerald-200 border-emerald-500/50'
+                : 'bg-teal-950/45 text-teal-200 border-teal-500/40'
+            }`}
+            title="Radar Bán tháo / Giải chấp CTCK & Lệnh chờ Rải Đinh Bắt Đáy 3 bậc"
+          >
+            <span>
+              🛡️ PP {verdict.vnTacticalSummary.panicAndForceSell.totalDistributionCluster}/5 •
+              Force-Sell {verdict.vnTacticalSummary.panicAndForceSell.forceSellProbabilityPct}%
+            </span>
+            {verdict.vnTacticalSummary.bottomFishingPlan.board !== 'INDEX' && (
+              <span>
+                • 🪝 B1:{' '}
+                {fmtP(verdict.vnTacticalSummary.bottomFishingPlan.rungs[0].limitPrice)}
+              </span>
+            )}
+          </button>
+        )}
+
         {/* Expand / Collapse Details Button */}
         <button
           type="button"
@@ -585,6 +615,42 @@ export const ChartVerdictOverlay: React.FC<ChartVerdictOverlayProps> = ({
               ))}
             </div>
           </div>
+
+          {/* Vietnam Tactical Selloff, Bottom-Fishing & T+2.5 Strip inside Expanded Overlay */}
+          {verdict.vnTacticalSummary && (
+            <div className="p-2 rounded-xl bg-teal-950/25 border border-teal-500/35 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap text-[10.5px]">
+                <span className="font-bold text-teal-200">
+                  🇻🇳 {verdict.vnTacticalSummary.panicAndForceSell.riskBadgeVi}
+                </span>
+                <span className="font-mono text-[10px] text-amber-300">
+                  {verdict.vnTacticalSummary.capitulationMeter.phaseBadgeVi}
+                </span>
+              </div>
+              {verdict.vnTacticalSummary.bottomFishingPlan.board !== 'INDEX' && (
+                <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+                  {verdict.vnTacticalSummary.bottomFishingPlan.rungs.map((r) => (
+                    <div
+                      key={r.rungIndex}
+                      className="p-1.5 rounded-lg bg-[#091220] border border-slate-800"
+                    >
+                      <div className="text-[9px] text-slate-400 font-sans truncate">
+                        Bậc {r.rungIndex} ({r.weightPct}%)
+                      </div>
+                      <div className="font-bold text-teal-300">
+                        {fmtP(r.limitPrice)} ({r.discountFromRefPct}%)
+                      </div>
+                      <div className="text-[9px] text-slate-300 truncate">{r.statusBadgeVi}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="text-[10px] text-slate-300 flex items-center justify-between gap-2 flex-wrap">
+                <span>⏱️ {verdict.vnTacticalSummary.t2CohortShock.badgeVi}</span>
+                <span>🛡️ {verdict.vnTacticalSummary.atcDistortion.badgeVi}</span>
+              </div>
+            </div>
+          )}
 
           {/* 1-Click Action Footer */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800">

@@ -224,17 +224,30 @@ export const IndicatorToolbar: React.FC<IndicatorToolbarProps> = ({
         </button>
 
         {isVnAsset ? (
-          <button
-            onClick={() => onToggle('vnPriceLimits')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
-              settings.vnPriceLimits !== false
-                ? 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400/60 shadow-sm shadow-fuchsia-500/15'
-                : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
-            }`}
-            title="Hiển thị đường Giá Trần (Tím), Tham Chiếu (Vàng) & Giá Sàn (Xanh lơ) chuẩn HOSE/HNX/UPCOM trực tiếp trên đồ thị"
-          >
-            <span>🇻🇳 Trần/TC/Sàn</span>
-          </button>
+          <>
+            <button
+              onClick={() => onToggle('vnPriceLimits')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+                settings.vnPriceLimits !== false
+                  ? 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400/60 shadow-sm shadow-fuchsia-500/15'
+                  : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+              }`}
+              title="Hiển thị đường Giá Trần (Tím), Tham Chiếu (Vàng) & Giá Sàn (Xanh lơ) chuẩn HOSE/HNX/UPCOM trực tiếp trên đồ thị"
+            >
+              <span>🇻🇳 Trần/TC/Sàn</span>
+            </button>
+            <button
+              onClick={() => onToggle('vnBottomFishingLines')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition ${
+                settings.vnBottomFishingLines !== false
+                  ? 'bg-teal-500/20 text-teal-200 border-teal-400/60 shadow-sm shadow-teal-500/15'
+                  : 'bg-[#101726] text-slate-400 border-slate-800 hover:text-white'
+              }`}
+              title="Hiển thị đường Rải Đinh Lệnh Chờ Bắt Đáy B1 (20%) & B2 (30% hứng Force-Sell sát giá Sàn) trên đồ thị VN"
+            >
+              <span>🪝 Rải Đinh Bắt Đáy</span>
+            </button>
+          </>
         ) : (
           <button
             onClick={() => onToggle('globalOptionsAndLiqLines')}

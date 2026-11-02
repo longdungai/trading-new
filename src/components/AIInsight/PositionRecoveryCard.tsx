@@ -51,6 +51,7 @@ interface PositionRecoveryCardProps {
 export const PositionRecoveryCard: React.FC<PositionRecoveryCardProps> = ({
   currentSymbol,
   allSymbols,
+  chartVerdict,
   recoveryPlan,
   showHoldingLines = true,
   onToggleHoldingLines,
@@ -723,6 +724,36 @@ export const PositionRecoveryCard: React.FC<PositionRecoveryCardProps> = ({
               )}
             </div>
           )}
+
+          {/* 4B. Vietnam T+2.5 Locked Equity Beta Hedge via Short VN30F1M */}
+          {recoveryPlan.isVnCorporateStock &&
+            recoveryPlan.netUnrealizedPnlPct < 0 &&
+            chartVerdict.vnTacticalSummary && (
+              <div className="p-2.5 rounded-xl bg-indigo-950/35 border border-indigo-500/40 space-y-1 text-[10.5px]">
+                <div className="flex items-center justify-between gap-2 flex-wrap font-bold text-indigo-200">
+                  <span>
+                    🛡️ Hộ Vệ Phái Sinh Short VN30F1M{' '}
+                    {recoveryPlan.holding.holdingDays < 3 ? '(Khi Đang Kẹp T+2.5)' : '(Bảo Hiểm Danh Mục)'}:
+                  </span>
+                  <span className="font-mono text-amber-300">
+                    Short{' '}
+                    {
+                      chartVerdict.vnTacticalSummary.postCrashAndHedge.betaHedgePlan
+                        .recommendedShortContractsHalfHedge
+                    }
+                    –
+                    {
+                      chartVerdict.vnTacticalSummary.postCrashAndHedge.betaHedgePlan
+                        .recommendedShortContractsFullHedge
+                    }{' '}
+                    HĐ
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-300 leading-snug">
+                  {chartVerdict.vnTacticalSummary.postCrashAndHedge.betaHedgePlan.hedgeSummaryVi}
+                </div>
+              </div>
+            )}
 
           {/* 5. Quick Alert Actions for Break-Even & Support Entry */}
           {onQuickCreatePriceAlert && (

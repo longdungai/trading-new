@@ -47,6 +47,7 @@ export interface IndicatorSettings {
   smartMoneyConcepts: boolean;
   aiForecast: boolean;
   monteCarloPaths: boolean;
+  vnBottomFishingLines?: boolean;
   kronosGhostCandles: boolean;
   kronosWalkForward: boolean;
   vnPriceLimits?: boolean;

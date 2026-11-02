@@ -832,6 +832,41 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       }
     }
 
+    // 7E. Vietnam 3-Rung Bottom-Fishing Limit Ladder ("Rải Đinh Bắt Đáy B1 / B2")
+    if (
+      settings.vnBottomFishingLines !== false &&
+      chartVerdict?.vnTacticalSummary &&
+      chartVerdict.vnTacticalSummary.bottomFishingPlan.board !== 'INDEX'
+    ) {
+      const bf = chartVerdict.vnTacticalSummary.bottomFishingPlan;
+      const rung1 = bf.rungs[0];
+      const rung2 = bf.rungs[1];
+      if (rung1 && rung1.limitPrice > 0) {
+        priceLinesRef.current.push(
+          candleSeries.createPriceLine({
+            price: rung1.limitPrice,
+            color: '#2dd4bf',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `🪝 BẮT ĐÁY B1 20% (${rung1.discountFromRefPct >= 0 ? '+' : ''}${rung1.discountFromRefPct}%)`,
+          })
+        );
+      }
+      if (rung2 && rung2.limitPrice > 0 && Math.abs(rung2.limitPrice - rung1.limitPrice) > 0.01) {
+        priceLinesRef.current.push(
+          candleSeries.createPriceLine({
+            price: rung2.limitPrice,
+            color: '#14b8a6',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: `🪝 HỨNG SÀN B2 30% (${rung2.discountFromRefPct}%)`,
+          })
+        );
+      }
+    }
+
     // 8. Update Kronos Ghost Candlesticks, Walk-Forward & AI Forecast Paths
     if (
       settings.kronosGhostCandles &&

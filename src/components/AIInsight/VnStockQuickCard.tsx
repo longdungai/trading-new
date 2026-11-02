@@ -3,14 +3,22 @@ import {
   Activity,
   AlertTriangle,
   ArrowUpRight,
+  Bell,
   Building2,
   CalendarClock,
+  CheckCircle2,
   Clock,
   Compass,
+  Eye,
+  EyeOff,
+  Flame,
+  Layers,
   Scale,
+  ShieldAlert,
+  Target,
   Users,
 } from 'lucide-react';
-import { Candle, MarketSymbol } from '../../types';
+import { Candle, MarketSymbol, Timeframe } from '../../types';
 import {
   computeVn30BasisAnalytics,
   computeVnIntradaySessionPulse,
@@ -23,12 +31,22 @@ import {
   fetchVnStockInsights,
   VnStockInsightsPayload,
 } from '../../services/vnMarket/vnStockInsightsClient';
+import { evaluateVnComprehensiveTacticalReport } from '../../services/vnMarket/vnSelloffAndBottomEngine';
+import {
+  loadUserHoldings,
+  USER_HOLDINGS_UPDATED_EVENT,
+  UserHoldingItem,
+} from '../../services/portfolio/holdingsRecoveryEngine';
 import { formatPrice } from '../../utils/formatters';
 
 interface VnStockQuickCardProps {
   currentSymbol: MarketSymbol;
   symbols: MarketSymbol[];
   candles: Candle[];
+  mtfCandlesMap?: Partial<Record<Timeframe, Candle[]>>;
+  showBottomFishingLines?: boolean;
+  onToggleBottomFishingLines?: () => void;
+  onQuickCreatePriceAlert?: (price: number) => void;
   onSelectSymbol: (sym: MarketSymbol) => void;
   onOpenVnMacroTab: () => void;
 }
@@ -37,6 +55,10 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
   currentSymbol,
   symbols,
   candles,
+  mtfCandlesMap,
+  showBottomFishingLines = true,
+  onToggleBottomFishingLines,
+  onQuickCreatePriceAlert,
   onSelectSymbol,
   onOpenVnMacroTab,
 }) => {
@@ -48,10 +70,23 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
 
   const [insights, setInsights] = useState<VnStockInsightsPayload | null>(null);
   const [nowClock, setNowClock] = useState<Date>(() => new Date());
+  const [activeTacticalTab, setActiveTacticalTab] = useState<'selloff' | 'bottom' | 't2_atc'>(
+    'bottom'
+  );
+  const [bottomBudgetInput, setBottomBudgetInput] = useState<string>('100');
+  const [holdingsMap, setHoldingsMap] = useState<Record<string, UserHoldingItem>>(() =>
+    loadUserHoldings()
+  );
 
   useEffect(() => {
     const t = setInterval(() => setNowClock(new Date()), 15_000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const syncHoldings = () => setHoldingsMap(loadUserHoldings());
+    window.addEventListener(USER_HOLDINGS_UPDATED_EVENT, syncHoldings);
+    return () => window.removeEventListener(USER_HOLDINGS_UPDATED_EVENT, syncHoldings);
   }, []);
 
   useEffect(() => {
@@ -103,7 +138,36 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
 
   const sectorInfo = useMemo(() => getVnStockSectorInfo(symUpper), [symUpper]);
 
-  if (!isVN || !priceLimits) return null;
+  const parsedBudgetMillion = useMemo(() => {
+    const n = Number(bottomBudgetInput);
+    return Number.isFinite(n) && n >= 10 ? n : 100;
+  }, [bottomBudgetInput]);
+
+  const tacticalReport = useMemo(() => {
+    if (!isVN) return null;
+    return evaluateVnComprehensiveTacticalReport({
+      symbolObj: currentSymbol,
+      candles,
+      mtfCandlesMap,
+      allSymbols: symbols,
+      vnInsights: insights,
+      userHoldingsMap: holdingsMap,
+      bottomBudgetMillionVnd: parsedBudgetMillion,
+      now: nowClock,
+    });
+  }, [
+    isVN,
+    currentSymbol,
+    candles,
+    mtfCandlesMap,
+    symbols,
+    insights,
+    holdingsMap,
+    parsedBudgetMillion,
+    nowClock,
+  ]);
+
+  if (!isVN || !priceLimits || !tacticalReport) return null;
 
   const unitSuffix = isIndex || isDeriv ? ' đ' : 'k';
   const liveColorClass =
@@ -123,6 +187,15 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
   const corpEvents = insights?.corporateEvents ?? [];
   const imminentEvent =
     corpEvents.find((ev) => ev.isImminentExDateWarning) || corpEvents[0] || null;
+
+  const {
+    panicAndForceSell,
+    bottomFishingPlan,
+    t2CohortShock,
+    atcDistortion,
+    capitulationMeter,
+    postCrashAndHedge,
+  } = tacticalReport;
 
   return (
     <div className="p-3 sm:p-3.5 rounded-xl bg-[#0e1523] border border-rose-500/30 space-y-2.5 shadow-xl select-none min-w-0">
@@ -145,7 +218,7 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
               ? 'Bước giá 0.1 điểm (100k/đ) • Ký quỹ ~17% • T+0'
               : isIndex
               ? 'Chỉ số thị trường cơ sở Sở GDCK TP.HCM'
-              : `Bước giá ${(priceLimits.tickSize * 1000).toFixed(0)}đ • Lô chẵn 100 CP • T+2`}
+              : `Bước giá ${(priceLimits.tickSize * 1000).toFixed(0)}đ • Lô chẵn 100 CP • T+2.5`}
           </div>
         </div>
 
@@ -206,6 +279,435 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
         </div>
       )}
 
+      {/* ==========================================================================
+          NEW: 3-TAB VIETNAM INSTITUTIONAL TACTICAL COMMAND CENTER
+          (1. Dự Đoán Bán Tháo & Chu Kỳ Đáy | 2. Rải Đinh Bắt Đáy 3 Bậc | 3. Hàng T+2.5 & ATC)
+         ========================================================================== */}
+      <div className="p-2.5 rounded-xl bg-[#09101d] border border-teal-500/35 space-y-2.5 min-w-0">
+        {/* Segmented Tactical Switcher */}
+        <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-[#060a13] border border-slate-800 text-[10px] font-bold">
+          <button
+            type="button"
+            onClick={() => setActiveTacticalTab('bottom')}
+            className={`py-1.5 px-1.5 rounded-md transition flex items-center justify-center gap-1 truncate ${
+              activeTacticalTab === 'bottom'
+                ? 'bg-teal-500/25 text-teal-200 border border-teal-400/50 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Target className="w-3 h-3 shrink-0 text-teal-400" />
+            <span className="truncate">Rải Đinh Đáy</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTacticalTab('selloff')}
+            className={`py-1.5 px-1.5 rounded-md transition flex items-center justify-center gap-1 truncate ${
+              activeTacticalTab === 'selloff'
+                ? 'bg-rose-500/25 text-rose-200 border border-rose-400/50 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <ShieldAlert className="w-3 h-3 shrink-0 text-rose-400" />
+            <span className="truncate">
+              Bán Tháo ({panicAndForceSell.forceSellProbabilityPct}%)
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTacticalTab('t2_atc')}
+            className={`py-1.5 px-1.5 rounded-md transition flex items-center justify-center gap-1 truncate ${
+              activeTacticalTab === 't2_atc'
+                ? 'bg-amber-500/25 text-amber-200 border border-amber-400/50 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Layers className="w-3 h-3 shrink-0 text-amber-400" />
+            <span className="truncate">T+2.5 &amp; ATC</span>
+          </button>
+        </div>
+
+        {/* TAB 1: SMART 3-RUNG BOTTOM-FISHING LIMIT LADDER ("RẢI ĐINH BẮT ĐÁY") */}
+        {activeTacticalTab === 'bottom' && (
+          <div className="space-y-2 text-[10.5px]">
+            {/* Floor Absorption Status Banner */}
+            <div
+              className={`p-2 rounded-lg border space-y-1 ${
+                bottomFishingPlan.floorAbsorptionState === 'FLOOR_LOCKED_NO_RESCUE'
+                  ? 'bg-rose-950/45 border-rose-500/50 text-rose-100'
+                  : bottomFishingPlan.floorAbsorptionState === 'FLOOR_RESCUE_ABSORPTION'
+                  ? 'bg-emerald-950/45 border-emerald-500/50 text-emerald-100'
+                  : 'bg-[#0c1628] border-slate-800 text-slate-200'
+              }`}
+            >
+              <div className="font-extrabold text-[10px] tracking-wide">
+                {bottomFishingPlan.floorAbsorptionBadgeVi}
+              </div>
+              <div className="text-[10px] text-slate-300 leading-snug">
+                {bottomFishingPlan.floorAbsorptionDetailVi}
+              </div>
+            </div>
+
+            {/* Budget Input & Chart Line Toggle */}
+            {!isIndex && (
+              <>
+                <div className="flex items-center justify-between gap-2 flex-wrap bg-[#070c16] p-1.5 rounded-lg border border-slate-800/90">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      Ngân sách bắt đáy:
+                    </span>
+                    <input
+                      type="number"
+                      min={10}
+                      step={10}
+                      value={bottomBudgetInput}
+                      onChange={(e) => setBottomBudgetInput(e.target.value)}
+                      className="w-16 px-1.5 py-0.5 rounded bg-[#10192b] border border-teal-500/40 text-teal-200 font-mono text-[10.5px] font-bold focus:outline-none"
+                    />
+                    <span className="text-[10px] font-mono text-slate-400">Tr VNĐ</span>
+                  </div>
+
+                  {onToggleBottomFishingLines && (
+                    <button
+                      type="button"
+                      onClick={onToggleBottomFishingLines}
+                      className={`px-2 py-0.5 rounded border text-[9.5px] font-bold flex items-center gap-1 transition ${
+                        showBottomFishingLines
+                          ? 'bg-teal-500/20 text-teal-200 border-teal-400/50'
+                          : 'bg-slate-900 text-slate-400 border-slate-700'
+                      }`}
+                      title="Ẩn/Hiện đường Rải Đinh Bắt Đáy B1 & B2 trên đồ thị"
+                    >
+                      {showBottomFishingLines ? (
+                        <Eye className="w-2.5 h-2.5" />
+                      ) : (
+                        <EyeOff className="w-2.5 h-2.5" />
+                      )}
+                      <span>Đường Bắt Đáy</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* 3 Staggered Limit Order Rungs */}
+                <div className="space-y-1.5">
+                  {bottomFishingPlan.rungs.map((rung) => {
+                    const isLocked = rung.status === 'LOCKED_WAIT_ABSORPTION';
+                    return (
+                      <div
+                        key={rung.rungIndex}
+                        className={`p-2 rounded-lg border space-y-1 ${
+                          isLocked
+                            ? 'bg-[#090f1a]/80 border-slate-800/90 opacity-85'
+                            : 'bg-[#0c1729] border-teal-500/35'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                          <span className="font-bold text-white text-[10.5px]">
+                            {rung.labelVi}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                              rung.status === 'UNLOCKED_RESCUE_CONFIRMED'
+                                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-500/40'
+                                : isLocked
+                                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/35'
+                                : 'bg-teal-500/20 text-teal-200 border border-teal-500/35'
+                            }`}
+                          >
+                            {rung.statusBadgeVi}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 font-mono text-[10.5px] flex-wrap">
+                          <span>
+                            Giá LO:{' '}
+                            <strong className="text-teal-300">
+                              {formatPrice(rung.limitPrice)}
+                              {unitSuffix}
+                            </strong>{' '}
+                            <span className="text-rose-300 text-[9.5px]">
+                              ({rung.discountFromRefPct >= 0 ? '+' : ''}
+                              {rung.discountFromRefPct}% TC)
+                            </span>
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-300">
+                              KL:{' '}
+                              <strong className="text-amber-300">
+                                {rung.recommendedShares.toLocaleString('en-US')}{' '}
+                                {isDeriv ? 'HĐ' : 'CP'}
+                              </strong>{' '}
+                              ({rung.capitalMillionVnd} Tr)
+                            </span>
+                            {onQuickCreatePriceAlert && (
+                              <button
+                                type="button"
+                                onClick={() => onQuickCreatePriceAlert(rung.limitPrice)}
+                                className="p-1 rounded bg-slate-800 hover:bg-teal-600/30 text-amber-300 border border-slate-700"
+                                title={`Đặt chuông báo khi giá chạm Bậc ${rung.rungIndex} (${rung.limitPrice}${unitSuffix})`}
+                              >
+                                <Bell className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-[9.5px] text-slate-400 leading-snug">
+                          Neo: <span className="text-slate-300">{rung.anchorVi}</span> •{' '}
+                          {rung.executionConditionVi}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* T+2.5 Stress Test Box */}
+                <div className="p-2 rounded-lg bg-[#070d18] border border-indigo-500/30 space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-indigo-200 flex-wrap">
+                    <span>🧪 Kiểm định chịu tải kẹp T+2.5 (Bậc 1+2):</span>
+                    <span className="font-mono text-cyan-300">
+                      Giá vốn TB: {formatPrice(bottomFishingPlan.t2StressTest.weightedAvgBuyPrice)}
+                      {unitSuffix}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px] pt-0.5">
+                    <div className="p-1.5 rounded bg-rose-950/30 border border-rose-500/25">
+                      <div className="text-[8.5px] text-slate-400 font-sans">
+                        Nếu T+1 sàn thêm 1 cây ({bottomFishingPlan.t2StressTest.ifOneMoreFloorPrice}
+                        {unitSuffix})
+                      </div>
+                      <div className="font-bold text-rose-300">
+                        {bottomFishingPlan.t2StressTest.lossIfOneMoreFloorPct}% (
+                        {bottomFishingPlan.t2StressTest.lossIfOneMoreFloorMillionVnd} Tr)
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded bg-emerald-950/30 border border-emerald-500/25">
+                      <div className="text-[8.5px] text-slate-400 font-sans">
+                        Mục tiêu sóng hồi T+ ({bottomFishingPlan.t2StressTest.reboundTargetPrice}
+                        {unitSuffix})
+                      </div>
+                      <div className="font-bold text-emerald-300">
+                        +{bottomFishingPlan.t2StressTest.expectedReboundGainPct}% (+
+                        {bottomFishingPlan.t2StressTest.expectedReboundProfitMillionVnd} Tr)
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[9.5px] text-slate-400 leading-snug pt-0.5">
+                    {bottomFishingPlan.t2StressTest.safetyNoteVi}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: PANIC SELLOFF, O'NEIL DISTRIBUTION DAYS, CAPITULATION METER & FTD/HEDGE */}
+        {activeTacticalTab === 'selloff' && (
+          <div className="space-y-2 text-[10.5px]">
+            {/* Distribution Day & Force-Sell Risk Box */}
+            <div
+              className={`p-2 rounded-lg border space-y-1.5 ${
+                panicAndForceSell.selloffRiskLevel === 'ACTIVE_FORCE_SELL_WAVE' ||
+                panicAndForceSell.selloffRiskLevel === 'HIGH_SELLOFF_RISK'
+                  ? 'bg-rose-950/45 border-rose-500/50 text-rose-100'
+                  : panicAndForceSell.selloffRiskLevel === 'FORCE_SELL_EXHAUSTING'
+                  ? 'bg-emerald-950/45 border-emerald-500/50 text-emerald-100'
+                  : 'bg-[#0c1628] border-slate-800 text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-extrabold text-[10px]">{panicAndForceSell.riskBadgeVi}</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-700 font-mono text-[9.5px] font-bold text-amber-300">
+                  PP: {panicAndForceSell.distributionDays25d}N + {panicAndForceSell.stallingDays25d}N
+                  Kéo xả
+                </span>
+              </div>
+              <div className="text-[10px] leading-snug">{panicAndForceSell.headlineVi}</div>
+              {panicAndForceSell.bulletsVi.map((b, idx) => (
+                <div key={idx} className="text-[9.5px] text-slate-300 leading-snug">
+                  • {b}
+                </div>
+              ))}
+              <div className="text-[9.5px] text-amber-200 pt-1 border-t border-slate-700/60 leading-snug">
+                👉 {panicAndForceSell.actionGuidanceVi}
+              </div>
+            </div>
+
+            {/* 4-Phase Capitulation & Washout Cycle Meter */}
+            <div className="p-2 rounded-lg bg-[#070d18] border border-cyan-500/30 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-bold text-[10px] text-cyan-200">
+                  {capitulationMeter.phaseBadgeVi}
+                </span>
+                <span className="font-mono text-[10px] font-black text-emerald-300">
+                  Độ rũ bỏ: {capitulationMeter.washoutCompletionScore}/100
+                </span>
+              </div>
+              <div className="text-[10px] text-slate-300 leading-snug">
+                {capitulationMeter.headlineVi}
+              </div>
+              <div className="space-y-1 pt-0.5">
+                {capitulationMeter.checklistVi.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-1.5 text-[9.5px] text-slate-300"
+                  >
+                    <CheckCircle2
+                      className={`w-3 h-3 shrink-0 ${
+                        item.passed ? 'text-emerald-400' : 'text-slate-600'
+                      }`}
+                    />
+                    <span className={item.passed ? 'text-slate-200' : 'text-slate-500'}>
+                      {item.labelVi}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Post-Crash FTD Tracker & Top 4 First-Mover Leaders */}
+            <div className="p-2 rounded-lg bg-[#070d18] border border-amber-500/30 space-y-1.5">
+              <div className="font-bold text-[10px] text-amber-300 flex items-center gap-1">
+                <Flame className="w-3 h-3 shrink-0" />
+                <span>{postCrashAndHedge.ftdBadgeVi}</span>
+              </div>
+              <div className="text-[9.5px] text-slate-300 leading-snug">
+                {postCrashAndHedge.ftdGuidanceVi}
+              </div>
+
+              {postCrashAndHedge.firstMoverLeaders.length > 0 && (
+                <div className="pt-1 border-t border-slate-800 space-y-1">
+                  <div className="text-[9.5px] font-bold text-emerald-300">
+                    🚀 Top Cổ Phiếu Bật Sớm / Giữ Nền Khỏe Nhất Khi Rũ Bỏ:
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {postCrashAndHedge.firstMoverLeaders.map((ldr) => (
+                      <button
+                        key={ldr.symbol}
+                        type="button"
+                        onClick={() => {
+                          const found = symbols.find((s) => s.symbol === ldr.symbol);
+                          if (found) onSelectSymbol(found);
+                        }}
+                        className="p-1.5 rounded bg-[#0d1729] hover:bg-[#142440] border border-slate-800 text-left transition"
+                      >
+                        <div className="flex items-center justify-between font-mono text-[10px]">
+                          <strong className="text-cyan-300">{ldr.symbol}</strong>
+                          <span
+                            className={
+                              ldr.change24hPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                            }
+                          >
+                            {ldr.change24hPct >= 0 ? '+' : ''}
+                            {ldr.change24hPct.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="text-[8.5px] text-slate-400 truncate">
+                          Rút chân +{ldr.bounceFromLowPct}%
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Portfolio VN30F1M Beta Hedge Calculator */}
+            <div className="p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/40 space-y-1">
+              <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-indigo-200 flex-wrap">
+                <span>🛡️ Hộ Vệ Phái Sinh Short VN30F1M (Khi Kẹp T+2.5):</span>
+                <span className="font-mono text-amber-300">
+                  Short {postCrashAndHedge.betaHedgePlan.recommendedShortContractsHalfHedge}–
+                  {postCrashAndHedge.betaHedgePlan.recommendedShortContractsFullHedge} HĐ
+                </span>
+              </div>
+              <div className="text-[9.5px] text-slate-300 leading-snug">
+                {postCrashAndHedge.betaHedgePlan.hedgeSummaryVi}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: T+2.5 COHORT SUPPLY SHOCK (13:00) & ATC DISTORTION SHIELD (14:30) */}
+        {activeTacticalTab === 't2_atc' && (
+          <div className="space-y-2 text-[10.5px]">
+            {/* T+2.5 Afternoon Unlock Cohort Box */}
+            <div
+              className={`p-2 rounded-lg border space-y-1.5 ${
+                t2CohortShock.supplyShockRegime === 'HIGH_PROFIT_TAKING_13H'
+                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-100'
+                  : t2CohortShock.supplyShockRegime === 'PANIC_CUTLOSS_FLUSH_13H'
+                  ? 'bg-rose-950/40 border-rose-500/50 text-rose-100'
+                  : 'bg-[#0c1628] border-slate-800 text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-extrabold text-[10px]">{t2CohortShock.badgeVi}</span>
+                <span className="font-mono text-[9.5px] text-cyan-300">
+                  Phiên T-2 ({t2CohortShock.tMinus2DateLabel}): {t2CohortShock.volumeVsAvgRatio}x
+                  Vol
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 font-mono text-center text-[10px]">
+                <div className="p-1 rounded bg-[#070c16] border border-slate-800">
+                  <div className="text-[8.5px] text-slate-400 font-sans">VWAP T-2</div>
+                  <div className="font-bold text-amber-300">
+                    {formatPrice(t2CohortShock.tMinus2VwapPrice)}
+                    {unitSuffix}
+                  </div>
+                </div>
+                <div className="p-1 rounded bg-[#070c16] border border-slate-800">
+                  <div className="text-[8.5px] text-slate-400 font-sans">Lãi/Lỗ Lô T-2</div>
+                  <div
+                    className={`font-bold ${
+                      t2CohortShock.cohortFloatingPnlPct >= 0
+                        ? 'text-emerald-400'
+                        : 'text-rose-400'
+                    }`}
+                  >
+                    {t2CohortShock.cohortFloatingPnlPct >= 0 ? '+' : ''}
+                    {t2CohortShock.cohortFloatingPnlPct}%
+                  </div>
+                </div>
+                <div className="p-1 rounded bg-[#070c16] border border-slate-800">
+                  <div className="text-[8.5px] text-slate-400 font-sans">Trạng thái 13:00</div>
+                  <div className="font-bold text-cyan-300">
+                    {t2CohortShock.isUnlockedInCurrentSession ? 'Đã về TK' : 'Chờ 13:00'}
+                  </div>
+                </div>
+              </div>
+              <div className="text-[9.5px] text-slate-300 leading-snug">
+                👉 {t2CohortShock.tacticalAdviceVi}
+              </div>
+            </div>
+
+            {/* ATC Distortion & Marking-the-Close Shield */}
+            <div
+              className={`p-2 rounded-lg border space-y-1.5 ${
+                atcDistortion.distortionType === 'ARTIFICIAL_ATC_MARKUP'
+                  ? 'bg-rose-950/40 border-rose-500/50 text-rose-100'
+                  : atcDistortion.distortionType === 'ATC_MARKDOWN_TRAP'
+                  ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100'
+                  : 'bg-[#0c1628] border-slate-800 text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-extrabold text-[10px]">{atcDistortion.badgeVi}</span>
+                <span className="font-mono text-[9.5px] text-slate-300">
+                  Lệch VWAP: {atcDistortion.gapVsVwapPct >= 0 ? '+' : ''}
+                  {atcDistortion.gapVsVwapPct}%
+                </span>
+              </div>
+              <div className="text-[10px] leading-snug">{atcDistortion.headlineVi}</div>
+              <div className="text-[9.5px] text-amber-200/95 leading-snug pt-1 border-t border-slate-800">
+                🛡️ {atcDistortion.nextMorningGuidanceVi}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Imminent Shareholder Ex-Dividend / Rights Issue Anti-Trap Radar */}
       {isCorporate && imminentEvent && (
         <div
@@ -257,7 +759,9 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
             </span>
           </div>
           <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 flex-wrap">
-            <span>Đáo hạn: {basisData.expiryDateISO} ({basisData.daysToExpiry} ngày)</span>
+            <span>
+              Đáo hạn: {basisData.expiryDateISO} ({basisData.daysToExpiry} ngày)
+            </span>
             {symUpper !== 'VN30F1M' ? (
               <button
                 type="button"
@@ -357,7 +861,8 @@ export const VnStockQuickCard: React.FC<VnStockQuickCardProps> = ({
                 <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-800/80 flex-wrap">
                   {liqPt.vwapPrice !== null && (
                     <span>
-                      VWAP sàn: <strong className="text-cyan-300">{formatPrice(liqPt.vwapPrice)}k</strong>
+                      VWAP sàn:{' '}
+                      <strong className="text-cyan-300">{formatPrice(liqPt.vwapPrice)}k</strong>
                     </span>
                   )}
                   <span>

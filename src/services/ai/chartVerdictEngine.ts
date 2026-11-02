@@ -37,6 +37,10 @@ import {
 import { computeVnActiveOrderFlow } from '../vnMarket/vnExecutionEngines';
 import { VnStockInsightsPayload } from '../vnMarket/vnStockInsightsClient';
 import {
+  evaluateVnComprehensiveTacticalReport,
+  VnComprehensiveTacticalReport,
+} from '../vnMarket/vnSelloffAndBottomEngine';
+import {
   computeCryptoCapitalCycle,
   computeCryptoLiquidationAndCarry,
   computeUsExtendedHoursPulse,
@@ -69,6 +73,10 @@ export interface RiskVetoItem {
     | 'VN_NEAR_CEILING_T25'
     | 'VN_ATC_NOISE'
     | 'VN_EX_DIVIDEND_GAP'
+    | 'VN_AFTERNOON_FORCE_SELL'
+    | 'VN_FLOOR_LOCKED_NO_RESCUE'
+    | 'VN_ARTIFICIAL_ATC_MARKUP'
+    | 'VN_T25_AFTERNOON_SUPPLY'
     | 'CRYPTO_HOT_FUNDING'
     | 'HTF_COUNTER_TREND'
     | 'SEVERE_MACRO_HEADWIND'
@@ -112,6 +120,7 @@ export interface ChartRecommendationVerdict {
   bullishDriversVi: string[];
   riskFactorsVi: string[];
   vetoes: RiskVetoItem[];
+  vnTacticalSummary?: VnComprehensiveTacticalReport | null;
 }
 
 export interface ChartRecommendationInput {
@@ -634,6 +643,64 @@ export function evaluateChartRecommendation(
           severity: 'CAUTION',
           titleVi: `Sắp giao dịch không hưởng quyền (${imminentEvent.effectiveDate})`,
           detailVi: imminentEvent.riskHint || `Lưu ý điều chỉnh giá tham chiếu ngày GDKHQ và thuế cổ tức 5%.`,
+        });
+      }
+
+      const vnTacticalLive = evaluateVnComprehensiveTacticalReport({
+        symbolObj,
+        candles,
+        mtfCandlesMap,
+        allSymbols,
+        vnInsights,
+        now,
+      });
+
+      if (vnTacticalLive.bottomFishingPlan.floorAbsorptionState === 'FLOOR_LOCKED_NO_RESCUE') {
+        vetoes.push({
+          code: 'VN_FLOOR_LOCKED_NO_RESCUE',
+          severity: 'HARD_VETO',
+          titleVi: 'Cổ phiếu nằm/sát Sàn tắc thanh khoản — Chưa có cầu giải cứu',
+          detailVi: vnTacticalLive.bottomFishingPlan.floorAbsorptionDetailVi,
+        });
+        p4Score -= 24;
+      } else if (
+        vnTacticalLive.bottomFishingPlan.floorAbsorptionState === 'FLOOR_RESCUE_ABSORPTION'
+      ) {
+        p4Score += 20;
+        bullishDrivers.push({
+          priority: 95,
+          text: vnTacticalLive.bottomFishingPlan.floorAbsorptionDetailVi,
+        });
+      }
+
+      if (vnTacticalLive.panicAndForceSell.selloffRiskLevel === 'ACTIVE_FORCE_SELL_WAVE') {
+        vetoes.push({
+          code: 'VN_AFTERNOON_FORCE_SELL',
+          severity: 'CAUTION',
+          titleVi: `Báo động giải chấp Call Margin / Bán chéo (${vnTacticalLive.panicAndForceSell.forceSellProbabilityPct}%)`,
+          detailVi: vnTacticalLive.panicAndForceSell.actionGuidanceVi,
+        });
+        riskFactors.push({
+          priority: 96,
+          text: vnTacticalLive.panicAndForceSell.headlineVi,
+        });
+      }
+
+      if (vnTacticalLive.atcDistortion.distortionType === 'ARTIFICIAL_ATC_MARKUP') {
+        vetoes.push({
+          code: 'VN_ARTIFICIAL_ATC_MARKUP',
+          severity: 'CAUTION',
+          titleVi: 'Cảnh báo kéo ảo cuối phiên ATC (+trên VWAP nhưng cầu yếu)',
+          detailVi: vnTacticalLive.atcDistortion.nextMorningGuidanceVi,
+        });
+      }
+
+      if (vnTacticalLive.t2CohortShock.supplyShockRegime === 'HIGH_PROFIT_TAKING_13H') {
+        vetoes.push({
+          code: 'VN_T25_AFTERNOON_SUPPLY',
+          severity: 'CAUTION',
+          titleVi: `Lô hàng bắt đáy T-2 lãi +${vnTacticalLive.t2CohortShock.cohortFloatingPnlPct}% về lúc 13:00`,
+          detailVi: vnTacticalLive.t2CohortShock.tacticalAdviceVi,
         });
       }
 
@@ -1302,6 +1369,17 @@ export function evaluateChartRecommendation(
     verdictCode === 'SELL_SHORT' ||
     verdictCode === 'REDUCE_TAKE_PROFIT';
 
+  const vnTacticalSummary: VnComprehensiveTacticalReport | null = isVN
+    ? evaluateVnComprehensiveTacticalReport({
+        symbolObj,
+        candles,
+        mtfCandlesMap,
+        allSymbols,
+        vnInsights: isReplayMode ? null : vnInsights,
+        now,
+      })
+    : null;
+
   return {
     symbol: symUpper,
     timeframe,
@@ -1336,5 +1414,6 @@ export function evaluateChartRecommendation(
     bullishDriversVi: topBullish,
     riskFactorsVi: topRisks,
     vetoes,
+    vnTacticalSummary,
   };
 }

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Check,
+  Download,
   Edit2,
   Plus,
   Trash2,
+  Upload,
   User,
   UserCheck,
   UserPlus,
@@ -12,6 +14,9 @@ import {
 import {
   createNewUserProfile,
   deleteUserProfile,
+  exportFullWorkspaceBackupJson,
+  importFullWorkspaceBackupJson,
+  loadAllUserProfiles,
   LocalUserProfile,
   ProfileAvatarColor,
   switchActiveUserProfile,
@@ -82,8 +87,54 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [backupNotice, setBackupNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeTheme = AVATAR_COLOR_MAP[activeProfile.avatarColor] || AVATAR_COLOR_MAP.cyan;
+
+  const handleExportBackupJson = () => {
+    try {
+      const jsonStr = exportFullWorkspaceBackupJson();
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `trading_workspace_backup_${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setBackupNotice({
+        ok: true,
+        text: `Đã xuất file sao lưu (.JSON) gồm ${profiles.length} hồ sơ User, danh mục ⭐, chỉ báo & nhật ký lệnh!`,
+      });
+    } catch {
+      setBackupNotice({
+        ok: false,
+        text: 'Không thể xuất file sao lưu. Vui lòng thử lại.',
+      });
+    }
+  };
+
+  const handleImportBackupFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === 'string' ? reader.result : '';
+      const res = importFullWorkspaceBackupJson(raw);
+      setBackupNotice({ ok: res.ok, text: res.messageVi });
+      if (res.ok && res.activeProfile) {
+        const refreshedAll = loadAllUserProfiles();
+        onProfileSwitched(res.activeProfile, refreshedAll);
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -422,6 +473,54 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
                   </button>
                 </form>
               )}
+
+              {/* Tool 6: 1-Click Workspace JSON Export / Import Backup & Restore */}
+              <div className="p-2.5 rounded-xl bg-[#070d18] border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-300">
+                    Sao Lưu &amp; Khôi Phục Hồ Sơ (.JSON)
+                  </span>
+                  <span className="text-[9.5px] font-mono text-slate-400">
+                    Mang sang máy / trình duyệt khác
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportBackupJson}
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition"
+                  >
+                    <Download className="w-3.5 h-3.5 shrink-0" />
+                    <span>Xuất Sao Lưu (.JSON)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/40 text-indigo-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition"
+                  >
+                    <Upload className="w-3.5 h-3.5 shrink-0" />
+                    <span>Nhập File (.JSON)</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleImportBackupFile}
+                    className="hidden"
+                  />
+                </div>
+                {backupNotice && (
+                  <div
+                    className={`p-2 rounded-lg text-[10.5px] font-medium border ${
+                      backupNotice.ok
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                        : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                    }`}
+                  >
+                    {backupNotice.text}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

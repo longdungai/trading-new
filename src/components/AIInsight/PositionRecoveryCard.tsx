@@ -1,20 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Activity,
   AlertTriangle,
+  Award,
   Bell,
+  BookOpen,
   Briefcase,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ClipboardCheck,
   Compass,
+  DollarSign,
   Edit3,
   Eye,
   EyeOff,
   Layers,
   PlusCircle,
   RefreshCw,
+  Scale,
   ShieldAlert,
+  Sparkles,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -30,6 +37,19 @@ import {
   USER_HOLDINGS_UPDATED_EVENT,
   UserHoldingItem,
 } from '../../services/portfolio/holdingsRecoveryEngine';
+import {
+  computeTradeJournalAnalytics,
+  deleteClosedTradeEntry,
+  loadClosedTradeJournal,
+  recordClosedTradeEntry,
+  TRADE_JOURNAL_UPDATED_EVENT,
+} from '../../services/portfolio/tradeJournalEngine';
+import { scanDivergenceAndCandlestickPatterns } from '../../services/analysis/divergenceAndPatternScanner';
+import {
+  computeQuickIntrinsicValuation,
+  computeSectorRotationRrgMatrix,
+  evaluatePreTradeChecklistAndGameplan,
+} from '../../services/analysis/preTradeChecklistAndSectorRrg';
 import {
   isVnDerivativeSymbol,
   isVnStockOrIndexSymbol,
@@ -51,6 +71,7 @@ interface PositionRecoveryCardProps {
 export const PositionRecoveryCard: React.FC<PositionRecoveryCardProps> = ({
   currentSymbol,
   allSymbols,
+  candles,
   chartVerdict,
   recoveryPlan,
   showHoldingLines = true,
@@ -81,10 +102,27 @@ export const PositionRecoveryCard: React.FC<PositionRecoveryCardProps> = ({
   const [daysInput, setDaysInput] = useState<string>('5');
   const [dcaBudgetInput, setDcaBudgetInput] = useState<string>('');
 
+  // Pro Trading Support Tools (Tools 1..5) State
+  const [activeProToolTab, setActiveProToolTab] = useState<
+    'checklist' | 'divergence' | 'rrg' | 'valuation' | 'journal'
+  >('checklist');
+  const [isCloseTradeModalOpen, setIsCloseTradeModalOpen] = useState<boolean>(false);
+  const [closeQtyInput, setCloseQtyInput] = useState<string>('');
+  const [closeExitPriceInput, setCloseExitPriceInput] = useState<string>('');
+  const [closeReasonInput, setCloseReasonInput] = useState<
+    'TAKE_PROFIT_T2' | 'T0_INTRADAY_HARVEST' | 'STOP_LOSS_DISCIPLINE' | 'MANUAL_EXIT'
+  >('TAKE_PROFIT_T2');
+  const [journalEntries, setJournalEntries] = useState(() => loadClosedTradeJournal());
+
   useEffect(() => {
     const sync = () => setHoldingsMap(loadUserHoldings());
+    const syncJournal = () => setJournalEntries(loadClosedTradeJournal());
     window.addEventListener(USER_HOLDINGS_UPDATED_EVENT, sync);
-    return () => window.removeEventListener(USER_HOLDINGS_UPDATED_EVENT, sync);
+    window.addEventListener(TRADE_JOURNAL_UPDATED_EVENT, syncJournal);
+    return () => {
+      window.removeEventListener(USER_HOLDINGS_UPDATED_EVENT, sync);
+      window.removeEventListener(TRADE_JOURNAL_UPDATED_EVENT, syncJournal);
+    };
   }, []);
 
   // Re-sync form inputs whenever active symbol changes
@@ -182,6 +220,98 @@ export const PositionRecoveryCard: React.FC<PositionRecoveryCardProps> = ({
     setIsFormOpen(true);
   };
 
+  // Pro Tools Computed Reports
+  const journalAnalytics = useMemo(
+    () => computeTradeJournalAnalytics(journalEntries),
+    [journalEntries]
+  );
+
+  const preTradeChecklist = useMemo(
+    () =>
+      evaluatePreTradeChecklistAndGameplan({
+        currentSymbol,
+        candles,
+        symbols: allSymbols,
+        holdingsMap,
+        plannedEntry: chartVerdict.entryMidPrice,
+        plannedStopLoss: chartVerdict.stopLoss,
+        plannedTakeProfit: chartVerdict.takeProfit1,
+      }),
+    [
+      currentSymbol,
+      candles,
+      allSymbols,
+      holdingsMap,
+      chartVerdict.entryMidPrice,
+      chartVerdict.stopLoss,
+      chartVerdict.takeProfit1,
+    ]
+  );
+
+  const divergencePatternReport = useMemo(
+    () => scanDivergenceAndCandlestickPatterns(candles),
+    [candles]
+  );
+
+  const rrgReport = useMemo(
+    () =>
+      computeSectorRotationRrgMatrix({
+        currentSymbol,
+        symbols: allSymbols,
+        candles,
+      }),
+    [currentSymbol, allSymbols, candles]
+  );
+
+  const valuationReport = useMemo(
+    () =>
+      computeQuickIntrinsicValuation({
+        currentSymbol,
+        candles,
+      }),
+    [currentSymbol, candles]
+  );
+
+  const handleOpenCloseTradeModal = () => {
+    const curHolding = holdingsMap[symUpper];
+    setCloseQtyInput(
+      curHolding
+        ? String(curHolding.quantity)
+        : isVnCorp
+          ? '1000'
+          : isVnDeriv
+            ? '2'
+            : '1'
+    );
+    setCloseExitPriceInput(String(currentSymbol.price));
+    setIsCloseTradeModalOpen((v) => !v);
+  };
+
+  const handleRecordClosedTrade = (e: React.FormEvent) => {
+    e.preventDefault();
+    const curHolding = holdingsMap[symUpper];
+    const q = Number(closeQtyInput.replace(/,/g, '').trim());
+    const exitP = Number(closeExitPriceInput.replace(/,/g, '').trim());
+    const entryP = curHolding
+      ? curHolding.avgCostPrice
+      : Number(avgPriceInput.replace(/,/g, '').trim()) || currentSymbol.price * 0.96;
+    if (!Number.isFinite(q) || q <= 0 || !Number.isFinite(exitP) || exitP <= 0) return;
+
+    recordClosedTradeEntry({
+      symbol: symUpper,
+      symbolObj: currentSymbol,
+      quantityClosed: q,
+      entryPrice: entryP,
+      exitPrice: exitP,
+      holdingDays: curHolding?.holdingDays ?? 3,
+      exitReason: closeReasonInput,
+      deductFromOpenHolding: Boolean(curHolding),
+    });
+
+    setIsCloseTradeModalOpen(false);
+    setActiveProToolTab('journal');
+  };
+
   return (
     <div className="p-3 sm:p-4 rounded-xl bg-[#101726] border border-amber-500/35 flex flex-col gap-3 shadow-xl select-none min-w-0">
       {/* Header */}
@@ -230,8 +360,97 @@ export const PositionRecoveryCard: React.FC<PositionRecoveryCardProps> = ({
               <span>{isFormOpen ? 'Đóng sửa' : 'Sửa giá vốn'}</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={handleOpenCloseTradeModal}
+            className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/45 text-emerald-200 text-[10px] font-bold flex items-center gap-1 transition whitespace-nowrap"
+            title="Chốt một phần hoặc toàn bộ vị thế và lưu vào Sổ Nhật Ký Lãi/Lỗ Thực"
+          >
+            <DollarSign className="w-3 h-3 text-emerald-300" />
+            <span>Chốt Lệnh / Ghi Sổ</span>
+          </button>
         </div>
       </div>
+
+      {/* Tool 1 Quick Close & Record Real Trade Form */}
+      {isCloseTradeModalOpen && (
+        <form
+          onSubmit={handleRecordClosedTrade}
+          className="p-2.5 rounded-xl bg-[#07121d] border border-emerald-500/50 space-y-2 text-xs animate-in fade-in"
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-emerald-300 text-[11px] flex items-center gap-1">
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>Ghi Nhận Lệnh Chốt {symUpper} Vào Sổ Nhật Ký Thực</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsCloseTradeModalOpen(false)}
+              className="text-[10px] text-slate-400 hover:text-white"
+            >
+              Đóng
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-300 block mb-1">
+                KL Chốt ({qtyUnit})
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0.0001"
+                required
+                value={closeQtyInput}
+                onChange={(e) => setCloseQtyInput(e.target.value)}
+                className="w-full px-2 py-1 rounded-lg bg-[#0e1b2d] border border-slate-700 text-white font-mono text-xs"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-300 block mb-1">
+                Giá Khớp Bán ({isVnCorp ? 'nghìn đ' : isVN ? 'điểm' : 'USD'})
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0.000001"
+                required
+                value={closeExitPriceInput}
+                onChange={(e) => setCloseExitPriceInput(e.target.value)}
+                className="w-full px-2 py-1 rounded-lg bg-[#0e1b2d] border border-slate-700 text-white font-mono text-xs"
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-[10px] text-slate-300 block mb-1">Lý do đóng lệnh</label>
+              <select
+                value={closeReasonInput}
+                onChange={(e) =>
+                  setCloseReasonInput(
+                    e.target.value as
+                      | 'TAKE_PROFIT_T2'
+                      | 'T0_INTRADAY_HARVEST'
+                      | 'STOP_LOSS_DISCIPLINE'
+                      | 'MANUAL_EXIT'
+                  )
+                }
+                className="w-full px-2 py-1 rounded-lg bg-[#0e1b2d] border border-slate-700 text-slate-200 text-xs"
+              >
+                <option value="TAKE_PROFIT_T2">Chốt lời T+2.5 / Đạt Target</option>
+                <option value="T0_INTRADAY_HARVEST">Lướt T+0 Hạ Giá Vốn</option>
+                <option value="STOP_LOSS_DISCIPLINE">Cắt Lỗ Kỷ Luật Bảo Toàn Vốn</option>
+                <option value="MANUAL_EXIT">Cơ Cấu Danh Mục Thủ Công</option>
+              </select>
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition"
+          >
+            Xác Nhận Chốt Lệnh &amp; Cập Nhật Đường Cong Vốn
+          </button>
+        </form>
+      )}
 
       {/* Saved Multi-Symbol Holdings Strip */}
       {heldSymbolsSummary.length > 0 && (
@@ -781,6 +1000,433 @@ export const PositionRecoveryCard: React.FC<PositionRecoveryCardProps> = ({
           )}
         </div>
       )}
+
+      {/* PRO TRADING SUPPORT SUITE (TOOLS 1, 2, 3, 4, 5) */}
+      <div className="pt-2 border-t border-slate-800/90 space-y-2.5 text-xs min-w-0">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span>Bộ Công Cụ Kỷ Luật, Phân Kỳ, Sóng Ngành &amp; Nhật Ký Vốn</span>
+          </span>
+          <span className="text-[9.5px] font-mono text-slate-400">
+            Điểm kỷ luật: <strong className="text-emerald-300">{preTradeChecklist.readinessScore}/100</strong>
+          </span>
+        </div>
+
+        {/* 5-Tool Segmented Bar */}
+        <div className="grid grid-cols-5 gap-1 p-1 rounded-xl bg-[#070c16] border border-slate-800 text-[10px] font-bold">
+          <button
+            type="button"
+            onClick={() => setActiveProToolTab('checklist')}
+            className={`py-1.5 px-1 rounded-lg transition truncate flex items-center justify-center gap-1 ${
+              activeProToolTab === 'checklist'
+                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/50'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Bảng Kế Hoạch Đầu Ngày & Checklist 5 Tiêu Chí Trước Khi Bấm Lệnh"
+          >
+            <ClipboardCheck className="w-3 h-3 shrink-0" />
+            <span className="truncate">Checklist ({preTradeChecklist.passCount}/5)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveProToolTab('divergence')}
+            className={`py-1.5 px-1 rounded-lg transition truncate flex items-center justify-center gap-1 ${
+              activeProToolTab === 'divergence'
+                ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-400/50'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Bộ Quét Phân Kỳ RSI/MACD & 6 Mô Hình Nến Đảo Chiều Tự Động"
+          >
+            <Activity className="w-3 h-3 shrink-0" />
+            <span className="truncate">Phân Kỳ/Nến</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveProToolTab('rrg')}
+            className={`py-1.5 px-1 rounded-lg transition truncate flex items-center justify-center gap-1 ${
+              activeProToolTab === 'rrg'
+                ? 'bg-indigo-500/25 text-indigo-200 border border-indigo-400/50'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Bản Đồ Luân Chuyển Sóng Ngành RRG 4 Pha"
+          >
+            <Compass className="w-3 h-3 shrink-0" />
+            <span className="truncate">Sóng Ngành</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveProToolTab('valuation')}
+            className={`py-1.5 px-1 rounded-lg transition truncate flex items-center justify-center gap-1 ${
+              activeProToolTab === 'valuation'
+                ? 'bg-amber-500/25 text-amber-200 border border-amber-400/50'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Trình Định Giá Nhanh Fair Value & Biên An Toàn Cơ Bản"
+          >
+            <Scale className="w-3 h-3 shrink-0" />
+            <span className="truncate">Định Giá ({valuationReport.fundamentalGrade})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveProToolTab('journal')}
+            className={`py-1.5 px-1 rounded-lg transition truncate flex items-center justify-center gap-1 ${
+              activeProToolTab === 'journal'
+                ? 'bg-purple-500/25 text-purple-200 border border-purple-400/50'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Sổ Nhật Ký Giao Dịch Đã Đóng & Đường Cong Vốn Cá Nhân"
+          >
+            <BookOpen className="w-3 h-3 shrink-0" />
+            <span className="truncate">Nhật Ký ({journalAnalytics.totalClosedTrades})</span>
+          </button>
+        </div>
+
+        {/* TAB 1: TOOL 3 — PRE-TRADE CHECKLIST & MORNING GAMEPLAN */}
+        {activeProToolTab === 'checklist' && (
+          <div className="p-2.5 rounded-xl bg-[#080f1d] border border-slate-800 space-y-2 text-[10.5px]">
+            <div className="p-2 rounded-lg bg-[#0d182c] border border-cyan-500/30 space-y-1">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="font-bold text-cyan-300">
+                  ☀️ {preTradeChecklist.morningGameplan.sessionGreetingVi}
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 rounded font-mono text-[9.5px] font-bold ${
+                    preTradeChecklist.verdict === 'READY_TO_EXECUTE'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : preTradeChecklist.verdict === 'CAUTION_REDUCE_SIZE'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                  }`}
+                >
+                  Khuyến nghị Size: {preTradeChecklist.recommendedSizeMultiplierPct}%
+                </span>
+              </div>
+              <div className="text-slate-300 leading-snug">
+                {preTradeChecklist.morningGameplan.primarySessionDirectiveVi}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              {preTradeChecklist.criteria.map((c) => (
+                <div
+                  key={c.id}
+                  className="p-2 rounded-lg bg-[#0c1526] border border-slate-800/90 flex flex-col gap-0.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-200">{c.titleVi}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold shrink-0 ${
+                        c.status === 'PASS'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : c.status === 'WARN'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      {c.status === 'PASS' ? 'ĐẠT' : c.status === 'WARN' ? 'LƯU Ý' : 'VI PHẠM'} •{' '}
+                      {c.metricBadge}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 leading-snug">{c.detailVi}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-2 rounded-lg bg-slate-900/90 border border-slate-800 text-slate-300 leading-snug">
+              <strong className="text-white">{preTradeChecklist.verdictLabelVi}:</strong>{' '}
+              {preTradeChecklist.coachingNoteVi}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: TOOL 2 — RSI/MACD DIVERGENCE & CANDLESTICK PATTERN SCANNER */}
+        {activeProToolTab === 'divergence' && (
+          <div className="p-2.5 rounded-xl bg-[#080f1d] border border-slate-800 space-y-2 text-[10.5px]">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="font-bold text-cyan-200">
+                Quét Phân Kỳ RSI/MACD &amp; Mẫu Nến Khối Lượng
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded font-mono text-[9.5px] font-bold ${
+                  divergencePatternReport.compositeBias === 'BULLISH_REVERSAL'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : divergencePatternReport.compositeBias === 'BEARISH_WARNING'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                {divergencePatternReport.compositeBadgeVi}
+              </span>
+            </div>
+
+            <div className="text-slate-300 leading-snug bg-[#0d182c] p-2 rounded-lg border border-slate-800">
+              {divergencePatternReport.summaryVi}
+            </div>
+
+            {divergencePatternReport.divergence.type !== 'NONE' && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold uppercase text-slate-400">
+                  Tín hiệu Phân Kỳ RSI / MACD:
+                </div>
+                <div
+                  className={`p-2 rounded-lg border ${
+                    divergencePatternReport.divergence.type.includes('BULLISH')
+                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                      : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                  }`}
+                >
+                  <div className="font-bold flex items-center justify-between">
+                    <span>
+                      [{divergencePatternReport.divergence.indicator}]{' '}
+                      {divergencePatternReport.divergence.badgeVi}
+                    </span>
+                    <span className="font-mono text-[9.5px]">
+                      Độ mạnh: {divergencePatternReport.divergence.strengthScore}/100
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 mt-0.5">
+                    {divergencePatternReport.divergence.headlineVi}
+                  </div>
+                  <div className="text-[10px] text-cyan-300 mt-0.5 font-medium">
+                    👉 {divergencePatternReport.divergence.actionAdviceVi}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {divergencePatternReport.candlestickPatterns.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold uppercase text-slate-400">
+                  Mẫu Hình Nến Price Action ({divergencePatternReport.candlestickPatterns.length}):
+                </div>
+                {divergencePatternReport.candlestickPatterns.map((pat, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded-lg bg-[#0d1627] border border-slate-800 space-y-0.5"
+                  >
+                    <div className="flex items-center justify-between font-bold text-white">
+                      <span>{pat.nameVi}</span>
+                      <span className="font-mono text-[9.5px] text-amber-300">
+                        RVOL {pat.volumeVsAvgRatio}x • {pat.badgeVi}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-300">{pat.detailVi}</div>
+                    <div className="text-[9.5px] font-mono text-cyan-300">
+                      Kích hoạt: {fmtP(pat.triggerPrice)} | Hủy mẫu hình: {fmtP(pat.invalidationPrice)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: TOOL 4 — 4-QUADRANT SECTOR ROTATION RRG MATRIX */}
+        {activeProToolTab === 'rrg' && (
+          <div className="p-2.5 rounded-xl bg-[#080f1d] border border-slate-800 space-y-2 text-[10.5px]">
+            <div className="p-2 rounded-lg bg-[#0d182c] border border-indigo-500/35 text-slate-200 leading-snug">
+              {rrgReport.rotationSummaryVi}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {rrgReport.sectors.slice(0, 6).map((sec) => {
+                const isLead = sec.quadrant === 'LEADING';
+                const isImp = sec.quadrant === 'IMPROVING';
+                const isWeak = sec.quadrant === 'WEAKENING';
+                return (
+                  <div
+                    key={sec.sectorId}
+                    className={`p-2 rounded-lg border flex flex-col gap-0.5 ${
+                      sec.containsCurrentSymbol
+                        ? 'bg-[#13203a] border-cyan-400/70'
+                        : 'bg-[#0c1424] border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-white truncate">
+                        {sec.shortNameVi}{' '}
+                        {sec.containsCurrentSymbol && (
+                          <span className="text-cyan-300 font-mono text-[9px]">({symUpper})</span>
+                        )}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded font-mono text-[9px] font-bold shrink-0 ${
+                          isLead
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : isImp
+                              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                              : isWeak
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        }`}
+                      >
+                        {sec.quadrant}
+                      </span>
+                    </div>
+                    <div className="text-[9.5px] font-mono text-slate-400 flex items-center justify-between">
+                      <span>
+                        RS: <strong className="text-slate-200">{sec.rsRatio}</strong> | Mom:{' '}
+                        <strong className="text-slate-200">{sec.rsMomentum}</strong>
+                      </span>
+                      <span className="text-amber-300">
+                        Leader: <strong>{sec.leaderSymbol}</strong> (
+                        {sec.leaderChangePct >= 0 ? '+' : ''}
+                        {sec.leaderChangePct}%)
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: TOOL 5 — QUICK INTRINSIC FAIR-VALUE & MARGIN OF SAFETY */}
+        {activeProToolTab === 'valuation' && (
+          <div className="p-2.5 rounded-xl bg-[#080f1d] border border-slate-800 space-y-2 text-[10.5px]">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="font-bold text-amber-200">{valuationReport.methodologyLabelVi}</span>
+              <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-200 font-mono text-[10px] font-black">
+                Hạng {valuationReport.fundamentalGrade} ({valuationReport.totalFundamentalScore}/100)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
+              <div className="p-2 rounded-lg bg-[#0d1729] border border-emerald-500/35">
+                <div className="text-[9px] font-sans text-emerald-300">Vùng Mua An Toàn (-15%)</div>
+                <div className="text-xs font-black text-emerald-300 mt-0.5">
+                  {fmtP(valuationReport.safeBuyZonePrice)}
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-[#0d1729] border border-cyan-500/40">
+                <div className="text-[9px] font-sans text-cyan-300">Giá Trị Hợp Lý (Fair Value)</div>
+                <div className="text-xs font-black text-white mt-0.5">
+                  {fmtP(valuationReport.fairValuePrice)}
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-[#0d1729] border border-amber-500/35">
+                <div className="text-[9px] font-sans text-amber-300">Vùng Chốt Lời (+15%)</div>
+                <div className="text-xs font-black text-amber-200 mt-0.5">
+                  {fmtP(valuationReport.overvaluedTrimPrice)}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              {valuationReport.pillars.map((pil, idx) => (
+                <div
+                  key={idx}
+                  className="p-1.5 rounded-lg bg-[#0c1424] border border-slate-800 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-200">{pil.labelVi}</div>
+                    <div className="text-[9.5px] text-slate-400">{pil.assessmentVi}</div>
+                  </div>
+                  <span className="font-mono text-[10px] font-bold text-cyan-300 shrink-0">
+                    {pil.valueText}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: TOOL 1 — REAL CLOSED TRADE JOURNAL & EQUITY CURVE */}
+        {activeProToolTab === 'journal' && (
+          <div className="p-2.5 rounded-xl bg-[#080f1d] border border-slate-800 space-y-2 text-[10.5px]">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="font-bold text-purple-200 flex items-center gap-1">
+                <Award className="w-3.5 h-3.5 text-purple-400" />
+                <span>{journalAnalytics.coachingBadgeVi}</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleOpenCloseTradeModal}
+                className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-[9.5px] font-bold"
+              >
+                + Ghi Lệnh Chốt Mới
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
+              <div className="p-1.5 rounded-lg bg-[#0d1627] border border-slate-800">
+                <div className="text-[9px] font-sans text-slate-400">Tỷ Lệ Thắng (Win Rate)</div>
+                <div className="text-xs font-black text-emerald-300">
+                  {journalAnalytics.winRatePct}% ({journalAnalytics.winCount}W/{journalAnalytics.lossCount}L)
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#0d1627] border border-slate-800">
+                <div className="text-[9px] font-sans text-slate-400">Profit Factor</div>
+                <div className="text-xs font-black text-cyan-300">
+                  {journalAnalytics.profitFactor}x
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#0d1627] border border-slate-800">
+                <div className="text-[9px] font-sans text-slate-400">Lãi Ròng Tích Lũy</div>
+                <div
+                  className={`text-xs font-black ${
+                    journalAnalytics.totalNetRealizedMillionVnd >= 0
+                      ? 'text-emerald-300'
+                      : 'text-rose-400'
+                  }`}
+                >
+                  {journalAnalytics.totalNetRealizedMillionVnd >= 0 ? '+' : ''}
+                  {journalAnalytics.totalNetRealizedMillionVnd} Tr
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-slate-300 bg-[#0d1729] p-2 rounded-lg border border-slate-800">
+              {journalAnalytics.coachingAdviceVi}
+            </div>
+
+            {journalAnalytics.entries.length > 0 && (
+              <div className="space-y-1 max-h-40 overflow-y-auto pr-0.5">
+                {journalAnalytics.entries.slice(0, 8).map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="p-1.5 rounded-lg bg-[#0c1424] border border-slate-800 flex items-center justify-between gap-2 font-mono text-[10px]"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-bold text-white">{entry.symbol}</span>{' '}
+                      <span className="text-slate-400">
+                        ({entry.quantityClosed.toLocaleString('en-US')} {entry.quantityLabel})
+                      </span>{' '}
+                      <span className="text-[9px] font-sans text-slate-400">
+                        • {entry.exitReasonLabelVi}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={`font-bold ${
+                          entry.netRealizedPnlPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
+                        {entry.netRealizedPnlPct >= 0 ? '+' : ''}
+                        {entry.netRealizedPnlPct}% ({entry.netRealizedCashValue >= 0 ? '+' : ''}
+                        {entry.netRealizedCashValue} {entry.currencyUnitLabel})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => deleteClosedTradeEntry(entry.id)}
+                        className="text-slate-500 hover:text-rose-400"
+                        title="Xóa bản ghi nhật ký này"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

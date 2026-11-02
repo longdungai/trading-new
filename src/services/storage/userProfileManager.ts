@@ -14,6 +14,12 @@ import {
   USER_HOLDINGS_UPDATED_EVENT,
   UserHoldingItem,
 } from '../portfolio/holdingsRecoveryEngine';
+import {
+  ClosedTradeJournalEntry,
+  loadClosedTradeJournal,
+  saveClosedTradeJournal,
+  TRADE_JOURNAL_UPDATED_EVENT,
+} from '../portfolio/tradeJournalEngine';
 
 export const USER_PROFILES_STORAGE_KEY = 'trading_new_local_user_profiles_v1';
 export const ACTIVE_USER_PROFILE_ID_KEY = 'trading_new_active_user_profile_id_v1';
@@ -548,3 +554,159 @@ export function deleteUserProfile(profileId: string): {
     activeProfile: remaining.find((p) => p.id === currentActiveId) || remaining[0],
   };
 }
+
+export interface WorkspaceBackupPayload {
+  schemaVersion: 1;
+  exportedAtISO: string;
+  activeProfileId: string;
+  profiles: LocalUserProfile[];
+  closedTradeJournal: ClosedTradeJournalEntry[];
+  extraStorageKeys?: Record<string, string>;
+}
+
+/**
+ * Tool 6: Export all local user profiles, starred symbols, indicator configs,
+ * open holdings, closed trade journal, and alerts/drawings into a portable JSON string.
+ */
+export function exportFullWorkspaceBackupJson(): string {
+  // First ensure current active profile has latest holdings synced
+  const active = loadActiveUserProfile();
+  const latestHoldings = loadUserHoldings();
+  const profiles = loadAllUserProfiles().map((p) =>
+    p.id === active.id ? { ...p, holdings: latestHoldings, updatedAtMs: Date.now() } : p
+  );
+  saveAllUserProfiles(profiles);
+
+  const closedTradeJournal = loadClosedTradeJournal();
+  const extraStorageKeys: Record<string, string> = {};
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (
+          key &&
+          (key.startsWith('trading_new_drawings_') ||
+            key.startsWith('trading_new_alerts') ||
+            key.startsWith('trading_new_paper_'))
+        ) {
+          const val = window.localStorage.getItem(key);
+          if (val !== null) {
+            extraStorageKeys[key] = val;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const payload: WorkspaceBackupPayload = {
+    schemaVersion: 1,
+    exportedAtISO: new Date().toISOString(),
+    activeProfileId: active.id,
+    profiles,
+    closedTradeJournal,
+    extraStorageKeys,
+  };
+
+  return JSON.stringify(payload, null, 2);
+}
+
+/**
+ * Tool 6: Restore full workspace backup from JSON string and activate the target user profile.
+ */
+export function importFullWorkspaceBackupJson(rawJson: string): {
+  ok: boolean;
+  messageVi: string;
+  restoredProfilesCount: number;
+  restoredJournalCount: number;
+  activeProfile: LocalUserProfile | null;
+} {
+  try {
+    const parsed = JSON.parse(rawJson) as Partial<WorkspaceBackupPayload>;
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.profiles) || parsed.profiles.length === 0) {
+      return {
+        ok: false,
+        messageVi: 'File JSON không hợp lệ hoặc không chứa dữ liệu Hồ Sơ User.',
+        restoredProfilesCount: 0,
+        restoredJournalCount: 0,
+        activeProfile: null,
+      };
+    }
+
+    const sanitizedProfiles: LocalUserProfile[] = parsed.profiles.map((p, idx) => ({
+      id: p.id || `usr_restored_${idx}`,
+      name: String(p.name || `User ${idx + 1}`),
+      avatarColor: p.avatarColor || 'cyan',
+      activeSymbol: String(p.activeSymbol || DEFAULT_SYMBOLS[0].symbol).toUpperCase(),
+      timeframe: VALID_TIMEFRAMES.has(p.timeframe) ? p.timeframe : '1h',
+      indicatorSettings: {
+        ...DEFAULT_INDICATOR_SETTINGS,
+        ...(p.indicatorSettings || {}),
+      },
+      kronosConfig: p.kronosConfig || loadKronosConfig(),
+      favorites: Array.isArray(p.favorites) ? p.favorites : [],
+      symbols: Array.isArray(p.symbols) && p.symbols.length > 0 ? p.symbols : DEFAULT_SYMBOLS,
+      holdings: p.holdings && typeof p.holdings === 'object' ? p.holdings : {},
+      layoutPrefs: {
+        ...DEFAULT_LAYOUT_PREFS,
+        ...(p.layoutPrefs || {}),
+      },
+      createdAtMs: Number(p.createdAtMs) || Date.now(),
+      updatedAtMs: Date.now(),
+    }));
+
+    saveAllUserProfiles(sanitizedProfiles);
+
+    const targetProfile =
+      sanitizedProfiles.find((p) => p.id === parsed.activeProfileId) || sanitizedProfiles[0];
+    applyProfileToActiveStorageKeys(targetProfile);
+
+    let restoredJournalCount = 0;
+    if (Array.isArray(parsed.closedTradeJournal)) {
+      saveClosedTradeJournal(parsed.closedTradeJournal);
+      restoredJournalCount = parsed.closedTradeJournal.length;
+    }
+
+    if (
+      parsed.extraStorageKeys &&
+      typeof parsed.extraStorageKeys === 'object' &&
+      typeof window !== 'undefined'
+    ) {
+      for (const [k, v] of Object.entries(parsed.extraStorageKeys)) {
+        if (typeof k === 'string' && typeof v === 'string') {
+          try {
+            window.localStorage.setItem(k, v);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(USER_PROFILE_CHANGED_EVENT, { detail: { profile: targetProfile } })
+      );
+      window.dispatchEvent(new CustomEvent(TRADE_JOURNAL_UPDATED_EVENT));
+    }
+
+    return {
+      ok: true,
+      messageVi: `Đã khôi phục thành công ${sanitizedProfiles.length} hồ sơ User và ${restoredJournalCount} nhật ký lệnh đóng!`,
+      restoredProfilesCount: sanitizedProfiles.length,
+      restoredJournalCount,
+      activeProfile: targetProfile,
+    };
+  } catch {
+    return {
+      ok: false,
+      messageVi: 'Lỗi giải mã file JSON. Vui lòng kiểm tra lại định dạng file sao lưu.',
+      restoredProfilesCount: 0,
+      restoredJournalCount: 0,
+      activeProfile: null,
+    };
+  }
+}
+

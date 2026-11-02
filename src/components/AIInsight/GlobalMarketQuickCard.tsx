@@ -4,9 +4,14 @@ import {
   AlertTriangle,
   ArrowUpRight,
   CalendarClock,
+  Clock,
+  Coins,
+  Crosshair,
   Flame,
   Globe2,
+  Layers,
   Magnet,
+  RefreshCw,
   ShieldCheck,
   TrendingUp,
 } from 'lucide-react';
@@ -26,6 +31,12 @@ import {
   GlobalMarketInsightsResponse,
   UsOptionsSummary,
 } from '../../services/globalMarket/globalMarketInsightsClient';
+import { evaluateCryptoSpotDailyCashEngine } from '../../services/globalMarket/cryptoSpotDailyCashEngine';
+import {
+  loadUserHoldings,
+  USER_HOLDINGS_UPDATED_EVENT,
+  UserHoldingItem,
+} from '../../services/portfolio/holdingsRecoveryEngine';
 import { formatPrice } from '../../utils/formatters';
 
 interface GlobalMarketQuickCardProps {
@@ -50,6 +61,19 @@ export const GlobalMarketQuickCard: React.FC<GlobalMarketQuickCardProps> = ({
 
   const [insights, setInsights] = useState<GlobalMarketInsightsResponse | null>(null);
   const [nowClock, setNowClock] = useState<Date>(() => new Date());
+  const [activeCryptoSpotTab, setActiveCryptoSpotTab] = useState<
+    'wick_sniper' | 't0_compound' | 'purity_session' | 'treasury_rs'
+  >('wick_sniper');
+  const [usdtCapitalInput, setUsdtCapitalInput] = useState<string>('5000');
+  const [holdingsMap, setHoldingsMap] = useState<Record<string, UserHoldingItem>>(() =>
+    loadUserHoldings()
+  );
+
+  useEffect(() => {
+    const syncHoldings = () => setHoldingsMap(loadUserHoldings());
+    window.addEventListener(USER_HOLDINGS_UPDATED_EVENT, syncHoldings);
+    return () => window.removeEventListener(USER_HOLDINGS_UPDATED_EVENT, syncHoldings);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNowClock(new Date()), 20_000);
@@ -101,6 +125,34 @@ export const GlobalMarketQuickCard: React.FC<GlobalMarketQuickCardProps> = ({
     const buckets = computeCryptoNarrativeRotation(symbols);
     return buckets.find((b) => b.tickers.some((t) => t.symbol === symUpper)) || buckets[0] || null;
   }, [isCrypto, symbols, symUpper]);
+
+  const cryptoSpotDaily = useMemo(() => {
+    if (!isCrypto) return null;
+    const parsedCapital = Math.max(100, Number(usdtCapitalInput.replace(/,/g, '')) || 5000);
+    return evaluateCryptoSpotDailyCashEngine({
+      currentSymbol,
+      candles,
+      symbols,
+      perpCarry: insights?.perpCarry,
+      cryptoMacro: insights?.cryptoMacro,
+      liqReport: cryptoLiqReport,
+      existingHolding: holdingsMap[symUpper] ?? null,
+      totalCapitalUsdt: parsedCapital,
+      nowMs: nowClock.getTime(),
+    });
+  }, [
+    isCrypto,
+    currentSymbol,
+    candles,
+    symbols,
+    insights?.perpCarry,
+    insights?.cryptoMacro,
+    cryptoLiqReport,
+    holdingsMap,
+    symUpper,
+    usdtCapitalInput,
+    nowClock,
+  ]);
 
   const usPulse = useMemo(() => {
     if (!isUsGlobal) return null;
@@ -282,6 +334,252 @@ export const GlobalMarketQuickCard: React.FC<GlobalMarketQuickCardProps> = ({
               {opt.impliedMovePct && <span>Biên Straddle: ±{opt.impliedMovePct}%</span>}
               {opt.totalNotionalBillionUsd && <span>OI: ${opt.totalNotionalBillionUsd}B</span>}
             </div>
+          </div>
+        )}
+
+        {/* ==========================================================================
+            NEW: 6-ENGINE ZERO-LEVERAGE CRYPTO SPOT 24/7 DAILY CASH COMMAND CENTER
+            (1. Hứng Râu Thanh Lý | 2. Lướt T+0 & Free Coin | 3. Tinh Khiết Spot & Phiên | 4. Két 3 Ngăn USDT & ALT/BTC)
+           ========================================================================== */}
+        {cryptoSpotDaily && (
+          <div className="p-2.5 rounded-xl bg-[#070d18] border border-emerald-500/35 space-y-2.5 text-xs">
+            {/* Banner Header */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Coins className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-emerald-300 truncate">
+                  Chiến Lược Spot Coin Hàng Ngày (1x Cash • Không Đòn Bẩy)
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 font-mono text-[9.5px] font-bold shrink-0">
+                Điểm Cơ Hội: {cryptoSpotDaily.dailyOpportunityScore}/100
+              </span>
+            </div>
+
+            {/* Playbook Status Pill */}
+            <div className="p-2 rounded-lg bg-[#0c1629] border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <span className="text-[10px] font-black text-cyan-300">
+                  {cryptoSpotDaily.playbookBadgeVi}
+                </span>
+                <span className="text-[9.5px] font-mono text-amber-300">
+                  Phí Spot 2 chiều: 0.20% • T+0 24/7
+                </span>
+              </div>
+              <div className="text-[10px] text-slate-300 leading-snug">
+                {cryptoSpotDaily.playbookHeadlineVi}
+              </div>
+            </div>
+
+            {/* 4-Tab Switcher */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 rounded-lg bg-[#050911] border border-slate-800 text-[9.5px] font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveCryptoSpotTab('wick_sniper')}
+                className={`py-1.5 px-1 rounded-md transition flex items-center justify-center gap-1 truncate ${
+                  activeCryptoSpotTab === 'wick_sniper'
+                    ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/50'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Crosshair className="w-3 h-3 shrink-0" />
+                <span className="truncate">1. Hứng Râu Liq</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCryptoSpotTab('t0_compound')}
+                className={`py-1.5 px-1 rounded-md transition flex items-center justify-center gap-1 truncate ${
+                  activeCryptoSpotTab === 't0_compound'
+                    ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-400/50'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <RefreshCw className="w-3 h-3 shrink-0" />
+                <span className="truncate">2. Lướt T+0 &amp; Lãi Kép</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCryptoSpotTab('purity_session')}
+                className={`py-1.5 px-1 rounded-md transition flex items-center justify-center gap-1 truncate ${
+                  activeCryptoSpotTab === 'purity_session'
+                    ? 'bg-indigo-500/25 text-indigo-200 border border-indigo-400/50'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Clock className="w-3 h-3 shrink-0" />
+                <span className="truncate">3. Phiên &amp; Spot Thực</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCryptoSpotTab('treasury_rs')}
+                className={`py-1.5 px-1 rounded-md transition flex items-center justify-center gap-1 truncate ${
+                  activeCryptoSpotTab === 'treasury_rs'
+                    ? 'bg-amber-500/25 text-amber-200 border border-amber-400/50'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Layers className="w-3 h-3 shrink-0" />
+                <span className="truncate">4. Két 3 Ngăn &amp; RS</span>
+              </button>
+            </div>
+
+            {/* TAB 1: LEVERAGE LIQUIDATION WICK SNIPER */}
+            {activeCryptoSpotTab === 'wick_sniper' && (
+              <div className="space-y-2 text-[10px]">
+                <div className="text-slate-300 leading-snug">
+                  {cryptoSpotDaily.wickSniper.sniperHeadlineVi}
+                </div>
+                <div className="space-y-1 font-mono">
+                  {cryptoSpotDaily.wickSniper.tranches.map((tr) => (
+                    <div
+                      key={tr.trancheIndex}
+                      className="p-1.5 rounded-lg bg-[#0b1424] border border-slate-800 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-sans font-bold text-emerald-300 truncate">
+                          {tr.labelVi} ({tr.usdtAllocationPct}% • ${tr.usdtAmount.toLocaleString()})
+                        </div>
+                        <div className="text-[9px] font-sans text-slate-400 truncate">
+                          {tr.triggerSourceVi}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-bold text-white">
+                          ${formatPrice(tr.limitPrice)}{' '}
+                          <span className="text-cyan-300">(-{tr.discountFromSpotPct}%)</span>
+                        </div>
+                        <div className="text-[9px] text-slate-400">
+                          Khớp: {tr.coinQuantity} {symUpper.replace('USDT', '')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 font-mono text-[9.5px]">
+                  <div className="p-1.5 rounded bg-emerald-950/35 border border-emerald-500/35 text-emerald-200">
+                    Chốt lời rút chân: <strong>${formatPrice(cryptoSpotDaily.wickSniper.snapbackTargetPrice)}</strong> (+{cryptoSpotDaily.wickSniper.netBounceProfitPct}% ròng ≈ +${cryptoSpotDaily.wickSniper.estimatedNetProfitUsdt})
+                  </div>
+                  <div className="p-1.5 rounded bg-rose-950/35 border border-rose-500/35 text-rose-200">
+                    Hủy cấu trúc: <strong>${formatPrice(cryptoSpotDaily.wickSniper.hardInvalidationPrice)}</strong> (Không cháy TK vì giữ Spot 1x)
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: T+0 PING-PONG & FREE COIN BAG */}
+            {activeCryptoSpotTab === 't0_compound' && (
+              <div className="space-y-2 text-[10px]">
+                <div className="p-2 rounded-lg bg-[#0b1424] border border-cyan-500/35 space-y-1">
+                  <div className="font-bold text-cyan-300">
+                    🔄 Chiến Thuật 1: Quay Vòng T+0 Hạ Giá Vốn Trong Ngày
+                  </div>
+                  <div className="text-slate-300 leading-snug">
+                    {cryptoSpotDaily.t0Compounding.compoundingSummaryVi}
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-[#0b1424] border border-amber-500/35 space-y-1">
+                  <div className="font-bold text-amber-300">
+                    🪙 Chiến Thuật 2: Tích Sản "Free Coin Bag" (Thu Hồi Gốc • Giữ Lãi Bằng Tiền Nhà Cái)
+                  </div>
+                  <div className="text-slate-300 leading-snug">
+                    {cryptoSpotDaily.t0Compounding.freeCoinBagPlan.summaryVi}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: SPOT PURITY SHIELD & 24/7 ASIA/LONDON/NY KILLZONE */}
+            {activeCryptoSpotTab === 'purity_session' && (
+              <div className="space-y-2 text-[10px]">
+                <div
+                  className={`p-2 rounded-lg border space-y-1 ${
+                    cryptoSpotDaily.spotPurityShield.isLeverageFrothVeto
+                      ? 'bg-rose-950/40 border-rose-500/45 text-rose-200'
+                      : 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold">
+                    <span>{cryptoSpotDaily.spotPurityShield.regimeBadgeVi}</span>
+                    <span className="font-mono">
+                      Purity: {cryptoSpotDaily.spotPurityShield.spotPurityScore}/100
+                    </span>
+                  </div>
+                  <div className="text-slate-200 leading-snug">
+                    {cryptoSpotDaily.spotPurityShield.shieldAdviceVi}
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-[#0b1424] border border-slate-800 space-y-1">
+                  <div className="flex items-center justify-between font-bold text-indigo-300">
+                    <span>🕒 {cryptoSpotDaily.sessionKillzone.sessionLabelVi}</span>
+                    <span className="font-mono text-[9.5px] text-slate-400">
+                      {cryptoSpotDaily.sessionKillzone.vnTimeWindowLabel}
+                    </span>
+                  </div>
+                  <div className="text-slate-300">
+                    • Đặc tính: {cryptoSpotDaily.sessionKillzone.volatilityExpectationVi}
+                  </div>
+                  <div className="text-cyan-300 font-medium">
+                    👉 Hành động: {cryptoSpotDaily.sessionKillzone.bestTacticVi}
+                  </div>
+                  <div className="text-[9.5px] text-amber-200 pt-0.5">
+                    • {cryptoSpotDaily.sessionKillzone.cmeMagnetNoteVi}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: 3-BUCKET USDT TREASURY & ALT/BTC RELATIVE STRENGTH */}
+            {activeCryptoSpotTab === 'treasury_rs' && (
+              <div className="space-y-2 text-[10px]">
+                <div className="flex items-center justify-between gap-2 bg-[#0b1424] p-2 rounded-lg border border-slate-800">
+                  <span className="font-bold text-amber-300">Tổng vốn Két Sắt Spot (USDT):</span>
+                  <input
+                    type="number"
+                    min="100"
+                    step="500"
+                    value={usdtCapitalInput}
+                    onChange={(e) => setUsdtCapitalInput(e.target.value)}
+                    className="w-28 px-2 py-1 rounded bg-[#060b14] border border-amber-500/40 text-white font-mono text-xs text-right"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  {cryptoSpotDaily.usdtTreasury.buckets.map((b) => (
+                    <div
+                      key={b.bucketId}
+                      className="p-1.5 rounded-lg bg-[#0b1424] border border-slate-800 flex flex-col gap-0.5"
+                    >
+                      <div className="flex items-center justify-between font-bold text-white">
+                        <span>{b.nameVi}</span>
+                        <span className="font-mono text-emerald-300">
+                          ${b.allocatedUsdt.toLocaleString()} ({b.coinUnits} ĐV @ ${formatPrice(b.deployPrice)})
+                        </span>
+                      </div>
+                      <div className="text-[9.5px] text-slate-400">{b.roleDescriptionVi}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-2 rounded-lg bg-[#0c172b] border border-cyan-500/35 space-y-0.5">
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="text-cyan-300">{cryptoSpotDaily.altBtcStrength.rsBadgeVi}</span>
+                    <span className="font-mono text-amber-300">
+                      Top Alpha: {cryptoSpotDaily.altBtcStrength.topAlphaLeaderSymbol} (
+                      {cryptoSpotDaily.altBtcStrength.topAlphaLeaderChangePct >= 0 ? '+' : ''}
+                      {cryptoSpotDaily.altBtcStrength.topAlphaLeaderChangePct}%)
+                    </span>
+                  </div>
+                  <div className="text-slate-300 leading-snug">
+                    {cryptoSpotDaily.altBtcStrength.rotationAdviceVi}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,9 +1,53 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+function localVercelApiPlugin() {
+  return {
+    name: 'local-vercel-api-middleware',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        const rawUrl = req.url || '';
+        const pathname = rawUrl.split('?')[0];
+        const routeMap: Record<string, string> = {
+          '/api/market-news': './api/market-news.js',
+          '/api/vn-stock-insights': './api/vn-stock-insights.js',
+          '/api/global-market-insights': './api/global-market-insights.js',
+          '/api/macro-fred': './api/macro-fred.js',
+        };
+        const modulePath = routeMap[pathname];
+        if (!modulePath) return next();
+
+        try {
+          const parsedUrl = new URL(rawUrl, 'http://localhost');
+          req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+          res.status = (code: number) => {
+            res.statusCode = code;
+            return res;
+          };
+          res.json = (payload: unknown) => {
+            if (!res.headersSent) {
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            }
+            res.end(JSON.stringify(payload));
+            return res;
+          };
+          const mod = await import(modulePath);
+          if (typeof mod?.default === 'function') {
+            await mod.default(req, res);
+            return;
+          }
+        } catch {
+          // Fall through if dynamic import fails
+        }
+        return next();
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), localVercelApiPlugin()],
   build: {
     rollupOptions: {
       output: {

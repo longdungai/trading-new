@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StrategyAnalysisHub, StrategyHubItem, TradeSetup } from '../../types';
+import { Candle, MarketSymbol, StrategyAnalysisHub, StrategyHubItem, TradeSetup } from '../../types';
 import {
   ShieldAlert,
   Crosshair,
@@ -21,6 +21,8 @@ import {
   Clock,
   AlertCircle,
   Download,
+  Target,
+  ShieldCheck,
 } from 'lucide-react';
 import { formatPercent, formatPrice, formatTime } from '../../utils/formatters';
 import {
@@ -34,6 +36,10 @@ import {
   isCryptoSymbol,
   isUsOrGlobalEquitySymbol,
 } from '../../services/globalMarket/globalExecutionEngines';
+import {
+  evaluateHighWinrateSniperReport,
+  scanTopSniperOpportunities,
+} from '../../services/ai/highWinrateSniperEngine';
 import {
   UserPaperTrade,
   getUserPaperTrades,
@@ -52,6 +58,10 @@ interface TradeSetupCardProps {
   setup?: TradeSetup | null;
   quoteAsset?: string;
   symbol?: string;
+  currentSymbolObj?: MarketSymbol;
+  candles?: Candle[];
+  allSymbols?: MarketSymbol[];
+  onSelectSymbol?: (sym: MarketSymbol) => void;
 }
 
 export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
@@ -59,6 +69,10 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
   setup,
   quoteAsset = 'USD',
   symbol = '',
+  currentSymbolObj,
+  candles = [],
+  allSymbols = [],
+  onSelectSymbol,
 }) => {
   const activeSymbol = strategyHub?.symbol || setup?.symbol || symbol;
   const isVND =
@@ -79,7 +93,14 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
   // Paper Testing state
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [paperTrades, setPaperTrades] = useState<UserPaperTrade[]>(() => getUserPaperTrades());
-  const [activeTab, setActiveTab] = useState<'strategy' | 'active_trades' | 'stats'>('strategy');
+  const [activeTab, setActiveTab] = useState<'strategy' | 'sniper_winrate' | 'active_trades' | 'stats'>('strategy');
+  const [leaderboardMarket, setLeaderboardMarket] = useState<'VN_STOCK' | 'CRYPTO_COIN'>(
+    isVND ? 'VN_STOCK' : 'CRYPTO_COIN'
+  );
+
+  useEffect(() => {
+    setLeaderboardMarket(isVND ? 'VN_STOCK' : 'CRYPTO_COIN');
+  }, [isVND]);
 
   // Test Order Form Inputs
   const [testTpTarget, setTestTpTarget] = useState<'TP1' | 'TP2' | 'TP3'>('TP2');
@@ -225,6 +246,60 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
     [paperTrades]
   );
 
+  const sniperReport = React.useMemo(
+    () =>
+      evaluateHighWinrateSniperReport({
+        symbol: activeSymbol,
+        symbolObj: currentSymbolObj,
+        candles,
+        entryPrice: currentItem.entryZone?.[0] || currentPrice,
+        stopLossPrice: currentItem.stopLoss,
+        tp1Price: currentItem.takeProfit1,
+        tp2Price: currentItem.takeProfit2,
+        tp3Price: currentItem.takeProfit3,
+      }),
+    [
+      activeSymbol,
+      currentSymbolObj,
+      candles,
+      currentItem.entryZone,
+      currentItem.stopLoss,
+      currentItem.takeProfit1,
+      currentItem.takeProfit2,
+      currentItem.takeProfit3,
+      currentPrice,
+    ]
+  );
+
+  const sniperLeaderboard = React.useMemo(
+    () => scanTopSniperOpportunities(allSymbols, activeSymbol, candles),
+    [allSymbols, activeSymbol, candles]
+  );
+
+  const handleQuickSniperPaperTrade = () => {
+    const isSafeNow = sniperReport.bullTrapShield.isSafeToEnterMarket;
+    const entry = isSafeNow
+      ? currentPrice
+      : sniperReport.bullTrapShield.safeLimitPullbackPrice;
+    addUserPaperTrade({
+      symbol: activeSymbol,
+      strategyName: `🎯 Sniper Winrate Cao (${sniperReport.empiricalBacktest.nonLossWinratePct}% Win+BE)`,
+      strategyId: 'high_winrate_sniper',
+      action: 'BUY',
+      entryType: isSafeNow ? 'market' : 'limit',
+      entryPrice: entry,
+      currentMarketPrice: currentPrice,
+      stopLoss: sniperReport.scaleOutPlan.initialStopLoss,
+      takeProfit: sniperReport.scaleOutPlan.tranches[1].targetPrice,
+      tpTargetLabel: 'TP2',
+      capital: testCapital,
+      leverage: 1,
+      quoteAsset,
+    });
+    setPaperTrades(getUserPaperTrades());
+    setActiveTab('active_trades');
+  };
+
   const handleExportCsv = () => {
     const csv = exportPaperTradesToCsv(paperTrades);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -280,18 +355,29 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex gap-1 border-b border-[#1c2738] pb-1.5 text-[10px] font-bold">
+      <div className="flex gap-1 border-b border-[#1c2738] pb-1.5 text-[10px] font-bold overflow-x-auto no-scrollbar whitespace-nowrap">
         <button
           onClick={() => setActiveTab('strategy')}
-          className={`px-2.5 py-1 rounded-lg transition ${
+          className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
             activeTab === 'strategy' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white bg-[#141b27]'
           }`}
         >
           Kế Hoạch Lệnh
         </button>
         <button
+          onClick={() => setActiveTab('sniper_winrate')}
+          className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 shrink-0 ${
+            activeTab === 'sniper_winrate'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm shadow-emerald-500/25'
+              : 'text-emerald-300 hover:text-white bg-emerald-950/35 border border-emerald-500/35'
+          }`}
+        >
+          <Target className="w-3 h-3 text-emerald-300 shrink-0" />
+          <span>🎯 Bắn Tỉa ({sniperReport.empiricalBacktest.nonLossWinratePct}%)</span>
+        </button>
+        <button
           onClick={() => setActiveTab('active_trades')}
-          className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
+          className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 shrink-0 ${
             activeTab === 'active_trades' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white bg-[#141b27]'
           }`}
         >
@@ -304,12 +390,12 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('stats')}
-          className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
+          className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 shrink-0 ${
             activeTab === 'stats' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white bg-[#141b27]'
           }`}
         >
-          <Award className="w-3 h-3 text-amber-300" />
-          <span>Thống Kê Của Bạn</span>
+          <Award className="w-3 h-3 text-amber-300 shrink-0" />
+          <span>Thống Kê</span>
           {closedTrades.length > 0 && (
             <span className="text-[9px] opacity-75">({closedTrades.length})</span>
           )}
@@ -319,6 +405,49 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
       {/* ================= TAB 1: STRATEGY DETAILS ================= */}
       {activeTab === 'strategy' && (
         <div className="space-y-3">
+          {/* Quick High-Winrate Sniper Summary Strip inside Strategy Tab */}
+          <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/45 via-[#0d1828] to-teal-950/40 border border-emerald-500/35 space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-extrabold text-emerald-300 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{sniperReport.tierBadgeVi}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveTab('sniper_winrate')}
+                className="px-2 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 text-[9.5px] font-bold transition whitespace-nowrap"
+              >
+                Mở Bảng Bắn Tỉa & Top Kèo ↗
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px] text-center">
+              <div className="p-1.5 rounded-lg bg-[#09111e] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Win + Hòa Vốn Thực</div>
+                <div className="font-black text-emerald-400 text-xs">
+                  {sniperReport.empiricalBacktest.nonLossWinratePct}%
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#09111e] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Khớp Mẫu Hình k-NN</div>
+                <div className="font-black text-cyan-300 text-xs">
+                  {sniperReport.fractalAnalog.analogWinratePct}%
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#09111e] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Khiên Chống Bẫy</div>
+                <div
+                  className={`font-black text-[10px] truncate ${
+                    sniperReport.bullTrapShield.isSafeToEnterMarket
+                      ? 'text-emerald-300'
+                      : 'text-amber-300'
+                  }`}
+                >
+                  {sniperReport.bullTrapShield.isSafeToEnterMarket ? 'Sạch Bẫy' : 'Kê Limit'}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Multi-Strategy Consensus Bar */}
           {strategyHub && (
             <div className="p-2 rounded-lg bg-[#0d121c] border border-[#1b2536] space-y-1.5">
@@ -476,6 +605,302 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
             <FlaskConical className="w-4 h-4" />
             <span>🧪 Mở Lệnh Thử Nghiệm (Test Chiến Lược AI)</span>
           </button>
+        </div>
+      )}
+
+      {/* ================= TAB 1B: HIGH-WINRATE SNIPER SUITE (VN STOCK & COIN) ================= */}
+      {activeTab === 'sniper_winrate' && (
+        <div className="space-y-3 text-xs">
+          {/* 1. Sniper Certification & Empirical Backtest Gate */}
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-950/50 via-[#0d1626] to-cyan-950/40 border border-emerald-500/40 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-[11px] font-black text-emerald-300">{sniperReport.tierBadgeVi}</div>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 font-mono text-[10px] font-bold">
+                Điểm Sniper: {sniperReport.compositeSniperScore}/100
+              </span>
+            </div>
+
+            <div className="text-[10px] text-slate-300 flex items-center justify-between gap-2 flex-wrap">
+              <span>{sniperReport.marketLabelVi}</span>
+              <span className="font-mono font-bold text-cyan-300">{sniperReport.directionBadgeVi}</span>
+            </div>
+
+            {/* Empirical Historical Backtest Grid */}
+            <div className="grid grid-cols-4 gap-1.5 font-mono text-center pt-1">
+              <div className="p-1.5 rounded-lg bg-[#08101c] border border-emerald-500/35">
+                <div className="text-[8.5px] text-slate-400 font-sans">Win+Hòa Vốn</div>
+                <div className="text-xs font-black text-emerald-400">
+                  {sniperReport.empiricalBacktest.nonLossWinratePct}%
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#08101c] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Win Thuần</div>
+                <div className="text-xs font-bold text-cyan-300">
+                  {sniperReport.empiricalBacktest.pureWinratePct}%
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#08101c] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Profit Factor</div>
+                <div className="text-xs font-bold text-amber-300">
+                  {sniperReport.empiricalBacktest.profitFactor}
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#08101c] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Mẫu Quá Khứ</div>
+                <div className="text-xs font-bold text-white">
+                  {sniperReport.empiricalBacktest.totalSignalsTested} lần
+                </div>
+              </div>
+            </div>
+
+            {/* 5-Criteria Sniper Checklist */}
+            <div className="space-y-1 pt-1 border-t border-slate-800/80">
+              {sniperReport.checklistPassed.map((c, idx) => (
+                <div key={idx} className="flex items-center justify-between gap-2 text-[10px]">
+                  <span className="text-slate-300 flex items-center gap-1 min-w-0 truncate">
+                    <span className={c.passed ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                      {c.passed ? '✓' : '•'}
+                    </span>
+                    <span className="truncate">{c.labelVi}</span>
+                  </span>
+                  <span
+                    className={`font-mono font-bold shrink-0 whitespace-nowrap ${
+                      c.passed ? 'text-emerald-300' : 'text-amber-300'
+                    }`}
+                  >
+                    {c.valueVi}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Microstructure Trigger & Bull-Trap / T+2.5 Shield */}
+          <div className="p-2.5 rounded-xl bg-[#0d1422] border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-cyan-300">
+                {sniperReport.microTrigger.triggerLabelVi}
+              </span>
+              <span className="text-[9.5px] font-mono text-slate-400">
+                Vol: {sniperReport.microTrigger.volumeRatio20}x MA20
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-300 leading-relaxed">
+              {sniperReport.microTrigger.detailVi}
+            </p>
+
+            {/* Bull-Trap Shield Box */}
+            <div
+              className={`p-2 rounded-lg border text-[10px] space-y-1 ${
+                sniperReport.bullTrapShield.trapRiskLevel === 'SAFE_ENTRY'
+                  ? 'bg-emerald-950/25 border-emerald-500/35 text-emerald-200'
+                  : sniperReport.bullTrapShield.trapRiskLevel === 'WAIT_PULLBACK_LIMIT'
+                  ? 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+                  : 'bg-rose-950/35 border-rose-500/45 text-rose-200'
+              }`}
+            >
+              <div className="font-bold">{sniperReport.bullTrapShield.trapBadgeVi}</div>
+              {sniperReport.bullTrapShield.warningsVi.map((w, i) => (
+                <div key={i} className="text-slate-200 leading-snug">
+                  • {w}
+                </div>
+              ))}
+              <div className="text-cyan-200 font-semibold">
+                💡 {sniperReport.bullTrapShield.actionAdviceVi}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. k-NN Historical Fractal Pattern Analog Matcher */}
+          <div className="p-2.5 rounded-xl bg-[#0d1422] border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-white flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                <span>Khớp Mẫu Hình Lịch Sử k-NN ({sniperReport.fractalAnalog.windowBars} Nến)</span>
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-400/40 text-purple-200 font-mono text-[9.5px] font-bold">
+                Xác suất thắng: {sniperReport.fractalAnalog.analogWinratePct}%
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-300 leading-relaxed">
+              {sniperReport.fractalAnalog.summaryVi}
+            </p>
+            {sniperReport.fractalAnalog.matches.length > 0 && (
+              <div className="grid grid-cols-5 gap-1 font-mono text-[9.5px] text-center">
+                {sniperReport.fractalAnalog.matches.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-1 rounded border ${
+                      m.outcome === 'WIN'
+                        ? 'bg-emerald-950/30 border-emerald-500/35 text-emerald-300'
+                        : m.outcome === 'LOSS'
+                        ? 'bg-rose-950/30 border-rose-500/35 text-rose-300'
+                        : 'bg-slate-900 border-slate-700 text-slate-300'
+                    }`}
+                  >
+                    <div className="text-[8.5px] text-slate-400">Khớp {m.similarityPct}%</div>
+                    <div className="font-bold">
+                      {m.forward5BarReturnPct >= 0 ? '+' : ''}
+                      {m.forward5BarReturnPct}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 4. 3-Stage Scale-Out & Auto-Breakeven Lock Coach */}
+          <div className="p-2.5 rounded-xl bg-[#0d1422] border border-emerald-500/35 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-emerald-300">
+                🛡️ Lộ Trình Chốt Lời 3 Nấc & Khóa Hòa Vốn Bất Bại
+              </span>
+              <span className="text-[9.5px] font-mono text-amber-300 font-bold">
+                Hòa vốn thực: {prefix}
+                {formatPrice(sniperReport.scaleOutPlan.breakevenLockPrice)}
+                {priceSuffix}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              {sniperReport.scaleOutPlan.tranches.map((tr) => (
+                <div
+                  key={tr.stage}
+                  className="p-2 rounded-lg bg-[#08101c] border border-slate-800 space-y-0.5"
+                >
+                  <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                    <span className="font-bold text-emerald-300">
+                      {tr.stage} • Chốt {tr.allocationPct}% tại {prefix}
+                      {formatPrice(tr.targetPrice)}
+                      {priceSuffix} (+{tr.gainFromEntryPct}%)
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-200 text-[9px] font-bold">
+                      XS chạm ~{tr.hitProbabilityPct}%
+                    </span>
+                  </div>
+                  <div className="text-[9.5px] text-slate-300 leading-snug">{tr.ruleVi}</div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleQuickSniperPaperTrade}
+              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>
+                {sniperReport.bullTrapShield.isSafeToEnterMarket
+                  ? `Khớp Lệnh Sniper Ngay (${prefix}${formatPrice(currentPrice)}${priceSuffix})`
+                  : `Đặt Limit Sniper Đón Rũ (${prefix}${formatPrice(
+                      sniperReport.bullTrapShield.safeLimitPullbackPrice
+                    )}${priceSuffix})`}
+              </span>
+            </button>
+          </div>
+
+          {/* 5. Cross-Market Top High-Winrate Leaderboard (VN Stocks & Crypto Coins) */}
+          <div className="p-2.5 rounded-xl bg-[#0d1422] border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-white">
+                🏆 Top Kèo Bắn Tỉa Winrate Cao Nhất Hôm Nay
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLeaderboardMarket('VN_STOCK')}
+                  className={`px-2 py-0.5 rounded text-[9.5px] font-bold border transition ${
+                    leaderboardMarket === 'VN_STOCK'
+                      ? 'bg-rose-500/20 text-rose-200 border-rose-400/50'
+                      : 'bg-[#08101c] text-slate-400 border-slate-800 hover:text-white'
+                  }`}
+                >
+                  🇻🇳 Cổ Phiếu VN ({sniperLeaderboard.vnStockPicks.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLeaderboardMarket('CRYPTO_COIN')}
+                  className={`px-2 py-0.5 rounded text-[9.5px] font-bold border transition ${
+                    leaderboardMarket === 'CRYPTO_COIN'
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/50'
+                      : 'bg-[#08101c] text-slate-400 border-slate-800 hover:text-white'
+                  }`}
+                >
+                  🪙 Coin Crypto ({sniperLeaderboard.cryptoCoinPicks.length})
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              {(leaderboardMarket === 'VN_STOCK'
+                ? sniperLeaderboard.vnStockPicks
+                : sniperLeaderboard.cryptoCoinPicks
+              ).map((pick, idx) => {
+                const isVnPick = pick.marketFocus === 'VN_STOCK';
+                const pfx = isVnPick ? '' : '$';
+                const sfx = isVnPick ? 'k' : '';
+                return (
+                  <div
+                    key={pick.symbol}
+                    onClick={() => {
+                      const found = allSymbols.find((s) => s.symbol === pick.symbol);
+                      if (found && onSelectSymbol) onSelectSymbol(found);
+                    }}
+                    className={`p-2 rounded-lg border transition cursor-pointer ${
+                      pick.symbol === activeSymbol
+                        ? 'bg-emerald-950/35 border-emerald-500/50'
+                        : 'bg-[#08101c] hover:bg-[#111c30] border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-black">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-mono font-extrabold text-white text-xs">
+                          {pick.symbol}
+                        </span>
+                        <span className="text-[9.5px] text-slate-400 truncate">
+                          {pick.setupLabelVi}
+                        </span>
+                      </div>
+                      <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 font-mono text-[9.5px] font-bold shrink-0">
+                        Win+BE ~{pick.estimatedNonLossWinratePct}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 font-mono text-[9.5px] text-slate-300 mt-1 flex-wrap">
+                      <span>
+                        Entry:{' '}
+                        <strong className="text-sky-300">
+                          {pfx}
+                          {formatPrice(pick.entryPrice)}
+                          {sfx}
+                        </strong>
+                      </span>
+                      <span>
+                        SL:{' '}
+                        <strong className="text-rose-300">
+                          {pfx}
+                          {formatPrice(pick.stopLossPrice)}
+                          {sfx}
+                        </strong>
+                      </span>
+                      <span>
+                        TP1/TP2:{' '}
+                        <strong className="text-emerald-300">
+                          {pfx}
+                          {formatPrice(pick.tp1Price)}
+                          {sfx} / {pfx}
+                          {formatPrice(pick.tp2Price)}
+                          {sfx}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 

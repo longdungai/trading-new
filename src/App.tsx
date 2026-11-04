@@ -1664,6 +1664,10 @@ export const App: React.FC = () => {
                       setup={tradeSetup}
                       quoteAsset={currentSymbol.quoteAsset}
                       symbol={currentSymbol.symbol}
+                      currentSymbolObj={currentSymbol}
+                      candles={effectiveCandles}
+                      allSymbols={symbols}
+                      onSelectSymbol={handleSelectSymbol}
                     />
                     <SentimentMeter sentiment={marketSentiment} />
                   </>
@@ -1703,6 +1707,10 @@ export const App: React.FC = () => {
                       setup={tradeSetup}
                       quoteAsset={currentSymbol.quoteAsset}
                       symbol={currentSymbol.symbol}
+                      currentSymbolObj={currentSymbol}
+                      candles={effectiveCandles}
+                      allSymbols={symbols}
+                      onSelectSymbol={handleSelectSymbol}
                     />
                   </>
                 )}

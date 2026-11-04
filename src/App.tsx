@@ -1341,14 +1341,14 @@ export const App: React.FC = () => {
                 currentMacroImpact.bias === 'HEADWIND' ||
                 currentMacroImpact.relevantAlerts.length > 0) && (
                 <div
-                  className={`border-b px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0 ${
+                  className={`border-b px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between gap-2 text-xs z-20 animate-in fade-in shrink-0 whitespace-nowrap overflow-hidden ${
                     currentMacroImpact.bias === 'SEVERE_HEADWIND' ||
                     currentMacroImpact.relevantAlerts.some(a => a.severity === 'CRITICAL')
                       ? 'bg-gradient-to-r from-rose-950/80 via-[#18111d] to-rose-950/80 border-rose-500/40'
                       : 'bg-gradient-to-r from-cyan-950/65 via-[#10192b] to-amber-950/60 border-amber-500/35'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
                     <AlertTriangle
                       className={`w-3.5 h-3.5 shrink-0 ${
                         currentMacroImpact.bias === 'SEVERE_HEADWIND'
@@ -1356,10 +1356,10 @@ export const App: React.FC = () => {
                           : 'text-amber-400'
                       }`}
                     />
-                    <span className="font-black uppercase font-mono tracking-wide shrink-0 text-amber-300">
-                      CẢNH BÁO VĨ MÔ:
+                    <span className="font-black uppercase font-mono tracking-wide shrink-0 text-amber-300 text-[11px] sm:text-xs whitespace-nowrap">
+                      <span className="hidden sm:inline">CẢNH BÁO </span>VĨ MÔ:
                     </span>
-                    <span className="text-slate-200 truncate">
+                    <span className="text-slate-200 truncate text-[11px] sm:text-xs">
                       <strong className="text-white font-mono">{currentSymbol.symbol}</strong> •{' '}
                       {currentMacroImpact.relevantAlerts[0]?.title ||
                         currentMacroImpact.bullets[0] ||
@@ -1367,19 +1367,21 @@ export const App: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() => setIsMacroModalOpen(true)}
-                      className="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-[11px] font-bold transition flex items-center gap-1"
+                      className="px-2 sm:px-2.5 py-0.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-[10.5px] sm:text-[11px] font-bold transition flex items-center gap-1 shrink-0 whitespace-nowrap"
                     >
-                      <Globe2 className="w-3 h-3 text-cyan-300" />
-                      <span>Chi Tiết Vĩ Mô</span>
+                      <Globe2 className="w-3 h-3 text-cyan-300 shrink-0" />
+                      <span>
+                        Chi Tiết<span className="hidden sm:inline"> Vĩ Mô</span>
+                      </span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsMacroBannerDismissed(true)}
-                      className="text-slate-400 hover:text-white p-0.5"
+                      className="text-slate-400 hover:text-white p-0.5 shrink-0"
                       title="Ẩn cảnh báo vĩ mô"
                     >
                       <X className="w-4 h-4" />
@@ -1390,14 +1392,16 @@ export const App: React.FC = () => {
 
             {/* Real-time Accumulation Buy Zone Alert Banner */}
             {currentAccumulation?.isHot && !isGomBannerDismissed && currentAccumulation.entryZone && (
-              <div className="bg-gradient-to-r from-amber-950/75 via-[#131d2e] to-amber-950/75 border-b border-amber-500/35 px-3 py-1.5 flex items-center justify-between text-xs z-20 animate-in fade-in shrink-0">
-                <div className="flex items-center gap-2 min-w-0">
+              <div className="bg-gradient-to-r from-amber-950/75 via-[#131d2e] to-amber-950/75 border-b border-amber-500/35 px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between gap-2 text-xs z-20 animate-in fade-in shrink-0 whitespace-nowrap overflow-hidden">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
-                  <span className="font-black text-amber-300 uppercase font-mono tracking-wide shrink-0 flex items-center gap-1">
-                    <Target className="w-3.5 h-3.5 text-amber-400" />
-                    VÙNG GOM ĐẸP:
+                  <span className="font-black text-amber-300 uppercase font-mono tracking-wide shrink-0 flex items-center gap-1 text-[11px] sm:text-xs whitespace-nowrap">
+                    <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>
+                      <span className="hidden sm:inline">VÙNG </span>GOM ĐẸP:
+                    </span>
                   </span>
-                  <span className="text-slate-200 truncate">
+                  <span className="text-slate-200 truncate text-[11px] sm:text-xs">
                     <strong className="text-white font-mono">{currentSymbol?.symbol}</strong> ({currentAccumulation.score}/100đ) • Vùng gom:{' '}
                     <span className="text-emerald-400 font-mono font-bold">
                       {isVND ? '' : '$'}
@@ -1425,16 +1429,18 @@ export const App: React.FC = () => {
                     </span>
                   </span>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap">
                   <button
                     onClick={() => setIsRadarOpen(true)}
-                    className="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black transition flex items-center gap-1 shadow-sm shadow-amber-500/20"
+                    className="px-2 sm:px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[10.5px] sm:text-[11px] font-black transition flex items-center gap-1 shadow-sm shadow-amber-500/20 shrink-0 whitespace-nowrap"
                   >
-                    <span>Quét Toàn TT</span>
+                    <span>
+                      Quét<span className="hidden sm:inline"> Toàn TT</span>
+                    </span>
                   </button>
                   <button
                     onClick={() => setIsGomBannerDismissed(true)}
-                    className="text-slate-400 hover:text-white p-0.5"
+                    className="text-slate-400 hover:text-white p-0.5 shrink-0"
                     title="Đóng thông báo"
                   >
                     <X className="w-4 h-4" />

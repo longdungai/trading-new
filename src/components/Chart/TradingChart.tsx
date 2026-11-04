@@ -733,6 +733,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     }
 
     // 7C. Unified 6-Pillar Recommended Trade Plan Lines (ENTRY • SL • TP1 • TP2)
+    const isCompactMobile = (chartContainerRef.current?.clientWidth || window.innerWidth) < 640;
     if (
       settings.recommendedPlanLines !== false &&
       chartVerdict &&
@@ -755,7 +756,11 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
-          title: isReduceOnly
+          title: isCompactMobile
+            ? isReduceOnly
+              ? 'HẠ TỶ TRỌNG'
+              : 'ENTRY'
+            : isReduceOnly
             ? '⚠️ VÙNG HẠ TỶ TRỌNG'
             : chartVerdict.verdictCode === 'ACCUMULATE_LIMIT'
             ? '🎯 KÊ LIMIT GOM'
@@ -769,7 +774,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: isReduceOnly
+          title: isCompactMobile
+            ? `SL (${slPct >= 0 ? '+' : ''}${slPct.toFixed(1)}%)`
+            : isReduceOnly
             ? `🛡️ CẢN VÔ HIỆU (${slPct >= 0 ? '+' : ''}${slPct.toFixed(1)}%)`
             : `🛑 CẮT LỖ SL (${slPct >= 0 ? '+' : ''}${slPct.toFixed(1)}%)`,
         }),
@@ -779,7 +786,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
-          title: isReduceOnly
+          title: isCompactMobile
+            ? `TP1 (${tp1Pct >= 0 ? '+' : ''}${tp1Pct.toFixed(1)}%)`
+            : isReduceOnly
             ? `📥 NỀN GOM LẠI 1 (${tp1Pct.toFixed(1)}%)`
             : `✅ CHỐT LỜI TP1 (${tp1Pct >= 0 ? '+' : ''}${tp1Pct.toFixed(1)}%)`,
         }),
@@ -789,7 +798,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           lineWidth: 2,
           lineStyle: LineStyle.Dotted,
           axisLabelVisible: true,
-          title: isReduceOnly
+          title: isCompactMobile
+            ? `TP2 (${tp2Pct >= 0 ? '+' : ''}${tp2Pct.toFixed(1)}%)`
+            : isReduceOnly
             ? `📥 NỀN GOM SÂU (${tp2Pct.toFixed(1)}%)`
             : `🏆 MỤC TIÊU TP2 (${tp2Pct >= 0 ? '+' : ''}${tp2Pct.toFixed(1)}% • 1:${chartVerdict.riskRewardRatio})`,
         })
@@ -810,7 +821,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
           lineWidth: 2,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: `💼 HÒA VỐN THỰC (${isProfit ? '+' : ''}${recoveryPlan.netUnrealizedPnlPct}%)`,
+          title: isCompactMobile
+            ? `HÒA VỐN (${isProfit ? '+' : ''}${recoveryPlan.netUnrealizedPnlPct}%)`
+            : `💼 HÒA VỐN THỰC (${isProfit ? '+' : ''}${recoveryPlan.netUnrealizedPnlPct}%)`,
         })
       );
 
@@ -826,7 +839,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `🎯 BỜ MỚI SAU DCA (+${recoveryPlan.smartDcaPlan.newGainNeededPct}%)`,
+            title: isCompactMobile
+              ? `BỜ DCA (+${recoveryPlan.smartDcaPlan.newGainNeededPct}%)`
+              : `🎯 BỜ MỚI SAU DCA (+${recoveryPlan.smartDcaPlan.newGainNeededPct}%)`,
           })
         );
       }
@@ -849,7 +864,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `🪝 BẮT ĐÁY B1 20% (${rung1.discountFromRefPct >= 0 ? '+' : ''}${rung1.discountFromRefPct}%)`,
+            title: isCompactMobile
+              ? `B1 20% (${rung1.discountFromRefPct >= 0 ? '+' : ''}${rung1.discountFromRefPct}%)`
+              : `🪝 BẮT ĐÁY B1 20% (${rung1.discountFromRefPct >= 0 ? '+' : ''}${rung1.discountFromRefPct}%)`,
           })
         );
       }
@@ -861,7 +878,9 @@ export const TradingChart: React.FC<TradingChartProps> = ({
             lineWidth: 1,
             lineStyle: LineStyle.Dotted,
             axisLabelVisible: true,
-            title: `🪝 HỨNG SÀN B2 30% (${rung2.discountFromRefPct}%)`,
+            title: isCompactMobile
+              ? `B2 30% (${rung2.discountFromRefPct}%)`
+              : `🪝 HỨNG SÀN B2 30% (${rung2.discountFromRefPct}%)`,
           })
         );
       }

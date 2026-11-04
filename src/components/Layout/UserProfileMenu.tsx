@@ -198,10 +198,13 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
         type="button"
         onClick={() => setIsOpen(true)}
         title={`Hồ sơ người dùng đang mở: ${activeProfile.name} (${activeProfile.activeSymbol} • ${activeProfile.timeframe} • ${enabledIndicatorCount} chỉ báo). Nhấp để chuyển đổi hoặc tạo User mới.`}
-        className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl border text-xs font-bold transition shrink-0 ${activeTheme.bg} ${activeTheme.border} ${activeTheme.text} hover:brightness-110`}
+        className={`relative flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border text-xs font-bold transition shrink-0 whitespace-nowrap ${activeTheme.bg} ${activeTheme.border} ${activeTheme.text} hover:brightness-110`}
       >
-        <User className="w-3.5 h-3.5 shrink-0" />
-        <span className="max-w-[76px] sm:max-w-[115px] truncate">{activeProfile.name}</span>
+        <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+        <span className="hidden sm:inline max-w-[110px] truncate">{activeProfile.name}</span>
+        <span
+          className={`sm:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#080c14] ${activeTheme.dot}`}
+        />
       </button>
 
       {isOpen && (

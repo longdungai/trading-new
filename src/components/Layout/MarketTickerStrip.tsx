@@ -85,14 +85,14 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
     aiPrediction?.trend === 'STRONG_BEARISH' || aiPrediction?.trend === 'BEARISH';
 
   return (
-    <div className="h-6 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-1.5 sm:px-3 flex items-center justify-between gap-1.5 sm:gap-2 select-none shrink-0 overflow-x-auto no-scrollbar z-20">
+    <div className="h-7 sm:h-8 bg-[#070b12] border-b border-slate-800/70 px-1.5 sm:px-3 flex items-center justify-between gap-1.5 sm:gap-2 select-none shrink-0 overflow-x-auto no-scrollbar whitespace-nowrap z-20">
       {/* Left: Macro Shock Radar Trigger + Fed Pivot Watch Pill + VN Gold Parity Pill */}
       {onOpenMacroModal && (
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 whitespace-nowrap">
           <button
             type="button"
             onClick={() => onOpenMacroModal('indicators')}
-            className={`px-2 py-0.5 rounded-md border text-[10px] font-mono flex items-center gap-1.5 shrink-0 transition ${
+            className={`px-2 py-0.5 rounded-md border text-[10px] font-mono flex items-center gap-1.5 shrink-0 whitespace-nowrap transition ${
               macroSnapshot?.regime === 'RISK_OFF'
                 ? 'bg-rose-500/15 border-rose-500/45 text-rose-200 hover:bg-rose-500/25'
                 : macroSnapshot?.regime === 'CAUTIOUS'
@@ -104,7 +104,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             title="Mở Radar Vĩ Mô Liên Thị Trường, Cảnh Báo Nóng & Lịch Đáo Hạn VN30F1M"
           >
             <Globe2 className="w-3 h-3 text-cyan-400 shrink-0" />
-            <span className="font-sans font-bold">
+            <span className="font-sans font-bold whitespace-nowrap">
               Vĩ mô
               <span className="hidden xl:inline">
                 :{' '}
@@ -119,13 +119,13 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             </span>
             {macroSnapshot && macroSnapshot.globalAlerts.length > 0 && (
               <span
-                className={`px-1 rounded text-[9px] font-bold flex items-center gap-0.5 ${
+                className={`px-1 rounded text-[9px] font-bold flex items-center gap-0.5 shrink-0 whitespace-nowrap ${
                   macroSnapshot.globalAlerts.some(a => a.severity === 'CRITICAL')
                     ? 'bg-rose-500 text-white animate-pulse'
                     : 'bg-amber-500 text-black'
                 }`}
               >
-                <AlertTriangle className="w-2.5 h-2.5" />
+                <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
                 {macroSnapshot.globalAlerts.length}
               </span>
             )}
@@ -135,7 +135,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             <button
               type="button"
               onClick={() => onOpenMacroModal('fed_pivot')}
-              className={`flex px-2 py-0.5 rounded-md border text-[10px] font-mono items-center gap-1 shrink-0 transition ${
+              className={`flex px-2 py-0.5 rounded-md border text-[10px] font-mono items-center gap-1 shrink-0 whitespace-nowrap transition ${
                 macroSnapshot.fedPivotV2
                   ? macroSnapshot.fedPivotV2.pivotScore >= 4.25
                     ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/30'
@@ -149,7 +149,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
               title="Mở cửa sổ chuyên sâu Fed Pivot Intelligence (7 Tín hiệu FRED/BLS/BEA + Lịch sử + 3 Kịch bản)"
             >
               <Landmark className="w-3 h-3 text-emerald-400 shrink-0" />
-              <span className="font-bold text-cyan-300">Fed Pivot</span>
+              <span className="font-bold text-cyan-300 whitespace-nowrap">Fed Pivot</span>
               {macroSnapshot.fedPivotV2 ? (
                 <span className="text-[9px] font-bold text-emerald-300 whitespace-nowrap">
                   {macroSnapshot.fedPivotV2.pivotScore.toFixed(1)}/7
@@ -159,7 +159,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
                 </span>
               ) : (
                 macroSnapshot.fedPivot && (
-                  <span className="text-[9px] font-bold text-slate-300">
+                  <span className="text-[9px] font-bold text-slate-300 whitespace-nowrap">
                     {macroSnapshot.fedPivot.effectiveRate.toFixed(2)}%
                   </span>
                 )
@@ -171,12 +171,12 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             <button
               type="button"
               onClick={() => onOpenMacroModal('vn_gold_fx')}
-              className="hidden sm:flex px-2 py-0.5 rounded-md border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-mono items-center gap-1 shrink-0 text-amber-200 transition"
+              className="hidden sm:flex px-2 py-0.5 rounded-md border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/20 text-[10px] font-mono items-center gap-1 shrink-0 whitespace-nowrap text-amber-200 transition"
               title="Xem Giá Vàng Thế Giới quy đổi VNĐ/lượng, Máy tính độ vênh SJC/Nhẫn 9999 & Áp lực Tỷ giá USD/VND"
             >
               <Coins className="w-3 h-3 text-amber-400 shrink-0" />
-              <span className="font-bold">Vàng quy đổi:</span>
-              <span className="text-white font-extrabold">
+              <span className="font-bold whitespace-nowrap">Vàng quy đổi:</span>
+              <span className="text-white font-extrabold whitespace-nowrap">
                 {vnGoldArb.worldCifParityMillionPerTael.toFixed(2)}tr
               </span>
             </button>
@@ -189,7 +189,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             title="Mở Chuyên Trang TTCK Việt Nam: Phái sinh VN30F1M Basis, Khối Ngoại Thời Gian Thực & Sóng 10 Ngành"
           >
             <span className="shrink-0">🇻🇳</span>
-            <span className="font-sans font-bold">TTCK VN</span>
+            <span className="font-sans font-bold whitespace-nowrap">TTCK VN</span>
           </button>
 
           <button
@@ -199,12 +199,12 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             title="Mở Trạm Tin Nóng Tài Chính Thời Gian Thực & Độ Rộng Nội Tại VN30"
           >
             <Newspaper className="w-3 h-3 text-emerald-400 shrink-0" />
-            <span className="font-sans font-bold">Tin nóng & Độ rộng</span>
+            <span className="font-sans font-bold whitespace-nowrap">Tin nóng & Độ rộng</span>
           </button>
         </div>
       )}
 
-      <div className="hidden lg:flex items-center gap-2 pr-2.5 border-r border-slate-800/80 shrink-0 text-[10px] font-mono">
+      <div className="hidden lg:flex items-center gap-2 pr-2.5 border-r border-slate-800/80 shrink-0 text-[10px] font-mono whitespace-nowrap">
         <Activity className="w-3 h-3 text-cyan-400" />
         <span className="text-slate-400 font-sans font-medium">Độ rộng:</span>
         <span className="text-emerald-400 font-bold">{breadth.up}▲</span>
@@ -218,7 +218,7 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
       </div>
 
       {/* Center: Scrollable Quick-Switch Macro Benchmarks */}
-      <div className="flex-1 min-w-0 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 lg:flex-1 lg:min-w-0 lg:overflow-x-auto no-scrollbar whitespace-nowrap">
         {quickSymbols.map(sym => {
           const isActive = sym.symbol === currentSymbol.symbol;
           const isUp = sym.change24h >= 0;
@@ -236,29 +236,29 @@ export const MarketTickerStrip: React.FC<MarketTickerStripProps> = ({
             <button
               key={sym.symbol}
               onClick={() => onSelectSymbol(sym)}
-              className={`px-2 py-0.5 rounded-md text-[10px] font-mono flex items-center gap-1.5 transition shrink-0 border ${
+              className={`px-2 py-0.5 rounded-md text-[10px] font-mono flex items-center gap-1.5 transition shrink-0 whitespace-nowrap border ${
                 isActive
                   ? 'bg-cyan-500/15 border-cyan-400/50 text-white shadow-sm shadow-cyan-500/10'
                   : 'bg-[#0d1320]/70 border-slate-800/70 text-slate-300 hover:bg-[#141d2f] hover:border-slate-700'
               }`}
             >
-              <span className={`font-bold ${isActive ? 'text-cyan-300' : 'text-slate-200'}`}>
+              <span className={`font-bold whitespace-nowrap ${isActive ? 'text-cyan-300' : 'text-slate-200'}`}>
                 {shortLabel}
               </span>
-              <span className="text-slate-400 hidden sm:inline">
+              <span className="text-slate-400 hidden sm:inline whitespace-nowrap">
                 {isVND
                   ? `${formatPrice(sym.price)}${isVnIdxOrDeriv ? 'đ' : 'k'}`
                   : `$${formatPrice(sym.price)}`}
               </span>
               <span
-                className={`font-semibold flex items-center ${
+                className={`font-semibold flex items-center whitespace-nowrap ${
                   isUp ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >
                 {isUp ? (
-                  <TrendingUp className="w-2.5 h-2.5 mr-0.5" />
+                  <TrendingUp className="w-2.5 h-2.5 mr-0.5 shrink-0" />
                 ) : (
-                  <TrendingDown className="w-2.5 h-2.5 mr-0.5" />
+                  <TrendingDown className="w-2.5 h-2.5 mr-0.5 shrink-0" />
                 )}
                 {formatPercent(sym.change24h)}
               </span>

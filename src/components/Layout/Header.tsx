@@ -154,9 +154,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="h-12 sm:h-[58px] bg-[#080c14]/95 backdrop-blur-xl border-b border-slate-800/80 px-2 sm:px-4 flex items-center justify-between gap-1.5 sm:gap-2 z-30 select-none shrink-0 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.6)]">
+      <header className="min-h-[48px] sm:h-[58px] py-1 sm:py-0 bg-[#080c14]/95 backdrop-blur-xl border-b border-slate-800/80 px-2 sm:px-4 flex items-center justify-between gap-1 sm:gap-2 z-30 select-none shrink-0 overflow-hidden shadow-[0_4px_20px_-8px_rgba(0,0,0,0.6)]">
         {/* Left: Brand + Symbol Command Selector + Live Quote & 24h Stats */}
-        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 overflow-hidden">
           {/* Brand Logo */}
           <div
             onClick={() => setActiveView('chart')}
@@ -168,7 +168,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
             <div className="hidden sm:block">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="font-extrabold text-sm tracking-tight text-white font-mono">
                   TRADING<span className="text-cyan-400">NEW</span>
                 </span>
@@ -176,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
                   KRONOS
                 </span>
               </div>
-              <div className="flex items-center gap-1 text-[9px] text-slate-400">
+              <div className="flex items-center gap-1 text-[9px] text-slate-400 whitespace-nowrap">
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
                     session.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
@@ -193,21 +193,21 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          <div className="hidden sm:block h-6 w-px bg-slate-800/90" />
+          <div className="hidden sm:block h-6 w-px bg-slate-800/90 shrink-0" />
 
           {/* Symbol Command Selector Button */}
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-[#101725] hover:bg-[#162033] border border-slate-700/70 hover:border-cyan-500/50 transition text-left shadow-inner"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-[#101725] hover:bg-[#162033] border border-slate-700/70 hover:border-cyan-500/50 transition text-left shadow-inner shrink-0 whitespace-nowrap"
             title="Tìm kiếm mã nhanh (Ctrl + K)"
           >
             <div className="min-w-0">
-              <div className="flex items-center gap-1 sm:gap-1.5">
-                <span className="font-extrabold text-xs sm:text-sm text-white font-mono tracking-tight">
+              <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
+                <span className="font-extrabold text-xs sm:text-sm text-white font-mono tracking-tight whitespace-nowrap">
                   {currentSymbol.symbol}
                 </span>
                 <span
-                  className={`text-[8.5px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded uppercase font-bold ${
+                  className={`hidden sm:inline-block text-[9px] px-1.5 py-0.2 rounded uppercase font-bold whitespace-nowrap ${
                     isCommodity
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/35'
                       : isVnDerivativeSymbol(currentSymbol.symbol)
@@ -243,20 +243,20 @@ export const Header: React.FC<HeaderProps> = ({
                 }
               }}
               title="Mở bảng Lệnh Nhanh Command Palette (Ctrl + K)"
-              className="hidden lg:flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#090d16] hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-400/50 text-[9px] font-mono text-cyan-300 transition"
+              className="hidden lg:flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#090d16] hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-400/50 text-[9px] font-mono text-cyan-300 transition shrink-0"
             >
               <Command className="w-2.5 h-2.5" />
               <span>K</span>
             </div>
-            <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
+            <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 shrink-0" />
           </button>
 
           {/* Real-Time Price & Official Session Metrics */}
-          <div className="flex items-center gap-2 sm:gap-3 font-mono tabular-nums pl-0.5">
-            <div>
-              <div className="flex items-center gap-1 sm:gap-1.5">
+          <div className="flex items-center gap-2 sm:gap-3 font-mono tabular-nums pl-0.5 shrink-0 whitespace-nowrap">
+            <div className="flex flex-col justify-center">
+              <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
                 <span
-                  className={`text-xs sm:text-base font-extrabold leading-tight ${
+                  className={`text-xs sm:text-base font-extrabold leading-none whitespace-nowrap ${
                     isPositive ? 'text-emerald-400' : 'text-rose-400'
                   }`}
                 >
@@ -266,7 +266,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
                 <span
                   title={`${session.statusHeadline}\n${session.scheduleSummary}\n${session.nextSessionLabel}`}
-                  className={`hidden lg:inline-flex items-center gap-1 text-[8.5px] font-sans font-bold px-1.5 py-0.5 rounded border ${
+                  className={`hidden lg:inline-flex items-center gap-1 text-[8.5px] font-sans font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${
                     session.isOpen
                       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
                       : session.state === 'LUNCH_BREAK'
@@ -282,9 +282,9 @@ export const Header: React.FC<HeaderProps> = ({
                   {session.badgeText}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
                 <span
-                  className={`text-[10px] font-bold px-1 rounded ${
+                  className={`text-[9.5px] sm:text-[10px] font-bold px-1 py-0.2 rounded leading-none whitespace-nowrap ${
                     isPositive
                       ? 'bg-emerald-500/15 text-emerald-400'
                       : 'bg-rose-500/15 text-rose-400'
@@ -294,7 +294,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
                 {signalAction && (
                   <span
-                    className={`hidden sm:inline-block text-[9px] font-bold px-1.5 py-0.2 rounded border ${
+                    className={`hidden sm:inline-block text-[9px] font-bold px-1.5 py-0.2 rounded border whitespace-nowrap ${
                       signalAction.includes('BUY')
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                         : signalAction.includes('SELL')
@@ -363,7 +363,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right: Quick Action Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0 whitespace-nowrap">
           {/* Desktop View Mode Switcher (Chart vs Heatmap) */}
           <div className="hidden sm:flex items-center bg-[#0d1320] p-0.5 rounded-xl border border-slate-800/90 text-xs">
             <button
@@ -393,12 +393,12 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenRadar && (
             <button
               onClick={onOpenRadar}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold shadow-sm shadow-amber-500/10 transition"
+              className="flex items-center gap-1 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-xs font-bold shadow-sm shadow-amber-500/10 transition shrink-0 whitespace-nowrap"
               title="Radar quét vùng gom tích sản toàn thị trường"
             >
-              <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
               <span className="hidden lg:inline">Vùng Gom</span>
-              <span className="lg:hidden">Gom</span>
+              <span className="hidden sm:inline lg:hidden">Gom</span>
             </button>
           )}
 
@@ -406,7 +406,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenAlerts}
               title="Trung tâm Chuông Cảnh Báo Thông Minh, Telegram & Đồng bộ Cloud KV"
-              className={`relative p-1.5 sm:p-2 rounded-xl border transition ${
+              className={`relative p-1.5 sm:p-2 rounded-xl border transition shrink-0 ${
                 unreadAlertCount > 0
                   ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
                   : activeAlertRuleCount > 0
@@ -417,7 +417,7 @@ export const Header: React.FC<HeaderProps> = ({
               <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {(unreadAlertCount > 0 || activeAlertRuleCount > 0) && (
                 <span
-                  className={`absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full text-[9px] font-mono font-extrabold flex items-center justify-center ${
+                  className={`absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8.5px] font-mono font-extrabold flex items-center justify-center ${
                     unreadAlertCount > 0 ? 'bg-rose-500 text-white animate-pulse' : 'bg-cyan-500 text-black'
                   }`}
                 >
@@ -431,7 +431,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onRefreshData}
             disabled={isLiveLoading}
             title="Làm mới dữ liệu nến & giá thời gian thực"
-            className="p-1.5 sm:p-2 rounded-xl bg-[#101725] hover:bg-[#172236] border border-slate-700/70 text-slate-300 hover:text-white transition disabled:opacity-50"
+            className="p-1.5 sm:p-2 rounded-xl bg-[#101725] hover:bg-[#172236] border border-slate-700/70 text-slate-300 hover:text-white transition disabled:opacity-50 shrink-0"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
@@ -451,23 +451,23 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onOpenBacktest}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-600/25 border border-cyan-400/30 transition"
+            title="Chạy Backtest AI & Kiểm định chiến lược"
+            className="flex items-center gap-1 p-1.5 sm:px-3.5 sm:py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-600/25 border border-cyan-400/30 transition shrink-0 whitespace-nowrap"
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">Backtest AI</span>
-            <span className="sm:hidden">Test</span>
           </button>
         </div>
       </header>
 
       {/* Sub-Header Timeframe Bar on Mobile (< 768px) */}
-      <div className="md:hidden flex items-center justify-between px-1.5 py-0.5 bg-[#080c14] border-b border-slate-800/80 overflow-x-auto no-scrollbar gap-1 shrink-0">
-        <div className="flex items-center gap-1 w-full justify-around">
+      <div className="md:hidden flex items-center justify-between px-1.5 py-1 bg-[#080c14] border-b border-slate-800/80 overflow-x-auto no-scrollbar gap-1 shrink-0 whitespace-nowrap">
+        <div className="flex items-center gap-1 w-full justify-between min-w-max">
           {timeframes.map(tf => (
             <button
               key={tf}
               onClick={() => onChangeTimeframe(tf)}
-              className={`flex-1 py-0.5 text-center text-[10.5px] font-mono font-bold rounded-md transition ${
+              className={`flex-1 min-w-[32px] px-1.5 py-0.5 text-center text-[10.5px] font-mono font-bold rounded-md transition shrink-0 whitespace-nowrap ${
                 timeframe === tf
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-400 hover:text-white bg-[#101725]'
@@ -481,16 +481,16 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onToggleZenMode}
               title="Chế độ Zen: Ẩn/Hiện thanh công cụ để phóng đại Biểu đồ trên di động"
-              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold flex items-center gap-0.5 shrink-0 border transition ${
+              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold flex items-center gap-0.5 shrink-0 border transition whitespace-nowrap ${
                 isZenMode
                   ? 'bg-amber-500/20 text-amber-300 border-amber-400/50'
                   : 'bg-[#101725] text-slate-400 border-slate-800 hover:text-white'
               }`}
             >
               {isZenMode ? (
-                <Minimize2 className="w-2.5 h-2.5" />
+                <Minimize2 className="w-2.5 h-2.5 shrink-0" />
               ) : (
-                <Maximize2 className="w-2.5 h-2.5" />
+                <Maximize2 className="w-2.5 h-2.5 shrink-0" />
               )}
               <span>Zen</span>
             </button>

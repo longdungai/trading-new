@@ -40,6 +40,7 @@ import {
   evaluateHighWinrateSniperReport,
   scanTopSniperOpportunities,
 } from '../../services/ai/highWinrateSniperEngine';
+import { buildSpotProUpgradeSuite } from '../../services/ai/spotProUpgradeEngine';
 import {
   UserPaperTrade,
   getUserPaperTrades,
@@ -93,13 +94,15 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
   // Paper Testing state
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [paperTrades, setPaperTrades] = useState<UserPaperTrade[]>(() => getUserPaperTrades());
-  const [activeTab, setActiveTab] = useState<'strategy' | 'sniper_winrate' | 'active_trades' | 'stats'>('strategy');
+  const [activeTab, setActiveTab] = useState<'strategy' | 'spot_pro' | 'sniper_winrate' | 'active_trades' | 'stats'>('strategy');
   const [leaderboardMarket, setLeaderboardMarket] = useState<'VN_STOCK' | 'CRYPTO_COIN'>(
     isVND ? 'VN_STOCK' : 'CRYPTO_COIN'
   );
+  const [spotProCapital, setSpotProCapital] = useState<number>(isVND ? 100_000_000 : 2_000);
 
   useEffect(() => {
     setLeaderboardMarket(isVND ? 'VN_STOCK' : 'CRYPTO_COIN');
+    setSpotProCapital(isVND ? 100_000_000 : 2_000);
   }, [isVND]);
 
   // Test Order Form Inputs
@@ -276,6 +279,47 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
     [allSymbols, activeSymbol, candles]
   );
 
+  const fallbackSymbolObj: MarketSymbol = React.useMemo(
+    () =>
+      currentSymbolObj || {
+        symbol: activeSymbol || 'BTCUSDT',
+        name: activeSymbol || 'Bitcoin',
+        baseAsset: activeSymbol,
+        quoteAsset,
+        type: isVND ? 'stock' : 'crypto',
+        price: currentPrice,
+        change24h: 0,
+        high24h: currentPrice * 1.02,
+        low24h: currentPrice * 0.98,
+        volume24h: 1000000,
+      },
+    [currentSymbolObj, activeSymbol, quoteAsset, isVND, currentPrice]
+  );
+
+  const spotProSuite = React.useMemo(
+    () =>
+      buildSpotProUpgradeSuite({
+        symbolObj: fallbackSymbolObj,
+        candles,
+        allSymbols,
+        capitalAmount: spotProCapital,
+        stopLossPrice: currentItem.stopLoss,
+        tp1Price: currentItem.takeProfit1,
+        tp2Price: currentItem.takeProfit2,
+        tp3Price: currentItem.takeProfit3,
+      }),
+    [
+      fallbackSymbolObj,
+      candles,
+      allSymbols,
+      spotProCapital,
+      currentItem.stopLoss,
+      currentItem.takeProfit1,
+      currentItem.takeProfit2,
+      currentItem.takeProfit3,
+    ]
+  );
+
   const handleQuickSniperPaperTrade = () => {
     const isSafeNow = sniperReport.bullTrapShield.isSafeToEnterMarket;
     const entry = isSafeNow
@@ -365,6 +409,16 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
           Kế Hoạch Lệnh
         </button>
         <button
+          onClick={() => setActiveTab('spot_pro')}
+          className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 shrink-0 ${
+            activeTab === 'spot_pro'
+              ? 'bg-gradient-to-r from-amber-500 to-emerald-600 text-white shadow-sm shadow-emerald-500/25'
+              : 'text-amber-300 hover:text-white bg-amber-950/35 border border-amber-500/35'
+          }`}
+        >
+          <span>💵 Spot 1x Pro ({spotProSuite.relativeStrength.rsTier === 'LEADER' ? 'RS Leader' : `DCA ${spotProSuite.smartDynamicDca.multiplier}x`})</span>
+        </button>
+        <button
           onClick={() => setActiveTab('sniper_winrate')}
           className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 shrink-0 ${
             activeTab === 'sniper_winrate'
@@ -405,20 +459,29 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
       {/* ================= TAB 1: STRATEGY DETAILS ================= */}
       {activeTab === 'strategy' && (
         <div className="space-y-3">
-          {/* Quick High-Winrate Sniper Summary Strip inside Strategy Tab */}
+          {/* Quick High-Winrate Sniper & Spot 1x Pro Summary Strip inside Strategy Tab */}
           <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/45 via-[#0d1828] to-teal-950/40 border border-emerald-500/35 space-y-1.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-[10.5px] font-extrabold text-emerald-300 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>{sniperReport.tierBadgeVi}</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setActiveTab('sniper_winrate')}
-                className="px-2 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 text-[9.5px] font-bold transition whitespace-nowrap"
-              >
-                Mở Bảng Bắn Tỉa & Top Kèo ↗
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('spot_pro')}
+                  className="px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 text-[9.5px] font-bold transition whitespace-nowrap"
+                >
+                  💵 Máy Tính Spot 1x ↗
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sniper_winrate')}
+                  className="px-2 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 text-[9.5px] font-bold transition whitespace-nowrap"
+                >
+                  🎯 Bắn Tỉa ↗
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px] text-center">
               <div className="p-1.5 rounded-lg bg-[#09111e] border border-slate-800">
@@ -428,9 +491,18 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
                 </div>
               </div>
               <div className="p-1.5 rounded-lg bg-[#09111e] border border-slate-800">
-                <div className="text-[8.5px] text-slate-400 font-sans">Khớp Mẫu Hình k-NN</div>
-                <div className="font-black text-cyan-300 text-xs">
-                  {sniperReport.fractalAnalog.analogWinratePct}%
+                <div className="text-[8.5px] text-slate-400 font-sans">Sức Mạnh RS</div>
+                <div
+                  className={`font-black text-[10px] truncate ${
+                    spotProSuite.relativeStrength.rsTier === 'LEADER' ||
+                    spotProSuite.relativeStrength.rsTier === 'OUTPERFORM'
+                      ? 'text-emerald-300'
+                      : spotProSuite.relativeStrength.rsTier === 'LAGGARD'
+                      ? 'text-rose-300'
+                      : 'text-cyan-300'
+                  }`}
+                >
+                  {spotProSuite.relativeStrength.rsTier} ({spotProSuite.relativeStrength.rsScore})
                 </div>
               </div>
               <div className="p-1.5 rounded-lg bg-[#09111e] border border-slate-800">
@@ -605,6 +677,276 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
             <FlaskConical className="w-4 h-4" />
             <span>🧪 Mở Lệnh Thử Nghiệm (Test Chiến Lược AI)</span>
           </button>
+        </div>
+      )}
+
+      {/* ================= TAB 1A: 5-ENGINE PRO SPOT 1X SUITE (COIN & VN STOCK) ================= */}
+      {activeTab === 'spot_pro' && (
+        <div className="space-y-3 text-xs">
+          {/* 1. Interactive Spot Cash & Board-Lot Calculator (30% - 40% - 30%) */}
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-950/40 via-[#0d1626] to-emerald-950/35 border border-amber-500/40 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[11px] font-black text-amber-300">
+                🧮 1. Máy Tính Đi Tiền & Chia Lô Spot 1x ({activeSymbol})
+              </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-mono text-[9.5px] font-bold">
+                Tổng gom: {spotProSuite.cashAndLotAllocation.totalQuantityFormatted}
+              </span>
+            </div>
+
+            <div className="text-[9.5px] text-slate-300">{spotProSuite.cashAndLotAllocation.boardLotRuleVi}</div>
+
+            {/* Preset Capital Buttons + Input */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[9.5px] text-slate-400">
+                <span>Vốn tiền mặt dự kiến vào kèo ({spotProSuite.cashAndLotAllocation.currencyUnit}):</span>
+                <span className="font-mono font-bold text-amber-300">
+                  {spotProSuite.cashAndLotAllocation.inputCapitalFormatted}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {(isVND
+                  ? [
+                      { label: '50 Tr', val: 50_000_000 },
+                      { label: '100 Tr', val: 100_000_000 },
+                      { label: '200 Tr', val: 200_000_000 },
+                      { label: '500 Tr', val: 500_000_000 },
+                    ]
+                  : [
+                      { label: '500 $', val: 500 },
+                      { label: '2,000 $', val: 2_000 },
+                      { label: '5,000 $', val: 5_000 },
+                      { label: '10,000 $', val: 10_000 },
+                    ]
+                ).map((preset) => (
+                  <button
+                    key={preset.val}
+                    type="button"
+                    onClick={() => setSpotProCapital(preset.val)}
+                    className={`py-1 px-1.5 rounded font-mono text-[10px] font-bold border transition ${
+                      spotProCapital === preset.val
+                        ? 'bg-amber-500/25 text-amber-200 border-amber-400/60'
+                        : 'bg-[#09111e] text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3 Tranches Breakdown */}
+            <div className="space-y-1.5 pt-1">
+              {spotProSuite.cashAndLotAllocation.tranches.map((tr) => (
+                <div
+                  key={tr.trancheIndex}
+                  className="p-2 rounded-lg bg-[#08101c] border border-slate-800/90 space-y-0.5"
+                >
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+                    <span className="font-bold text-amber-200">{tr.labelVi}</span>
+                    <span className="text-emerald-300 font-bold">
+                      Mua {tr.quantityFormatted} @ {prefix}
+                      {formatPrice(tr.limitPrice)}
+                      {priceSuffix} (-{tr.discountFromSpotPct}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[9.5px] text-slate-400">
+                    <span className="truncate">{tr.triggerNoteVi}</span>
+                    <span className="font-mono text-slate-200 shrink-0">{tr.cashCommittedFormatted}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Summary Metrics: Avg Price, Breakeven, Profit TP1/TP2, Max Loss */}
+            <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px] pt-1">
+              <div className="p-1.5 rounded-lg bg-[#08101c] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Giá Vốn TB / Hòa Vốn Sau Phí</div>
+                <div className="font-bold text-white">
+                  {prefix}
+                  {formatPrice(spotProSuite.cashAndLotAllocation.weightedAvgEntryPrice)}
+                  {priceSuffix}{' '}
+                  <span className="text-amber-300">
+                    (BE: {prefix}
+                    {formatPrice(spotProSuite.cashAndLotAllocation.allInBreakevenPrice)}
+                    {priceSuffix})
+                  </span>
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-[#08101c] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Tiền Mặt Còn Dự Phòng</div>
+                <div className="font-bold text-cyan-300">
+                  {spotProSuite.cashAndLotAllocation.remainingCashReserveFormatted}
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-emerald-950/25 border border-emerald-500/30">
+                <div className="text-[8.5px] text-emerald-300 font-sans">Lãi Ròng Dự Kiến (TP1 / TP2)</div>
+                <div className="font-bold text-emerald-300 truncate">
+                  {spotProSuite.cashAndLotAllocation.expectedNetProfitTp1Formatted} /{' '}
+                  {spotProSuite.cashAndLotAllocation.expectedNetProfitTp2Formatted}
+                </div>
+              </div>
+              <div className="p-1.5 rounded-lg bg-rose-950/25 border border-rose-500/30">
+                <div className="text-[8.5px] text-rose-300 font-sans">Rủi Ro Nếu Gãy Cấu Trúc</div>
+                <div className="font-bold text-rose-300 truncate">
+                  {spotProSuite.cashAndLotAllocation.maxStructuralLossFormatted}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Relative Strength (RS Leader vs Laggard) */}
+          <div className="p-2.5 rounded-xl bg-[#0d1422] border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-white">
+                ⚖️ 2. Sức Mạnh Tương Đối (RS so với {spotProSuite.relativeStrength.benchmarkSymbol})
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded font-mono text-[9.5px] font-bold border ${
+                  spotProSuite.relativeStrength.rsTier === 'LEADER' ||
+                  spotProSuite.relativeStrength.rsTier === 'OUTPERFORM'
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/50'
+                    : spotProSuite.relativeStrength.rsTier === 'LAGGARD'
+                    ? 'bg-rose-500/20 text-rose-200 border-rose-400/50'
+                    : 'bg-cyan-500/20 text-cyan-200 border-cyan-400/50'
+                }`}
+              >
+                Điểm RS: {spotProSuite.relativeStrength.rsScore}/100 (
+                {spotProSuite.relativeStrength.rsSpread24hPct >= 0 ? '+' : ''}
+                {spotProSuite.relativeStrength.rsSpread24hPct}%)
+              </span>
+            </div>
+            <div className="text-[10px] font-bold text-amber-300">{spotProSuite.relativeStrength.badgeVi}</div>
+            <p className="text-[10px] text-slate-300 leading-relaxed">{spotProSuite.relativeStrength.adviceVi}</p>
+            {spotProSuite.relativeStrength.topMarketLeaderSymbol !== activeSymbol && (
+              <button
+                type="button"
+                onClick={() => {
+                  const leaderObj = allSymbols.find(
+                    (s) => s.symbol === spotProSuite.relativeStrength.topMarketLeaderSymbol
+                  );
+                  if (leaderObj && onSelectSymbol) onSelectSymbol(leaderObj);
+                }}
+                className="w-full py-1.5 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-200 text-[10px] font-bold transition text-center"
+              >
+                👑 Chuyển sang Mã Dẫn Dắt #1 hiện tại: {spotProSuite.relativeStrength.topMarketLeaderSymbol} (
+                {spotProSuite.relativeStrength.topMarketLeaderSpreadPct >= 0 ? '+' : ''}
+                {spotProSuite.relativeStrength.topMarketLeaderSpreadPct}% vs {spotProSuite.relativeStrength.benchmarkSymbol}) ↗
+              </button>
+            )}
+          </div>
+
+          {/* 3. Spot Scale-Out 40/40/20 & Free-Ride 0% Risk Plan */}
+          <div className="p-2.5 rounded-xl bg-[#0d1422] border border-emerald-500/35 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-emerald-300">
+                🎯 3. Lộ Trình Chốt Lời 40/40/20 & Gồng Lãi 0% Rủi Ro
+              </span>
+              <span className="text-[9.5px] font-mono text-amber-300 font-bold">
+                Chặn Hòa Vốn: {prefix}
+                {formatPrice(spotProSuite.scaleOutAndFreeRide.freeRideStopPrice)}
+                {priceSuffix}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {spotProSuite.scaleOutAndFreeRide.steps.map((st) => (
+                <div
+                  key={st.step}
+                  className="p-2 rounded-lg bg-[#08101c] border border-slate-800 space-y-0.5"
+                >
+                  <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                    <span className="font-bold text-emerald-300">{st.titleVi}</span>
+                    <span className="text-amber-300 font-bold shrink-0">
+                      @{prefix}
+                      {formatPrice(st.targetPrice)}
+                      {priceSuffix} (+{st.gainFromAvgEntryPct}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 font-mono text-[9.5px] text-cyan-200">
+                    <span>Bán: {st.quantityToSellFormatted}</span>
+                    <span>Lãi khóa: {st.netProfitLockedFormatted}</span>
+                  </div>
+                  <div className="text-[9.5px] text-slate-300 leading-snug">{st.actionInstructionVi}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 4. Cash-Is-King Circuit Breaker & Capitulation Catch Zone */}
+          <div
+            className={`p-2.5 rounded-xl border space-y-1.5 ${
+              spotProSuite.cashCircuitBreaker.defenseState === 'CASH_IS_KING_DEFENSE'
+                ? 'bg-rose-950/35 border-rose-500/45'
+                : spotProSuite.cashCircuitBreaker.defenseState === 'SELECTIVE_CAUTIOUS'
+                ? 'bg-amber-950/30 border-amber-500/40'
+                : 'bg-[#0d1422] border-slate-800'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-white">
+                🛑 4. Cầu Dao Giữ Tiền Mặt & Vùng Vợt Xác Hoảng Loạn
+              </span>
+              <span className="font-mono text-[9.5px] font-bold text-cyan-300">
+                Độ rộng: {spotProSuite.cashCircuitBreaker.marketBreadthBullishPct}% mã xanh
+              </span>
+            </div>
+            <div className="text-[10px] font-bold text-amber-200">
+              {spotProSuite.cashCircuitBreaker.badgeVi}
+            </div>
+            {spotProSuite.cashCircuitBreaker.reasonsVi.map((r, idx) => (
+              <div key={idx} className="text-[9.5px] text-slate-300">
+                • {r}
+              </div>
+            ))}
+            <div className="p-2 rounded-lg bg-[#08101c] border border-slate-800 flex items-center justify-between gap-2 font-mono text-[10px]">
+              <span className="text-slate-300 font-sans">Vùng Kê Lệnh Vợt Xác (Panic Flush):</span>
+              <span className="font-bold text-emerald-300">
+                {prefix}
+                {formatPrice(spotProSuite.cashCircuitBreaker.capitulationCatchLowPrice)}
+                {priceSuffix} – {prefix}
+                {formatPrice(spotProSuite.cashCircuitBreaker.capitulationCatchHighPrice)}
+                {priceSuffix} (-{spotProSuite.cashCircuitBreaker.capitulationDiscountPct}%)
+              </span>
+            </div>
+            <div className="text-[9.5px] text-cyan-200 font-semibold">
+              💡 {spotProSuite.cashCircuitBreaker.actionDirectiveVi}
+            </div>
+          </div>
+
+          {/* 5. Smart Dynamic DCA Multiplier */}
+          <div className="p-2.5 rounded-xl bg-[#0d1422] border border-purple-500/35 space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-bold text-purple-300">
+                📦 5. Hệ Số Tích Sản Thông Minh Theo Định Giá (Smart DCA)
+              </span>
+              <span className="px-2 py-0.5 rounded bg-purple-500/20 border border-purple-400/40 text-purple-200 font-mono text-[10px] font-black">
+                Hệ số hôm nay: {spotProSuite.smartDynamicDca.multiplier}x
+              </span>
+            </div>
+            <div className="text-[10px] font-bold text-amber-200">
+              {spotProSuite.smartDynamicDca.zoneBadgeVi}
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px]">
+              <div className="p-1.5 rounded bg-[#08101c] border border-slate-800">
+                <div className="text-[8.5px] text-slate-400 font-sans">Định Mức DCA Cơ Sở (1.0x)</div>
+                <div className="font-bold text-slate-200">
+                  {spotProSuite.smartDynamicDca.basePeriodicBudgetFormatted}
+                </div>
+              </div>
+              <div className="p-1.5 rounded bg-[#08101c] border border-purple-500/30">
+                <div className="text-[8.5px] text-purple-300 font-sans">
+                  Khuyến Nghị Giải Ngân ({spotProSuite.smartDynamicDca.multiplier}x)
+                </div>
+                <div className="font-bold text-emerald-300">
+                  {spotProSuite.smartDynamicDca.recommendedTodayDcaFormatted} (
+                  {spotProSuite.smartDynamicDca.recommendedTodayQuantityFormatted})
+                </div>
+              </div>
+            </div>
+            <p className="text-[9.5px] text-slate-300 leading-snug">
+              {spotProSuite.smartDynamicDca.rationaleVi}
+            </p>
+          </div>
         </div>
       )}
 

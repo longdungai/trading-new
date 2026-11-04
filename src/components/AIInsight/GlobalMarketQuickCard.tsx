@@ -195,11 +195,11 @@ export const GlobalMarketQuickCard: React.FC<GlobalMarketQuickCardProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="p-1 rounded-lg bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 shrink-0">
-              <Magnet className="w-3.5 h-3.5" />
+            <span className="p-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 shrink-0">
+              <Coins className="w-3.5 h-3.5" />
             </span>
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-white truncate">
-              Vi Cấu Trúc Perps & Options
+              Trạm Giao Dịch Spot Coin 1x &amp; Vi Cấu Trúc
             </span>
           </div>
           <button
@@ -207,138 +207,13 @@ export const GlobalMarketQuickCard: React.FC<GlobalMarketQuickCardProps> = ({
             onClick={onOpenGlobalMacroTab}
             className="px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 text-cyan-200 text-[10px] font-bold flex items-center gap-1 shrink-0 whitespace-nowrap transition"
           >
-            <span>Sóng Crypto & Mỹ</span>
+            <span>Sóng Crypto &amp; Mỹ</span>
             <ArrowUpRight className="w-3 h-3" />
           </button>
         </div>
 
-        {/* Funding 8h + Perp-Spot Basis + Countdown */}
-        <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
-          <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/90 min-w-0">
-            <div className="text-slate-400 text-[9px] truncate">Funding 8h</div>
-            <div
-              className={`font-bold text-xs truncate ${
-                cryptoLiqReport.fundingRegime === 'OVERLEVERAGED_LONGS'
-                  ? 'text-rose-400'
-                  : cryptoLiqReport.fundingRegime === 'SHORT_SQUEEZE_SETUP'
-                  ? 'text-emerald-400'
-                  : fundingPositive
-                  ? 'text-cyan-300'
-                  : 'text-amber-300'
-              }`}
-            >
-              {fundingPositive ? '+' : ''}
-              {cryptoLiqReport.fundingRate8hPct.toFixed(4)}%
-            </div>
-            <div className="text-[9px] text-slate-500 truncate">
-              {cryptoLiqReport.annualizedFundingPct >= 0 ? '+' : ''}
-              {cryptoLiqReport.annualizedFundingPct.toFixed(1)}%/năm
-            </div>
-          </div>
-
-          <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/90 min-w-0">
-            <div className="text-slate-400 text-[9px] truncate">Perp-Spot Basis</div>
-            <div
-              className={`font-bold text-xs truncate ${
-                cryptoLiqReport.perpSpotBasisPct >= 0 ? 'text-emerald-300' : 'text-rose-300'
-              }`}
-            >
-              {cryptoLiqReport.perpSpotBasisPct >= 0 ? '+' : ''}
-              {cryptoLiqReport.perpSpotBasisPct.toFixed(3)}%
-            </div>
-            <div className="text-[9px] text-slate-500 truncate">
-              Kỳ tới: {cryptoLiqReport.nextFundingCountdownVi}
-            </div>
-          </div>
-
-          <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/90 min-w-0">
-            <div className="text-slate-400 text-[9px] truncate">BTC.D / Mint 7d</div>
-            <div className="font-bold text-xs text-amber-300 truncate">
-              {cryptoCycle?.btcDominancePct ? `${cryptoCycle.btcDominancePct.toFixed(1)}%` : '--'}
-            </div>
-            <div className="text-[9px] text-slate-400 truncate">
-              {cryptoCycle?.stablecoin7dNetMintBillionUsd != null
-                ? `${cryptoCycle.stablecoin7dNetMintBillionUsd >= 0 ? '+' : ''}$${cryptoCycle.stablecoin7dNetMintBillionUsd.toFixed(2)}B`
-                : activeNarrative
-                ? `RS ${activeNarrative.rsVsBtcPct >= 0 ? '+' : ''}${activeNarrative.rsVsBtcPct}%`
-                : 'Live 24/7'}
-            </div>
-          </div>
-        </div>
-
-        {/* 25x / 50x Leveraged Liquidation Magnet Clusters */}
-        <div className="p-2 rounded-lg bg-[#080e1a] border border-slate-800/90 space-y-1.5">
-          <div className="flex items-center justify-between gap-2 flex-wrap text-[10px]">
-            <span className="font-bold text-slate-200 flex items-center gap-1">
-              <Flame className="w-3 h-3 text-rose-400 shrink-0" />
-              <span>Nam châm Thanh lý Đòn bẩy (25x–50x)</span>
-            </span>
-            <span className="text-[9px] font-mono text-cyan-300 shrink-0 whitespace-nowrap">
-              Gần nhất: {cryptoLiqReport.distanceToNearestMagnetPct}%
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px]">
-            <div className="px-2 py-1 rounded bg-rose-950/35 border border-rose-500/30 min-w-0">
-              <div className="text-[9px] text-rose-300 truncate">Short Liq (50x → 25x)</div>
-              <div className="text-white font-bold truncate">
-                ${formatPrice(cryptoLiqReport.shortLiq50x)} → ${formatPrice(cryptoLiqReport.shortLiq25x)}
-              </div>
-            </div>
-            <div className="px-2 py-1 rounded bg-emerald-950/35 border border-emerald-500/30 min-w-0">
-              <div className="text-[9px] text-emerald-300 truncate">Long Liq (50x → 25x)</div>
-              <div className="text-white font-bold truncate">
-                ${formatPrice(cryptoLiqReport.longLiq50x)} → ${formatPrice(cryptoLiqReport.longLiq25x)}
-              </div>
-            </div>
-          </div>
-          <div className="text-[10px] text-slate-300 leading-snug break-words">
-            {cryptoLiqReport.squeezeWarningVi}
-          </div>
-        </div>
-
-        {/* Deribit Institutional Options (BTC / ETH) */}
-        {opt && (
-          <div className="p-2 rounded-lg bg-[#0b1324] border border-fuchsia-500/25 space-y-1.5">
-            <div className="flex items-center justify-between gap-1.5 flex-wrap text-[10px]">
-              <span className="font-bold text-fuchsia-200">
-                🎯 Deribit {opt.underlyingCurrency} Options ({opt.primaryExpiryIso})
-              </span>
-              {opt.dvol30dPct && (
-                <span className="px-1.5 py-0.5 rounded bg-fuchsia-500/15 border border-fuchsia-500/35 text-[9px] font-mono text-fuchsia-300 shrink-0 whitespace-nowrap">
-                  DVOL {opt.dvol30dPct}%
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
-              <div className="min-w-0">
-                <div className="text-[9px] text-slate-400 truncate">Put Wall</div>
-                <div className="font-bold text-sky-300 truncate">
-                  {opt.putWallPrice ? `$${formatPrice(opt.putWallPrice)}` : '--'}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[9px] text-slate-400 truncate">Max Pain</div>
-                <div className="font-bold text-amber-300 truncate">
-                  {opt.maxPainPrice ? `$${formatPrice(opt.maxPainPrice)}` : '--'}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[9px] text-slate-400 truncate">Call Wall</div>
-                <div className="font-bold text-pink-300 truncate">
-                  {opt.callWallPrice ? `$${formatPrice(opt.callWallPrice)}` : '--'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between gap-2 flex-wrap text-[9px] text-slate-400 font-mono">
-              <span>P/C OI: {opt.putCallOiRatio ?? '--'}</span>
-              {opt.impliedMovePct && <span>Biên Straddle: ±{opt.impliedMovePct}%</span>}
-              {opt.totalNotionalBillionUsd && <span>OI: ${opt.totalNotionalBillionUsd}B</span>}
-            </div>
-          </div>
-        )}
-
         {/* ==========================================================================
-            NEW: 6-ENGINE ZERO-LEVERAGE CRYPTO SPOT 24/7 DAILY CASH COMMAND CENTER
+            PRIMARY: 6-ENGINE ZERO-LEVERAGE CRYPTO SPOT 24/7 DAILY CASH COMMAND CENTER
             (1. Hứng Râu Thanh Lý | 2. Lướt T+0 & Free Coin | 3. Tinh Khiết Spot & Phiên | 4. Két 3 Ngăn USDT & ALT/BTC)
            ========================================================================== */}
         {cryptoSpotDaily && (
@@ -580,6 +455,131 @@ export const GlobalMarketQuickCard: React.FC<GlobalMarketQuickCardProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Funding 8h + Perp-Spot Basis + Countdown */}
+        <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+          <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/90 min-w-0">
+            <div className="text-slate-400 text-[9px] truncate">Funding 8h</div>
+            <div
+              className={`font-bold text-xs truncate ${
+                cryptoLiqReport.fundingRegime === 'OVERLEVERAGED_LONGS'
+                  ? 'text-rose-400'
+                  : cryptoLiqReport.fundingRegime === 'SHORT_SQUEEZE_SETUP'
+                  ? 'text-emerald-400'
+                  : fundingPositive
+                  ? 'text-cyan-300'
+                  : 'text-amber-300'
+              }`}
+            >
+              {fundingPositive ? '+' : ''}
+              {cryptoLiqReport.fundingRate8hPct.toFixed(4)}%
+            </div>
+            <div className="text-[9px] text-slate-500 truncate">
+              {cryptoLiqReport.annualizedFundingPct >= 0 ? '+' : ''}
+              {cryptoLiqReport.annualizedFundingPct.toFixed(1)}%/năm
+            </div>
+          </div>
+
+          <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/90 min-w-0">
+            <div className="text-slate-400 text-[9px] truncate">Perp-Spot Basis</div>
+            <div
+              className={`font-bold text-xs truncate ${
+                cryptoLiqReport.perpSpotBasisPct >= 0 ? 'text-emerald-300' : 'text-rose-300'
+              }`}
+            >
+              {cryptoLiqReport.perpSpotBasisPct >= 0 ? '+' : ''}
+              {cryptoLiqReport.perpSpotBasisPct.toFixed(3)}%
+            </div>
+            <div className="text-[9px] text-slate-500 truncate">
+              Kỳ tới: {cryptoLiqReport.nextFundingCountdownVi}
+            </div>
+          </div>
+
+          <div className="p-2 rounded-lg bg-[#080d17] border border-slate-800/90 min-w-0">
+            <div className="text-slate-400 text-[9px] truncate">BTC.D / Mint 7d</div>
+            <div className="font-bold text-xs text-amber-300 truncate">
+              {cryptoCycle?.btcDominancePct ? `${cryptoCycle.btcDominancePct.toFixed(1)}%` : '--'}
+            </div>
+            <div className="text-[9px] text-slate-400 truncate">
+              {cryptoCycle?.stablecoin7dNetMintBillionUsd != null
+                ? `${cryptoCycle.stablecoin7dNetMintBillionUsd >= 0 ? '+' : ''}$${cryptoCycle.stablecoin7dNetMintBillionUsd.toFixed(2)}B`
+                : activeNarrative
+                ? `RS ${activeNarrative.rsVsBtcPct >= 0 ? '+' : ''}${activeNarrative.rsVsBtcPct}%`
+                : 'Live 24/7'}
+            </div>
+          </div>
+        </div>
+
+        {/* 25x / 50x Leveraged Liquidation Magnet Clusters */}
+        <div className="p-2 rounded-lg bg-[#080e1a] border border-slate-800/90 space-y-1.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap text-[10px]">
+            <span className="font-bold text-slate-200 flex items-center gap-1">
+              <Flame className="w-3 h-3 text-rose-400 shrink-0" />
+              <span>Nam châm Thanh lý Đòn bẩy (25x–50x)</span>
+            </span>
+            <span className="text-[9px] font-mono text-cyan-300 shrink-0 whitespace-nowrap">
+              Gần nhất: {cryptoLiqReport.distanceToNearestMagnetPct}%
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px]">
+            <div className="px-2 py-1 rounded bg-rose-950/35 border border-rose-500/30 min-w-0">
+              <div className="text-[9px] text-rose-300 truncate">Short Liq (50x → 25x)</div>
+              <div className="text-white font-bold truncate">
+                ${formatPrice(cryptoLiqReport.shortLiq50x)} → ${formatPrice(cryptoLiqReport.shortLiq25x)}
+              </div>
+            </div>
+            <div className="px-2 py-1 rounded bg-emerald-950/35 border border-emerald-500/30 min-w-0">
+              <div className="text-[9px] text-emerald-300 truncate">Long Liq (50x → 25x)</div>
+              <div className="text-white font-bold truncate">
+                ${formatPrice(cryptoLiqReport.longLiq50x)} → ${formatPrice(cryptoLiqReport.longLiq25x)}
+              </div>
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-300 leading-snug break-words">
+            {cryptoLiqReport.squeezeWarningVi}
+          </div>
+        </div>
+
+        {/* Deribit Institutional Options (BTC / ETH) */}
+        {opt && (
+          <div className="p-2 rounded-lg bg-[#0b1324] border border-fuchsia-500/25 space-y-1.5">
+            <div className="flex items-center justify-between gap-1.5 flex-wrap text-[10px]">
+              <span className="font-bold text-fuchsia-200">
+                🎯 Deribit {opt.underlyingCurrency} Options ({opt.primaryExpiryIso})
+              </span>
+              {opt.dvol30dPct && (
+                <span className="px-1.5 py-0.5 rounded bg-fuchsia-500/15 border border-fuchsia-500/35 text-[9px] font-mono text-fuchsia-300 shrink-0 whitespace-nowrap">
+                  DVOL {opt.dvol30dPct}%
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+              <div className="min-w-0">
+                <div className="text-[9px] text-slate-400 truncate">Put Wall</div>
+                <div className="font-bold text-sky-300 truncate">
+                  {opt.putWallPrice ? `$${formatPrice(opt.putWallPrice)}` : '--'}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[9px] text-slate-400 truncate">Max Pain</div>
+                <div className="font-bold text-amber-300 truncate">
+                  {opt.maxPainPrice ? `$${formatPrice(opt.maxPainPrice)}` : '--'}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[9px] text-slate-400 truncate">Call Wall</div>
+                <div className="font-bold text-pink-300 truncate">
+                  {opt.callWallPrice ? `$${formatPrice(opt.callWallPrice)}` : '--'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 flex-wrap text-[9px] text-slate-400 font-mono">
+              <span>P/C OI: {opt.putCallOiRatio ?? '--'}</span>
+              {opt.impliedMovePct && <span>Biên Straddle: ±{opt.impliedMovePct}%</span>}
+              {opt.totalNotionalBillionUsd && <span>OI: ${opt.totalNotionalBillionUsd}B</span>}
+            </div>
           </div>
         )}
       </div>

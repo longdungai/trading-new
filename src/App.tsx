@@ -1575,6 +1575,48 @@ export const App: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-3">
                 {((effectiveRightTab === 'ai' && mobileTab === 'chart') || mobileTab === 'ai') && (
                   <>
+                    {/* Quick 1x Spot Switcher Bar (Coin & VN Stock) */}
+                    <div className="bg-gradient-to-r from-emerald-950/50 via-slate-900/90 to-cyan-950/50 border border-emerald-500/30 rounded-xl p-2 shadow-sm">
+                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                        <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1">
+                          💵 Trạm Giao Dịch Spot 1x (Không Đòn Bẩy)
+                        </span>
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                          {isCryptoSymbol(currentSymbol)
+                            ? '🪙 Đang bật: Spot Coin 24/7'
+                            : isVnStockOrIndexSymbol(currentSymbol)
+                            ? '🇻🇳 Đang bật: Spot Cổ Phiếu VN (T+2.5)'
+                            : '⚡ Chọn mã Coin / CP VN bên dưới'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1">
+                        {(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'FPT', 'HPG', 'SSI'] as const).map(
+                          (quickTicker) => {
+                            const targetSym = symbols.find((s) => s.symbol === quickTicker);
+                            if (!targetSym) return null;
+                            const isActive = currentSymbol.symbol === quickTicker;
+                            const isCoin = quickTicker.endsWith('USDT');
+                            return (
+                              <button
+                                key={quickTicker}
+                                onClick={() => handleSelectSymbol(targetSym)}
+                                className={`px-1.5 py-1 rounded text-[10px] font-bold transition-all border text-center truncate ${
+                                  isActive
+                                    ? isCoin
+                                      ? 'bg-amber-500/25 text-amber-200 border-amber-400/60 shadow-sm'
+                                      : 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60 shadow-sm'
+                                    : 'bg-slate-900/80 text-slate-300 border-slate-700/60 hover:border-emerald-500/40 hover:text-white'
+                                }`}
+                                title={`Mở bộ công cụ Spot 1x cho ${targetSym.name}`}
+                              >
+                                {isCoin ? `🪙 ${quickTicker.replace('USDT', '')}` : `🇻🇳 ${quickTicker}`}
+                              </button>
+                            );
+                          }
+                        )}
+                      </div>
+                    </div>
+
                     {activeRecoveryPlan && (
                       <PositionRecoveryCard
                         currentSymbol={currentSymbol}
@@ -1631,6 +1673,16 @@ export const App: React.FC = () => {
                           }}
                         />
                       )}
+                    <TradeSetupCard
+                      strategyHub={strategyHub}
+                      setup={tradeSetup}
+                      quoteAsset={currentSymbol.quoteAsset}
+                      symbol={currentSymbol.symbol}
+                      currentSymbolObj={currentSymbol}
+                      candles={effectiveCandles}
+                      allSymbols={symbols}
+                      onSelectSymbol={handleSelectSymbol}
+                    />
                     <AIPredictionCard
                       prediction={aiPrediction}
                       quoteAsset={currentSymbol.quoteAsset}
@@ -1658,16 +1710,6 @@ export const App: React.FC = () => {
                       onToggleVpvr={() => handleToggleIndicator('volumeProfile')}
                       onToggleVwap={() => handleToggleIndicator('vwap')}
                       onSelectTimeframe={setTimeframe}
-                    />
-                    <TradeSetupCard
-                      strategyHub={strategyHub}
-                      setup={tradeSetup}
-                      quoteAsset={currentSymbol.quoteAsset}
-                      symbol={currentSymbol.symbol}
-                      currentSymbolObj={currentSymbol}
-                      candles={effectiveCandles}
-                      allSymbols={symbols}
-                      onSelectSymbol={handleSelectSymbol}
                     />
                     <SentimentMeter sentiment={marketSentiment} />
                   </>

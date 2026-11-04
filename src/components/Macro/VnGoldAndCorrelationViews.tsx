@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   ArrowUpRight,
   Coins,
   GitCompare,
+  RefreshCw,
   Scale,
   ShieldAlert,
   TrendingUp,
@@ -383,6 +384,11 @@ interface IntermarketCorrelationViewProps {
 }
 
 const BENCHMARK_CORR_TICKERS = ['BTCUSDT', 'XAUUSD', 'OIL_WTI', 'VNINDEX', 'FPT', 'NVDA'];
+const CORR_CACHE_TTL_MS = 5 * 60_000;
+const corrSeriesCache = new Map<
+  string,
+  { ts: number; symbol: string; label: string; candles: Candle[] }
+>();
 
 export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProps> = ({
   currentSymbol,
@@ -390,47 +396,116 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
   onJumpToSymbol,
 }) => {
   const [seriesInputs, setSeriesInputs] = useState<IntermarketSeriesInput[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [lookbackBars, setLookbackBars] = useState<14 | 30 | 60>(30);
+  const [refreshTick, setRefreshTick] = useState<number>(0);
+
+  // Keep latest symbols in a ref so live WebSocket price ticks never re-trigger the 1D candle fetch effect
+  const symbolsRef = useRef<MarketSymbol[]>(symbols);
+  symbolsRef.current = symbols;
 
   const targetKeys = useMemo(() => {
     const set = new Set<string>([currentSymbol.symbol.toUpperCase(), ...BENCHMARK_CORR_TICKERS]);
     return Array.from(set).slice(0, 7);
   }, [currentSymbol.symbol]);
 
+  // Primitive string key that only changes when the set of matched ticker names changes, NOT on live price ticks
+  const availableTargetsKey = useMemo(() => {
+    const available = new Set(symbols.map(s => s.symbol.toUpperCase()));
+    return targetKeys.filter(k => available.has(k)).join(',');
+  }, [targetKeys, symbols]);
+
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
+    const keys = availableTargetsKey ? availableTargetsKey.split(',').filter(Boolean) : [];
+    if (keys.length === 0) {
+      setIsLoading(false);
+      return;
+    }
 
+    const currentSymbols = symbolsRef.current;
     const targets: MarketSymbol[] = [];
-    for (const k of targetKeys) {
-      const found = symbols.find(s => s.symbol.toUpperCase() === k);
+    for (const k of keys) {
+      const found = currentSymbols.find(s => s.symbol.toUpperCase() === k);
       if (found) targets.push(found);
     }
 
-    void Promise.allSettled(targets.map(sym => fetchMarketData(sym, '1D'))).then(results => {
+    const now = Date.now();
+    const forceBypassCache = refreshTick > 0;
+    const cachedLoaded: IntermarketSeriesInput[] = [];
+    const missingTargets: MarketSymbol[] = [];
+
+    for (const sym of targets) {
+      const key = sym.symbol.toUpperCase();
+      const cached = corrSeriesCache.get(key);
+      if (!forceBypassCache && cached && now - cached.ts < CORR_CACHE_TTL_MS) {
+        cachedLoaded.push({
+          symbol: cached.symbol,
+          label: cached.label,
+          candles: cached.candles,
+        });
+      } else {
+        missingTargets.push(sym);
+      }
+    }
+
+    // Immediately hydrate any cached series so the table stays mounted without jumping
+    if (cachedLoaded.length >= 2) {
+      setSeriesInputs(cachedLoaded);
+    }
+
+    if (missingTargets.length === 0) {
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
+    if (cachedLoaded.length < 2 && seriesInputs.length === 0) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    void Promise.allSettled(missingTargets.map(sym => fetchMarketData(sym, '1D'))).then(results => {
       if (!active) return;
-      const loaded: IntermarketSeriesInput[] = [];
       results.forEach((res, idx) => {
         if (res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length >= 15) {
-          loaded.push({
-            symbol: targets[idx].symbol,
-            label: targets[idx].name,
+          const targetSym = missingTargets[idx];
+          corrSeriesCache.set(targetSym.symbol.toUpperCase(), {
+            ts: Date.now(),
+            symbol: targetSym.symbol,
+            label: targetSym.name,
             candles: res.value as Candle[],
           });
         }
       });
-      setSeriesInputs(loaded);
+
+      const finalLoaded: IntermarketSeriesInput[] = [];
+      for (const sym of targets) {
+        const entry = corrSeriesCache.get(sym.symbol.toUpperCase());
+        if (entry && entry.candles.length >= 15) {
+          finalLoaded.push({
+            symbol: entry.symbol,
+            label: entry.label,
+            candles: entry.candles,
+          });
+        }
+      }
+
+      setSeriesInputs(finalLoaded);
       setIsLoading(false);
+      setIsRefreshing(false);
     });
 
     return () => {
       active = false;
     };
-  }, [targetKeys, symbols]);
+  }, [availableTargetsKey, refreshTick]);
 
   const corrData = useMemo(
-    () => buildIntermarketCorrelationMatrix(seriesInputs, 30),
-    [seriesInputs]
+    () => buildIntermarketCorrelationMatrix(seriesInputs, lookbackBars),
+    [seriesInputs, lookbackBars]
   );
 
   const getCellStyle = (r: number | null, isDiagonal: boolean) => {
@@ -443,10 +518,10 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
     return 'bg-[#0b1220] text-slate-300';
   };
 
-  if (isLoading) {
+  if (isLoading && seriesInputs.length === 0) {
     return (
       <div className="p-8 text-center rounded-xl bg-[#0c121e] border border-slate-800 text-slate-400 text-xs font-mono leading-relaxed break-words">
-        Đang tính toán Ma trận Tương quan Log-Return 30 phiên thực tế giữa {targetKeys.join(', ')}...
+        Đang tính toán Ma trận Tương quan Log-Return {lookbackBars} phiên thực tế giữa {targetKeys.join(', ')}...
       </div>
     );
   }
@@ -459,12 +534,38 @@ export const IntermarketCorrelationView: React.FC<IntermarketCorrelationViewProp
           <div className="font-bold text-white flex items-center gap-1.5 min-w-0">
             <GitCompare className="w-4 h-4 text-cyan-400 shrink-0" />
             <span className="leading-snug break-words">
-              Ma Trận Tương Quan Liên Thị Trường (30 Phiên 1D — Pearson Log-Return)
+              Ma Trận Tương Quan Liên Thị Trường ({lookbackBars} Phiên 1D — Pearson Log-Return)
             </span>
           </div>
-          <span className="text-[10px] font-mono text-slate-400 break-words">
-            +1.00 Cùng chiều chặt • 0.00 Độc lập • -1.00 Ngược chiều
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {([14, 30, 60] as const).map(bars => (
+              <button
+                key={bars}
+                type="button"
+                onClick={() => setLookbackBars(bars)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors ${
+                  lookbackBars === bars
+                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/45'
+                    : 'bg-[#080d17] text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+              >
+                {bars} Phiên
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRefreshTick(prev => prev + 1)}
+              disabled={isRefreshing}
+              className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#080d17] hover:bg-slate-800 text-slate-300 border border-slate-700/80 flex items-center gap-1 transition-colors disabled:opacity-50"
+              title="Tải lại chuỗi nến 1D mới nhất"
+            >
+              <RefreshCw className={`w-3 h-3 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Đang cập nhật...' : 'Làm mới'}</span>
+            </button>
+          </div>
+        </div>
+        <div className="text-[10px] font-mono text-slate-400 break-words">
+          +1.00 Cùng chiều chặt • 0.00 Độc lập • -1.00 Ngược chiều (Đã khóa chống nhảy khi giá nhảy tick trực tiếp)
         </div>
 
         <div className="overflow-x-auto">

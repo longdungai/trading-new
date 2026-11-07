@@ -10,21 +10,22 @@ interface IndicatorPanelsProps {
 export const IndicatorPanels: React.FC<IndicatorPanelsProps> = ({ candles, settings }) => {
   const [hoverRsiIdx, setHoverRsiIdx] = useState<number | null>(null);
 
-  if (!settings.rsi && !settings.macd) return null;
-  if (!candles || candles.length < 15) return null;
+  const safeCandles = candles && candles.length >= 15 ? candles : [];
+  const displayCount = Math.min(safeCandles.length, 90);
 
-  const displayCount = Math.min(candles.length, 90);
-
-  // 1. RSI(14) + RSI-SMA(14) Signal Line (TradingView Standard)
+  // 1. RSI(14) + RSI-SMA(14) Signal Line (TradingView Standard) — Hooks ALWAYS run unconditionally
   const allRSI = useMemo(
-    () => (settings.rsi ? calculateRSI(candles, 14) : []),
-    [candles, settings.rsi]
+    () => (settings.rsi && safeCandles.length >= 15 ? calculateRSI(safeCandles, 14) : []),
+    [safeCandles, settings.rsi]
   );
-  const rsiData = useMemo(() => allRSI.slice(-displayCount), [allRSI, displayCount]);
+  const rsiData = useMemo(
+    () => (displayCount > 0 ? allRSI.slice(-displayCount) : []),
+    [allRSI, displayCount]
+  );
 
   // Compute 14-period SMA of RSI for crossover visibility
   const rsiSmaData = useMemo(() => {
-    if (!settings.rsi || allRSI.length === 0) return [];
+    if (!settings.rsi || allRSI.length === 0 || displayCount === 0) return [];
     const period = 14;
     const smaFull: (number | null)[] = new Array(allRSI.length).fill(null);
     let sum = 0;
@@ -45,21 +46,24 @@ export const IndicatorPanels: React.FC<IndicatorPanelsProps> = ({ candles, setti
   const activeRsiIndex =
     hoverRsiIdx !== null && hoverRsiIdx >= 0 && hoverRsiIdx < rsiData.length
       ? hoverRsiIdx
-      : rsiData.length - 1;
+      : Math.max(0, rsiData.length - 1);
 
   const currentRSI = rsiData.length > 0 ? rsiData[activeRsiIndex]?.value ?? 50 : 50;
   const currentRsiSma =
-    rsiSmaData.length > 0 && rsiSmaData[activeRsiIndex] !== null
+    rsiSmaData.length > 0 && rsiSmaData[activeRsiIndex] !== null && rsiSmaData[activeRsiIndex] !== undefined
       ? (rsiSmaData[activeRsiIndex] as number)
       : currentRSI;
   const latestRsi = rsiData.length > 0 ? rsiData[rsiData.length - 1].value : 50;
 
   // 2. MACD(12, 26, 9) Data
   const allMACD = useMemo(
-    () => (settings.macd ? calculateMACD(candles, 12, 26, 9) : []),
-    [candles, settings.macd]
+    () => (settings.macd && safeCandles.length >= 15 ? calculateMACD(safeCandles, 12, 26, 9) : []),
+    [safeCandles, settings.macd]
   );
-  const macdData = useMemo(() => allMACD.slice(-displayCount), [allMACD, displayCount]);
+  const macdData = useMemo(
+    () => (displayCount > 0 ? allMACD.slice(-displayCount) : []),
+    [allMACD, displayCount]
+  );
   const currentMACD =
     macdData.length > 0
       ? macdData[macdData.length - 1]
@@ -97,7 +101,7 @@ export const IndicatorPanels: React.FC<IndicatorPanelsProps> = ({ candles, setti
     if (rsiSmaData.length < 2) return '';
     return rsiSmaData
       .map((val, idx) => {
-        const v = val !== null ? val : 50;
+        const v = val !== null && val !== undefined ? val : 50;
         const x = (idx / (rsiSmaData.length - 1)) * 100;
         const y = Math.max(2, Math.min(98, 100 - v));
         return `${x.toFixed(2)},${y.toFixed(2)}`;
@@ -137,6 +141,10 @@ export const IndicatorPanels: React.FC<IndicatorPanelsProps> = ({ candles, setti
       pillBg: 'bg-purple-500 text-white',
     };
   }, [currentRSI]);
+
+  // Early return ONLY AFTER all hooks have executed
+  if (!settings.rsi && !settings.macd) return null;
+  if (safeCandles.length < 15) return null;
 
   const latestRsiY = Math.max(6, Math.min(94, 100 - latestRsi));
 

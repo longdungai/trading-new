@@ -182,8 +182,6 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
     return () => window.removeEventListener(PAPER_TRADES_UPDATED_EVENT, syncFromGlobal);
   }, []);
 
-  if (!currentItem.name) return null;
-
   const isBuy = currentItem.action === 'STRONG_BUY' || currentItem.action === 'BUY';
   const isSell = currentItem.action === 'STRONG_SELL' || currentItem.action === 'SELL';
 
@@ -319,6 +317,9 @@ export const TradeSetupCard: React.FC<TradeSetupCardProps> = ({
       currentItem.takeProfit3,
     ]
   );
+
+  // Early return ONLY AFTER all React Hooks have executed unconditionally
+  if (!currentItem.name) return null;
 
   const handleQuickSniperPaperTrade = () => {
     const isSafeNow = sniperReport.bullTrapShield.isSafeToEnterMarket;

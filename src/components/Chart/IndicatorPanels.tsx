@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Candle, IndicatorSettings } from '../../types';
 import { calculateMACD, calculateRSI } from '../../services/indicators';
 
@@ -8,26 +8,64 @@ interface IndicatorPanelsProps {
 }
 
 export const IndicatorPanels: React.FC<IndicatorPanelsProps> = ({ candles, settings }) => {
+  const [hoverRsiIdx, setHoverRsiIdx] = useState<number | null>(null);
+
   if (!settings.rsi && !settings.macd) return null;
   if (!candles || candles.length < 15) return null;
 
-  // Calculate indicators with full history for accuracy, then take the display slice
-  const displayCount = Math.min(candles.length, 80);
+  const displayCount = Math.min(candles.length, 90);
 
-  // 1. RSI Data
-  const allRSI = settings.rsi ? calculateRSI(candles, 14) : [];
-  const rsiData = allRSI.slice(-displayCount);
-  const currentRSI = rsiData.length > 0 ? rsiData[rsiData.length - 1].value : 50;
+  // 1. RSI(14) + RSI-SMA(14) Signal Line (TradingView Standard)
+  const allRSI = useMemo(
+    () => (settings.rsi ? calculateRSI(candles, 14) : []),
+    [candles, settings.rsi]
+  );
+  const rsiData = useMemo(() => allRSI.slice(-displayCount), [allRSI, displayCount]);
 
-  // 2. MACD Data with Full Warmup
-  const allMACD = settings.macd ? calculateMACD(candles, 12, 26, 9) : [];
-  const macdData = allMACD.slice(-displayCount);
-  const currentMACD = macdData.length > 0
-    ? macdData[macdData.length - 1]
-    : { macd: 0, signal: 0, histogram: 0 };
+  // Compute 14-period SMA of RSI for crossover visibility
+  const rsiSmaData = useMemo(() => {
+    if (!settings.rsi || allRSI.length === 0) return [];
+    const period = 14;
+    const smaFull: (number | null)[] = new Array(allRSI.length).fill(null);
+    let sum = 0;
+    for (let i = 0; i < allRSI.length; i++) {
+      sum += allRSI[i].value;
+      if (i >= period) {
+        sum -= allRSI[i - period].value;
+      }
+      if (i >= period - 1) {
+        smaFull[i] = sum / period;
+      } else {
+        smaFull[i] = sum / (i + 1);
+      }
+    }
+    return smaFull.slice(-displayCount);
+  }, [allRSI, displayCount, settings.rsi]);
 
-  // Dynamic Auto-Scale for MACD (Supports BTC $96k, Gold $4.6k, VN30 70k, Doge $0.08)
-  const maxAbsMACD = React.useMemo(() => {
+  const activeRsiIndex =
+    hoverRsiIdx !== null && hoverRsiIdx >= 0 && hoverRsiIdx < rsiData.length
+      ? hoverRsiIdx
+      : rsiData.length - 1;
+
+  const currentRSI = rsiData.length > 0 ? rsiData[activeRsiIndex]?.value ?? 50 : 50;
+  const currentRsiSma =
+    rsiSmaData.length > 0 && rsiSmaData[activeRsiIndex] !== null
+      ? (rsiSmaData[activeRsiIndex] as number)
+      : currentRSI;
+  const latestRsi = rsiData.length > 0 ? rsiData[rsiData.length - 1].value : 50;
+
+  // 2. MACD(12, 26, 9) Data
+  const allMACD = useMemo(
+    () => (settings.macd ? calculateMACD(candles, 12, 26, 9) : []),
+    [candles, settings.macd]
+  );
+  const macdData = useMemo(() => allMACD.slice(-displayCount), [allMACD, displayCount]);
+  const currentMACD =
+    macdData.length > 0
+      ? macdData[macdData.length - 1]
+      : { macd: 0, signal: 0, histogram: 0 };
+
+  const maxAbsMACD = useMemo(() => {
     if (macdData.length === 0) return 1;
     let max = 0.00001;
     for (const d of macdData) {
@@ -35,217 +73,366 @@ export const IndicatorPanels: React.FC<IndicatorPanelsProps> = ({ candles, setti
       if (Math.abs(d.signal) > max) max = Math.abs(d.signal);
       if (Math.abs(d.histogram) > max) max = Math.abs(d.histogram);
     }
-    return max * 1.15; // 15% padding so curves don't touch top/bottom edges
+    return max * 1.15;
   }, [macdData]);
 
-  const isComboMode = settings.rsi && settings.macd;
+  // Build SVG path & area points for RSI
+  const rsiPoints = useMemo(() => {
+    if (rsiData.length < 2) return '';
+    return rsiData
+      .map((d, idx) => {
+        const x = (idx / (rsiData.length - 1)) * 100;
+        const y = Math.max(2, Math.min(98, 100 - d.value));
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(' ');
+  }, [rsiData]);
+
+  const rsiAreaPoints = useMemo(() => {
+    if (!rsiPoints) return '';
+    return `0,100 ${rsiPoints} 100,100`;
+  }, [rsiPoints]);
+
+  const rsiSmaPoints = useMemo(() => {
+    if (rsiSmaData.length < 2) return '';
+    return rsiSmaData
+      .map((val, idx) => {
+        const v = val !== null ? val : 50;
+        const x = (idx / (rsiSmaData.length - 1)) * 100;
+        const y = Math.max(2, Math.min(98, 100 - v));
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(' ');
+  }, [rsiSmaData]);
+
+  const rsiStateBadge = useMemo(() => {
+    if (currentRSI >= 70) {
+      return {
+        label: 'QUÁ MUA (>70)',
+        cls: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+        lineColor: '#fb7185',
+        pillBg: 'bg-rose-500 text-white',
+      };
+    }
+    if (currentRSI <= 30) {
+      return {
+        label: 'QUÁ BÁN (<30 • VÙNG GOM)',
+        cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+        lineColor: '#34d399',
+        pillBg: 'bg-emerald-500 text-slate-950',
+      };
+    }
+    if (currentRSI >= 50) {
+      return {
+        label: 'XUNG LỰC TĂNG (>50)',
+        cls: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/35',
+        lineColor: '#c084fc',
+        pillBg: 'bg-purple-500 text-white',
+      };
+    }
+    return {
+      label: 'XUNG LỰC YẾU (<50)',
+      cls: 'bg-amber-500/15 text-amber-300 border-amber-500/35',
+      lineColor: '#c084fc',
+      pillBg: 'bg-purple-500 text-white',
+    };
+  }, [currentRSI]);
+
+  const latestRsiY = Math.max(6, Math.min(94, 100 - latestRsi));
 
   return (
-    <div className="border-t border-[#1b2230] bg-[#080b12] select-none shrink-0">
-      {/* ================= 1. UNIFIED COMBO PANEL: RSI + MACD IN 1 SLIM FRAME ================= */}
-      {isComboMode ? (
-        <div className="h-14 sm:h-20 px-2 sm:px-3 py-0.5 sm:py-1 relative flex flex-col justify-between">
-          {/* Unified Compact Slim Header */}
-          <div className="flex items-center justify-between z-10 text-[9px] sm:text-[10px] font-mono leading-none">
-            {/* Left: RSI value & MACD values */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5">
+    <div className="border-t border-slate-800/90 bg-[#060a12] select-none shrink-0 divide-y divide-slate-800/80">
+      {/* ================= 1. DEDICATED HIGH-CLARITY RSI(14) PANEL ================= */}
+      {settings.rsi && (
+        <div
+          className="h-[74px] sm:h-[92px] px-2 sm:px-3 py-1 relative flex flex-col justify-between"
+          onMouseLeave={() => setHoverRsiIdx(null)}
+          onMouseMove={(e) => {
+            if (rsiData.length < 2) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const chartWidth = Math.max(1, rect.width - 52);
+            const relX = Math.max(0, Math.min(chartWidth, e.clientX - rect.left));
+            const idx = Math.round((relX / chartWidth) * (rsiData.length - 1));
+            setHoverRsiIdx(idx);
+          }}
+        >
+          {/* Top RSI Header Bar */}
+          <div className="flex items-center justify-between gap-2 z-10 text-[9.5px] sm:text-[10.5px] font-mono leading-none">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
               <div className="flex items-center gap-1">
-                <span className="font-bold text-indigo-400">RSI(14):</span>
-                <span className={`font-bold ${
-                  currentRSI >= 70 ? 'text-rose-400' : currentRSI <= 30 ? 'text-emerald-400' : 'text-white'
-                }`}>
+                <span className="w-2 h-0.5 rounded-full bg-purple-400 inline-block" />
+                <span className="font-extrabold text-purple-300">RSI(14):</span>
+                <span
+                  className={`font-black text-[11px] sm:text-xs ${
+                    currentRSI >= 70
+                      ? 'text-rose-400'
+                      : currentRSI <= 30
+                      ? 'text-emerald-400'
+                      : 'text-white'
+                  }`}
+                >
                   {currentRSI.toFixed(1)}
                 </span>
               </div>
 
-              <div className="h-2.5 w-px bg-gray-800" />
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-cyan-300">M:{currentMACD.macd.toFixed(2)}</span>
-                <span className="text-amber-400">S:{currentMACD.signal.toFixed(2)}</span>
-                <span className={`font-semibold ${currentMACD.histogram >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  H:{currentMACD.histogram >= 0 ? `+${currentMACD.histogram.toFixed(2)}` : currentMACD.histogram.toFixed(2)}
-                </span>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-0.5 rounded-full bg-amber-400 inline-block" />
+                <span className="text-amber-300/90 font-semibold">MA(14):</span>
+                <span className="font-bold text-amber-300">{currentRsiSma.toFixed(1)}</span>
               </div>
-            </div>
 
-            {/* Right: Slim legend reference */}
-            <div className="flex items-center gap-1.5 text-[8px] sm:text-[9px] text-gray-500 font-mono">
-              <span className="text-rose-400/80">70</span>
-              <span>/</span>
-              <span className="text-emerald-400/80">30</span>
-            </div>
-          </div>
-
-          {/* Unified SVG Vector Layer with Thin, Crisp Strokes */}
-          <div className="w-full h-9 sm:h-14 relative">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
-              {/* Ultra-fine reference lines */}
-              <line x1="0" y1="30" x2="100" y2="30" stroke="rgba(244, 63, 94, 0.25)" strokeDasharray="1.5,1.5" strokeWidth="0.5" />
-              <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="0.5" />
-              <line x1="0" y1="70" x2="100" y2="70" stroke="rgba(16, 185, 129, 0.25)" strokeDasharray="1.5,1.5" strokeWidth="0.5" />
-
-              {/* 1. Slim Background MACD Histogram Bars */}
-              {macdData.map((d, idx) => {
-                const x = (idx / (macdData.length - 1)) * 100;
-                const normalizedH = (d.histogram / maxAbsMACD) * 35;
-                const barHeight = Math.abs(normalizedH);
-                const y = normalizedH >= 0 ? 50 - barHeight : 50;
-                const color = d.histogram >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(244, 63, 94, 0.35)';
-                return <rect key={idx} x={Math.max(0, x - 0.4)} y={y} width="0.8" height={Math.max(0.8, barHeight)} fill={color} />;
-              })}
-
-              {/* 2. Slim MACD Signal Line (Orange - stroke 1.0) */}
-              {macdData.length > 1 && (
-                <polyline
-                  fill="none"
-                  stroke="#f59e0b"
-                  strokeWidth="1.0"
-                  strokeOpacity="0.8"
-                  points={macdData
-                    .map((d, idx) => {
-                      const x = (idx / (macdData.length - 1)) * 100;
-                      const y = 50 - (d.signal / maxAbsMACD) * 38;
-                      return `${x},${Math.max(3, Math.min(97, y))}`;
-                    })
-                    .join(' ')}
-                />
-              )}
-
-              {/* 3. Slim MACD Line (Cyan - stroke 1.1) */}
-              {macdData.length > 1 && (
-                <polyline
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="1.1"
-                  strokeOpacity="0.85"
-                  points={macdData
-                    .map((d, idx) => {
-                      const x = (idx / (macdData.length - 1)) * 100;
-                      const y = 50 - (d.macd / maxAbsMACD) * 38;
-                      return `${x},${Math.max(3, Math.min(97, y))}`;
-                    })
-                    .join(' ')}
-                />
-              )}
-
-              {/* 4. Foreground Slim RSI Curve (Indigo - stroke 1.3) */}
-              {rsiData.length > 1 && (
-                <polyline
-                  fill="none"
-                  stroke="#818cf8"
-                  strokeWidth="1.3"
-                  points={rsiData
-                    .map((d, idx) => {
-                      const x = (idx / (rsiData.length - 1)) * 100;
-                      const y = 100 - d.value;
-                      return `${x},${Math.max(3, Math.min(97, y))}`;
-                    })
-                    .join(' ')}
-                />
-              )}
-            </svg>
-          </div>
-        </div>
-      ) : settings.rsi ? (
-        /* ================= 2. RSI ONLY (SLIM) ================= */
-        <div className="h-12 sm:h-18 px-2 sm:px-3 py-0.5 relative flex flex-col justify-between">
-          <div className="flex items-center justify-between z-10 text-[9px] sm:text-[10px] font-mono leading-none">
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-indigo-400">RSI(14):</span>
-              <span className={`font-bold ${
-                currentRSI >= 70 ? 'text-rose-400' : currentRSI <= 30 ? 'text-emerald-400' : 'text-white'
-              }`}>
-                {currentRSI.toFixed(1)}
+              <span
+                className={`px-1.5 py-0.5 rounded border text-[8.5px] sm:text-[9px] font-sans font-bold ${rsiStateBadge.cls}`}
+              >
+                {rsiStateBadge.label}
               </span>
             </div>
-            <div className="flex items-center gap-1 text-[8px] text-gray-500 font-mono">
-              <span className="text-rose-400">70</span>
-              <span>/</span>
-              <span className="text-emerald-400">30</span>
+
+            <div className="hidden sm:flex items-center gap-2 text-[9px] text-slate-400 font-mono">
+              <span className="text-rose-400 font-semibold">Quá mua: 70</span>
+              <span>•</span>
+              <span className="text-slate-300">Trục giữa: 50</span>
+              <span>•</span>
+              <span className="text-emerald-400 font-semibold">Quá bán: 30</span>
             </div>
           </div>
 
-          <div className="w-full h-8 sm:h-12 relative">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
-              <line x1="0" y1="30" x2="100" y2="30" stroke="rgba(244, 63, 94, 0.25)" strokeDasharray="1.5,1.5" strokeWidth="0.5" />
-              <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="0.5" />
-              <line x1="0" y1="70" x2="100" y2="70" stroke="rgba(16, 185, 129, 0.25)" strokeDasharray="1.5,1.5" strokeWidth="0.5" />
+          {/* Main RSI Canvas + Right Scale Gutter */}
+          <div className="flex-1 flex items-stretch gap-1 min-h-0 pt-1">
+            <div className="flex-1 h-full relative">
+              <svg
+                className="w-full h-full overflow-visible"
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+              >
+                <defs>
+                  <linearGradient id="rsiCurveFillGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#c084fc" stopOpacity="0.28" />
+                    <stop offset="50%" stopColor="#818cf8" stopOpacity="0.10" />
+                    <stop offset="100%" stopColor="#34d399" stopOpacity="0.03" />
+                  </linearGradient>
+                </defs>
 
-              {rsiData.length > 1 && (
-                <polyline
-                  fill="none"
-                  stroke="#818cf8"
-                  strokeWidth="1.3"
-                  points={rsiData
-                    .map((d, idx) => {
-                      const x = (idx / (rsiData.length - 1)) * 100;
-                      const y = 100 - d.value;
-                      return `${x},${Math.max(2, Math.min(98, y))}`;
-                    })
-                    .join(' ')}
+                {/* Overbought Zone (70..100 -> y: 0..30) */}
+                <rect x="0" y="0" width="100" height="30" fill="rgba(244, 63, 94, 0.07)" />
+                {/* Normal Channel Band (30..70 -> y: 30..70) */}
+                <rect x="0" y="30" width="100" height="40" fill="rgba(139, 92, 246, 0.07)" />
+                {/* Oversold Zone (0..30 -> y: 70..100) */}
+                <rect x="0" y="70" width="100" height="30" fill="rgba(16, 185, 129, 0.08)" />
+
+                {/* Crisp Horizontal Reference Lines (70 / 50 / 30) with non-scaling stroke */}
+                <line
+                  x1="0"
+                  y1="30"
+                  x2="100"
+                  y2="30"
+                  stroke="rgba(251, 113, 133, 0.65)"
+                  strokeDasharray="4,3"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
                 />
-              )}
-            </svg>
+                <line
+                  x1="0"
+                  y1="50"
+                  x2="100"
+                  y2="50"
+                  stroke="rgba(148, 163, 184, 0.38)"
+                  strokeDasharray="2,3"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <line
+                  x1="0"
+                  y1="70"
+                  x2="100"
+                  y2="70"
+                  stroke="rgba(52, 211, 153, 0.65)"
+                  strokeDasharray="4,3"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                />
+
+                {/* Soft Gradient Fill under RSI Curve */}
+                {rsiAreaPoints && <polygon points={rsiAreaPoints} fill="url(#rsiCurveFillGrad)" />}
+
+                {/* RSI-SMA(14) Signal Line (TradingView Warm Amber) */}
+                {rsiSmaPoints && (
+                  <polyline
+                    fill="none"
+                    stroke="#fbbf24"
+                    strokeWidth="1.5"
+                    strokeOpacity="0.88"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    points={rsiSmaPoints}
+                  />
+                )}
+
+                {/* Outer Glow Layer for Main RSI(14) Curve */}
+                {rsiPoints && (
+                  <polyline
+                    fill="none"
+                    stroke={rsiStateBadge.lineColor}
+                    strokeWidth="4.5"
+                    strokeOpacity="0.22"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    points={rsiPoints}
+                  />
+                )}
+
+                {/* Main High-Contrast RSI(14) Curve */}
+                {rsiPoints && (
+                  <polyline
+                    fill="none"
+                    stroke={rsiStateBadge.lineColor}
+                    strokeWidth="2.25"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    points={rsiPoints}
+                  />
+                )}
+
+                {/* Hover Crosshair Guide Line */}
+                {hoverRsiIdx !== null && rsiData.length > 1 && (
+                  <line
+                    x1={(hoverRsiIdx / (rsiData.length - 1)) * 100}
+                    y1="0"
+                    x2={(hoverRsiIdx / (rsiData.length - 1)) * 100}
+                    y2="100"
+                    stroke="rgba(34, 211, 238, 0.65)"
+                    strokeDasharray="2,2"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+              </svg>
+
+              {/* Live Pulsing Endpoint Dot at Right Edge of RSI Curve */}
+              <div
+                className="absolute right-0 w-2.5 h-2.5 -mr-1 -mt-1.5 rounded-full border border-white shadow-md pointer-events-none"
+                style={{
+                  top: `${latestRsiY}%`,
+                  backgroundColor: rsiStateBadge.lineColor,
+                }}
+              />
+            </div>
+
+            {/* Right Scale Axis (70 / 50 / 30 + Live RSI Pill) */}
+            <div className="w-[46px] sm:w-[54px] shrink-0 relative border-l border-slate-800/80 pl-1 font-mono text-[8.5px] sm:text-[9px] text-slate-400">
+              <span className="absolute right-1 top-[22%] text-rose-400/90 font-semibold">70</span>
+              <span className="absolute right-1 top-[44%] text-slate-400">50</span>
+              <span className="absolute right-1 top-[66%] text-emerald-400/90 font-semibold">30</span>
+
+              {/* Floating Live RSI Tag on Axis */}
+              <span
+                className={`absolute right-0.5 left-1 -mt-2 px-1 py-0.2 rounded text-[9px] font-black text-center shadow ${rsiStateBadge.pillBg}`}
+                style={{ top: `${latestRsiY}%` }}
+              >
+                {latestRsi.toFixed(1)}
+              </span>
+            </div>
           </div>
         </div>
-      ) : (
-        /* ================= 3. MACD ONLY (SLIM) ================= */
-        <div className="h-12 sm:h-18 px-2 sm:px-3 py-0.5 relative flex flex-col justify-between">
-          <div className="flex items-center justify-between z-10 text-[9px] sm:text-[10px] font-mono leading-none">
-            <div className="flex items-center gap-1.5 text-blue-300">
-              <span className="font-semibold text-blue-400">MACD:</span>
-              <span>M:{currentMACD.macd.toFixed(2)}</span>
-              <span className="text-amber-400">S:{currentMACD.signal.toFixed(2)}</span>
-              <span className={currentMACD.histogram >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                H:{currentMACD.histogram >= 0 ? `+${currentMACD.histogram.toFixed(2)}` : currentMACD.histogram.toFixed(2)}
+      )}
+
+      {/* ================= 2. DEDICATED MACD(12, 26, 9) PANEL ================= */}
+      {settings.macd && (
+        <div className="h-[54px] sm:h-[68px] px-2 sm:px-3 py-1 relative flex flex-col justify-between">
+          <div className="flex items-center justify-between z-10 text-[9.5px] sm:text-[10px] font-mono leading-none">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sky-400">MACD(12,26,9):</span>
+              <span className="text-sky-300 font-semibold">M: {currentMACD.macd.toFixed(2)}</span>
+              <span className="text-amber-400 font-semibold">S: {currentMACD.signal.toFixed(2)}</span>
+              <span
+                className={`font-bold ${
+                  currentMACD.histogram >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                }`}
+              >
+                Hist: {currentMACD.histogram >= 0 ? `+${currentMACD.histogram.toFixed(2)}` : currentMACD.histogram.toFixed(2)}
               </span>
             </div>
           </div>
 
-          <div className="w-full h-8 sm:h-12 relative">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
-              <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="0.5" />
-
-              {macdData.map((d, idx) => {
-                const x = (idx / (macdData.length - 1)) * 100;
-                const normalizedH = (d.histogram / maxAbsMACD) * 45;
-                const barHeight = Math.abs(normalizedH);
-                const y = normalizedH >= 0 ? 50 - barHeight : 50;
-                const color = d.histogram >= 0 ? 'rgba(16, 185, 129, 0.45)' : 'rgba(244, 63, 94, 0.45)';
-                return <rect key={idx} x={Math.max(0, x - 0.4)} y={y} width="0.8" height={Math.max(0.8, barHeight)} fill={color} />;
-              })}
-
-              {macdData.length > 1 && (
-                <polyline
-                  fill="none"
-                  stroke="#f59e0b"
-                  strokeWidth="1.0"
-                  points={macdData
-                    .map((d, idx) => {
-                      const x = (idx / (macdData.length - 1)) * 100;
-                      const y = 50 - (d.signal / maxAbsMACD) * 45;
-                      return `${x},${Math.max(3, Math.min(97, y))}`;
-                    })
-                    .join(' ')}
+          <div className="flex-1 flex items-stretch gap-1 min-h-0 pt-0.5">
+            <div className="flex-1 h-full relative">
+              <svg
+                className="w-full h-full overflow-visible"
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+              >
+                <line
+                  x1="0"
+                  y1="50"
+                  x2="100"
+                  y2="50"
+                  stroke="rgba(148, 163, 184, 0.28)"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
                 />
-              )}
 
-              {macdData.length > 1 && (
-                <polyline
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="1.2"
-                  points={macdData
-                    .map((d, idx) => {
-                      const x = (idx / (macdData.length - 1)) * 100;
-                      const y = 50 - (d.macd / maxAbsMACD) * 45;
-                      return `${x},${Math.max(3, Math.min(97, y))}`;
-                    })
-                    .join(' ')}
-                />
-              )}
-            </svg>
+                {macdData.map((d, idx) => {
+                  const x = (idx / Math.max(1, macdData.length - 1)) * 100;
+                  const normalizedH = (d.histogram / maxAbsMACD) * 44;
+                  const barHeight = Math.abs(normalizedH);
+                  const y = normalizedH >= 0 ? 50 - barHeight : 50;
+                  const color =
+                    d.histogram >= 0 ? 'rgba(16, 185, 129, 0.48)' : 'rgba(244, 63, 94, 0.48)';
+                  return (
+                    <rect
+                      key={idx}
+                      x={Math.max(0, x - 0.45)}
+                      y={y}
+                      width="0.9"
+                      height={Math.max(1, barHeight)}
+                      fill={color}
+                    />
+                  );
+                })}
+
+                {macdData.length > 1 && (
+                  <polyline
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    points={macdData
+                      .map((d, idx) => {
+                        const x = (idx / (macdData.length - 1)) * 100;
+                        const y = 50 - (d.signal / maxAbsMACD) * 44;
+                        return `${x.toFixed(2)},${Math.max(3, Math.min(97, y)).toFixed(2)}`;
+                      })
+                      .join(' ')}
+                  />
+                )}
+
+                {macdData.length > 1 && (
+                  <polyline
+                    fill="none"
+                    stroke="#38bdf8"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    points={macdData
+                      .map((d, idx) => {
+                        const x = (idx / (macdData.length - 1)) * 100;
+                        const y = 50 - (d.macd / maxAbsMACD) * 44;
+                        return `${x.toFixed(2)},${Math.max(3, Math.min(97, y)).toFixed(2)}`;
+                      })
+                      .join(' ')}
+                  />
+                )}
+              </svg>
+            </div>
+            <div className="w-[46px] sm:w-[54px] shrink-0 relative border-l border-slate-800/80 pl-1 font-mono text-[8.5px] text-slate-400">
+              <span className="absolute right-1 top-[40%]">0.0</span>
+            </div>
           </div>
         </div>
       )}

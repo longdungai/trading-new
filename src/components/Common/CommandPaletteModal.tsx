@@ -36,6 +36,7 @@ interface CommandPaletteModalProps {
   onOpenBacktest: () => void;
   onOpenAlerts: () => void;
   onOpenRadar: () => void;
+  onOpenCryptoRebound: () => void;
   onToggleReplay: () => void;
   onToggleVpvr: () => void;
   onToggleVwap: () => void;
@@ -64,6 +65,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   onOpenBacktest,
   onOpenAlerts,
   onOpenRadar,
+  onOpenCryptoRebound,
   onToggleReplay,
   onToggleVpvr,
   onToggleVwap,
@@ -218,6 +220,18 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         },
       },
       {
+        id: 'cmd_crypto_rebound',
+        title: 'Bắt sóng hồi Crypto',
+        subtitle: 'Quét bán tháo và kiểm chứng ba cách rải đinh trên spot',
+        badge: 'CRYPTO',
+        keywords: 'bat day song hoi rai dinh crypto spot rebound',
+        icon: 'chart',
+        onExecute: () => {
+          onOpenCryptoRebound();
+          onClose();
+        },
+      },
+      {
         id: 'cmd_compare_btc',
         title: `🔀 So Sánh Tương Quan % Với BTCUSDT Trên Biểu Đồ ${currentSymbol.symbol}`,
         subtitle: 'Chồng đường biến động % của Bitcoin lên biểu đồ hiện tại',
@@ -308,6 +322,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     onOpenBacktest,
     onOpenAlerts,
     onOpenRadar,
+    onOpenCryptoRebound,
     onToggleReplay,
     onToggleVpvr,
     onToggleVwap,

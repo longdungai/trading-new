@@ -24,12 +24,12 @@ const BASE_URLS = [
 // Cache symbols known not to exist on Binance Spot so filtered batch queries stay fast (~5 KB)
 const invalidBinanceSymbols = new Set<string>();
 
-async function fetchWithFallbacks(path: string): Promise<any> {
+async function fetchWithFallbacks(path: string, signal?: AbortSignal): Promise<any> {
   let lastError: any = null;
   for (const base of BASE_URLS) {
     try {
       const url = `${base}${path}`;
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetch(url, { cache: 'no-store', signal });
       if (res.ok) {
         return await res.json();
       }
@@ -38,6 +38,7 @@ async function fetchWithFallbacks(path: string): Promise<any> {
         throw new Error(`HTTP 400 on ${path}`);
       }
     } catch (err: any) {
+      if (signal?.aborted) throw err;
       lastError = err;
       if (err?.message?.startsWith('HTTP 400')) {
         break;
@@ -50,14 +51,15 @@ async function fetchWithFallbacks(path: string): Promise<any> {
 export async function fetchBinanceKlines(
   symbol: string,
   timeframe: Timeframe = '1h',
-  limit: number = 250
+  limit: number = 250,
+  signal?: AbortSignal
 ): Promise<Candle[]> {
   const binanceSymbol = symbol.replace(/[/_-]/g, '').toUpperCase();
   const interval = timeframeMap[timeframe] || '1h';
   const path = `/klines?symbol=${binanceSymbol}&interval=${interval}&limit=${limit}`;
 
   try {
-    const data = await fetchWithFallbacks(path);
+    const data = await fetchWithFallbacks(path, signal);
     return data.map((item: (number | string)[]) => ({
       time: Math.floor(Number(item[0]) / 1000),
       open: parseFloat(item[1] as string),
@@ -67,7 +69,7 @@ export async function fetchBinanceKlines(
       volume: parseFloat(item[5] as string),
     }));
   } catch (error) {
-    console.warn(`Failed to fetch Binance klines for ${symbol}:`, error);
+    if (!signal?.aborted) console.warn(`Failed to fetch Binance klines for ${symbol}:`, error);
     throw error;
   }
 }

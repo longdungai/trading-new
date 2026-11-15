@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Bell,
+  ArrowUpRight,
   Bot,
   Flame,
   Search,
@@ -35,6 +36,7 @@ interface HeaderProps {
   onOpenBacktest: () => void;
   onOpenHeatmap: () => void;
   onOpenRadar?: () => void;
+  onOpenCryptoRebound?: () => void;
   onOpenAlerts?: () => void;
   onOpenCommandPalette?: () => void;
   unreadAlertCount?: number;
@@ -61,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeTimeframe,
   onOpenBacktest,
   onOpenRadar,
+  onOpenCryptoRebound,
   onOpenAlerts,
   onOpenCommandPalette,
   unreadAlertCount = 0,
@@ -399,6 +402,19 @@ export const Header: React.FC<HeaderProps> = ({
               <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
               <span className="hidden lg:inline">Vùng Gom</span>
               <span className="hidden sm:inline lg:hidden">Gom</span>
+            </button>
+          )}
+
+          {onOpenCryptoRebound && (
+            <button
+              type="button"
+              onClick={onOpenCryptoRebound}
+              aria-label="Bắt sóng hồi Crypto"
+              title="Bắt sóng hồi Crypto"
+              className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-xl border border-teal-500/40 bg-teal-500/15 p-1.5 text-xs font-bold text-teal-200 transition hover:bg-teal-500/25 sm:px-3"
+            >
+              <ArrowUpRight className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Sóng hồi</span>
             </button>
           )}
 

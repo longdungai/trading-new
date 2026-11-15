@@ -102,6 +102,7 @@ import { SentimentMeter } from './components/Market/SentimentMeter';
 import { MarketHeatmap } from './components/Market/MarketHeatmap';
 import { BacktestModal } from './components/Backtest/BacktestModal';
 import { AccumulationRadarModal } from './components/Market/AccumulationRadarModal';
+import { CryptoReboundModal } from './components/Market/CryptoReboundModal';
 import { MacroIntelligenceModal, MacroModalTab } from './components/Macro/MacroIntelligenceModal';
 import { AlertCenterModal } from './components/Alerts/AlertCenterModal';
 import { MtfAndVpvrCard } from './components/AIInsight/MtfAndVpvrCard';
@@ -159,6 +160,7 @@ export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [isBacktestOpen, setIsBacktestOpen] = useState<boolean>(false);
   const [isRadarOpen, setIsRadarOpen] = useState<boolean>(false);
+  const [isCryptoReboundOpen, setIsCryptoReboundOpen] = useState(false);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState<boolean>(false);
   const [presetAlertPrice, setPresetAlertPrice] = useState<number | null>(null);
   const [activeAlertRuleCount, setActiveAlertRuleCount] = useState<number>(
@@ -1212,6 +1214,7 @@ export const App: React.FC = () => {
         onOpenBacktest={() => setIsBacktestOpen(true)}
         onOpenHeatmap={() => setActiveView(activeView === 'heatmap' ? 'chart' : 'heatmap')}
         onOpenRadar={() => setIsRadarOpen(true)}
+        onOpenCryptoRebound={() => setIsCryptoReboundOpen(true)}
         onOpenAlerts={() => {
           setPresetAlertPrice(null);
           setIsAlertModalOpen(true);
@@ -1947,6 +1950,8 @@ export const App: React.FC = () => {
         />
       )}
 
+      {isCryptoReboundOpen && <CryptoReboundModal onClose={() => setIsCryptoReboundOpen(false)} />}
+
       {/* Smart Alert Center, Telegram Dispatcher & Cloud KV Sync Modal */}
       {isAlertModalOpen && (
         <AlertCenterModal
@@ -2003,6 +2008,7 @@ export const App: React.FC = () => {
             setIsAlertModalOpen(true);
           }}
           onOpenRadar={() => setIsRadarOpen(true)}
+          onOpenCryptoRebound={() => setIsCryptoReboundOpen(true)}
           onToggleReplay={handleToggleReplayMode}
           onToggleVpvr={() => handleToggleIndicator('volumeProfile')}
           onToggleVwap={() => handleToggleIndicator('vwap')}
